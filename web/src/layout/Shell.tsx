@@ -23,21 +23,25 @@ export default function Shell(): JSX.Element {
 
   return (
     <div className="app-shell">
-      <nav className="app-nav">
-        {links
-          .filter((l) => !l.perm || can(l.perm))
-          .map((l) => (
-            <NavLink key={l.to} to={l.to} end={l.to === "/"} className={({ isActive }) => (isActive ? "active" : "")}>
-              {l.label}
-            </NavLink>
-          ))}
-        <span style={{ marginLeft: "auto", opacity: 0.85 }}>
-          {me.tenant.slug} / {me.email}
-        </span>
-        <button type="button" onClick={logout} style={{ marginTop: 0 }}>
-          ログアウト
-        </button>
-      </nav>
+      <header className="app-header">
+        <div className="app-header-bar">
+          <span className="app-header-meta">
+            {me.tenant.slug} / {me.email}
+          </span>
+          <button type="button" className="app-header-logout" onClick={logout}>
+            ログアウト
+          </button>
+        </div>
+        <nav className="app-nav-tabs" aria-label="メインメニュー">
+          {links
+            .filter((l) => !l.perm || can(l.perm))
+            .map((l) => (
+              <NavLink key={l.to} to={l.to} end={l.to === "/"} className={({ isActive }) => (isActive ? "active" : "")}>
+                {l.label}
+              </NavLink>
+            ))}
+        </nav>
+      </header>
       <main className="app-main">
         <Outlet />
       </main>

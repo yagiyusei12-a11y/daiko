@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { useAuth } from "../auth";
-import { Card, Err } from "../ui";
+import { Card, Err, Tabs } from "../ui";
 
 type Role = { id: string; name: string; permissions: unknown };
 type UserRow = { id: string; email: string; displayName: string | null; roles: { id: string; name: string }[] };
@@ -9,6 +9,7 @@ type UserRow = { id: string; email: string; displayName: string | null; roles: {
 export default function Rbac(): JSX.Element {
   const { can } = useAuth();
   const manage = can("rbac.manage");
+  const [rbacTab, setRbacTab] = useState("roles");
   const [roles, setRoles] = useState<Role[]>([]);
   const [users, setUsers] = useState<UserRow[] | null>(null);
   const [usersErr, setUsersErr] = useState<string | null>(null);
@@ -85,10 +86,11 @@ export default function Rbac(): JSX.Element {
     else await loadUsers();
   }
 
-  return (
-    <>
-      <Card title="ロール一覧">
-        <Err msg={err} />
+  const tabItems = [
+    {
+      id: "roles",
+      label: "ロール一覧",
+      children: (
         <table>
           <thead>
             <tr>
@@ -119,77 +121,96 @@ export default function Rbac(): JSX.Element {
             ))}
           </tbody>
         </table>
-      </Card>
-      {manage ? (
-        <>
-          <Card title="ロール作成">
-            <form onSubmit={(e) => void createRole(e)}>
-              <label>名前</label>
-              <input value={newName} onChange={(e) => setNewName(e.target.value)} required />
-              <label>権限（1 行 1 権限文字列）</label>
-              <textarea rows={5} value={newPerms} onChange={(e) => setNewPerms(e.target.value)} style={{ width: "100%" }} />
-              <button type="submit">作成</button>
-            </form>
-          </Card>
-          <Card title="ユーザーとロール">
-            <Err msg={usersErr} />
-            {users ? (
-              <table>
-                <thead>
-                  <tr>
-                    <th>メール</th>
-                    <th>表示名</th>
-                    <th>付与済み</th>
-                    <th>追加</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id}>
-                      <td>{u.email}</td>
-                      <td>{u.displayName ?? "—"}</td>
-                      <td>
-                        {u.roles.map((r) => (
-                          <span key={r.id} style={{ marginRight: 6 }}>
-                            {r.name}
-                            {r.name !== "owner" ? (
-                              <button type="button" onClick={() => void removeRole(u.id, r.id)}>
-                                ×
-                              </button>
-                            ) : null}
-                          </span>
-                        ))}
-                      </td>
-                      <td>
-                        <select
-                          value={assignRole[u.id] ?? ""}
-                          onChange={(e) => setAssignRole((m) => ({ ...m, [u.id]: e.target.value }))}
-                        >
-                          <option value="">ロールを選択</option>
-                          {roles.map((r) => (
-                            <option key={r.id} value={r.id}>
-                              {r.name}
-                            </option>
-                          ))}
-                        </select>
-                        <button type="button" onClick={() => void assign(u.id)}>
-                          付与
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p style={{ fontSize: "0.9rem" }}>ユーザー一覧を読み込み中…</p>
-            )}
-          </Card>
-        </>
-      ) : (
-        <Card title="ユーザー割当">
-          <p style={{ fontSize: "0.9rem" }}>ユーザーへのロール付与は rbac.manage が必要です。</p>
-        </Card>
-      )}
-    </>
+      ),
+    },
+    ...(manage
+      ? [
+          {
+            id: "create",
+            label: "ロール作成",
+            children: (
+              <form onSubmit={(e) => void createRole(e)}>
+                <label>名前</label>
+                <input value={newName} onChange={(e) => setNewName(e.target.value)} required />
+                <label>権限（1 行 1 権限文字列）</label>
+                <textarea rows={5} value={newPerms} onChange={(e) => setNewPerms(e.target.value)} style={{ width: "100%" }} />
+                <button type="submit">作成</button>
+              </form>
+            ),
+          },
+          {
+            id: "assign",
+            label: "ユーザー割当",
+            children: (
+              <>
+                <Err msg={usersErr} />
+                {users ? (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>メール</th>
+                        <th>表示名</th>
+                        <th>付与済み</th>
+                        <th>追加</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((u) => (
+                        <tr key={u.id}>
+                          <td>{u.email}</td>
+                          <td>{u.displayName ?? "—"}</td>
+                          <td>
+                            {u.roles.map((r) => (
+                              <span key={r.id} style={{ marginRight: 6 }}>
+                                {r.name}
+                                {r.name !== "owner" ? (
+                                  <button type="button" onClick={() => void removeRole(u.id, r.id)}>
+                                    ×
+                                  </button>
+                                ) : null}
+                              </span>
+                            ))}
+                          </td>
+                          <td>
+                            <select
+                              value={assignRole[u.id] ?? ""}
+                              onChange={(e) => setAssignRole((m) => ({ ...m, [u.id]: e.target.value }))}
+                            >
+                              <option value="">ロールを選択</option>
+                              {roles.map((r) => (
+                                <option key={r.id} value={r.id}>
+                                  {r.name}
+                                </option>
+                              ))}
+                            </select>
+                            <button type="button" onClick={() => void assign(u.id)}>
+                              付与
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p style={{ fontSize: "0.9rem" }}>ユーザー一覧を読み込み中…</p>
+                )}
+              </>
+            ),
+          },
+        ]
+      : [
+          {
+            id: "assign",
+            label: "ユーザー割当",
+            children: <p style={{ fontSize: "0.9rem", margin: 0 }}>ユーザーへのロール付与は rbac.manage が必要です。</p>,
+          },
+        ]),
+  ];
+
+  return (
+    <Card title="権限（RBAC）">
+      <Err msg={err} />
+      <Tabs aria-label="権限セクション" activeId={rbacTab} onActiveChange={setRbacTab} items={tabItems} />
+    </Card>
   );
 }

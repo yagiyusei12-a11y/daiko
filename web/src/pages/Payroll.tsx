@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../api";
-import { Card, Err } from "../ui";
+import { Card, Err, Tabs } from "../ui";
 
 type Line = {
   id: string;
@@ -18,6 +18,7 @@ type Run = {
 };
 
 export default function Payroll(): JSX.Element {
+  const [payTab, setPayTab] = useState("list");
   const [runs, setRuns] = useState<Run[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [filterYm, setFilterYm] = useState("");
@@ -65,65 +66,81 @@ export default function Payroll(): JSX.Element {
   }
 
   return (
-    <>
-      <Card title="給与（月次）">
-        <Err msg={err} />
-        <p style={{ fontSize: "0.85rem", marginTop: 0 }}>
-          プレビューでドラフト行を再計算します。ロック後はその月の日報削除などが 403 になります。
-        </p>
-        <label>一覧フィルタ（YYYY-MM、空なら直近）</label>
-        <input
-          type="month"
-          value={filterYm}
-          onChange={(e) => setFilterYm(e.target.value)}
-          placeholder="2026-05"
-        />
-        <button type="button" onClick={() => void load()}>
-          再読込
-        </button>
-      </Card>
-      <Card title="プレビュー再計算">
-        <form onSubmit={(e) => void preview(e)}>
-          <label>対象月（YYYY-MM）</label>
-          <input type="month" value={previewYm} onChange={(e) => setPreviewYm(e.target.value)} required />
-          <label>プール率（bps、0–10000）</label>
-          <input value={poolBps} onChange={(e) => setPoolBps(e.target.value)} />
-          <button type="submit">プレビュー保存</button>
-        </form>
-      </Card>
-      <Card title="給与ラン一覧">
-        <table>
-          <thead>
-            <tr>
-              <th>月</th>
-              <th>状態</th>
-              <th>行数</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {runs.map((x) => (
-              <tr key={x.id}>
-                <td>{x.periodYm}</td>
-                <td>{x.status}</td>
-                <td>{x.lines?.length ?? 0}</td>
-                <td>
-                  <Link to={`/payroll/${x.id}`}>明細</Link>{" "}
-                  {x.status !== "LOCKED" ? (
-                    <button type="button" onClick={() => void lock(x.id)}>
-                      ロック
-                    </button>
-                  ) : (
-                    <button type="button" onClick={() => void unlock(x.id)}>
-                      解除
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-    </>
+    <Card title="給与（月次）">
+      <Err msg={err} />
+      <p style={{ fontSize: "0.85rem", marginTop: 0 }}>
+        プレビューでドラフト行を再計算します。ロック後はその月の日報削除などが 403 になります。
+      </p>
+      <Tabs
+        aria-label="給与セクション"
+        activeId={payTab}
+        onActiveChange={setPayTab}
+        items={[
+          {
+            id: "list",
+            label: "一覧",
+            children: (
+              <>
+                <label>一覧フィルタ（YYYY-MM、空なら直近）</label>
+                <input
+                  type="month"
+                  value={filterYm}
+                  onChange={(e) => setFilterYm(e.target.value)}
+                  placeholder="2026-05"
+                />
+                <button type="button" onClick={() => void load()}>
+                  再読込
+                </button>
+                <h3 style={{ fontSize: "1rem", margin: "1rem 0 0.5rem" }}>給与ラン一覧</h3>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>月</th>
+                      <th>状態</th>
+                      <th>行数</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runs.map((x) => (
+                      <tr key={x.id}>
+                        <td>{x.periodYm}</td>
+                        <td>{x.status}</td>
+                        <td>{x.lines?.length ?? 0}</td>
+                        <td>
+                          <Link to={`/payroll/${x.id}`}>明細</Link>{" "}
+                          {x.status !== "LOCKED" ? (
+                            <button type="button" onClick={() => void lock(x.id)}>
+                              ロック
+                            </button>
+                          ) : (
+                            <button type="button" onClick={() => void unlock(x.id)}>
+                              解除
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            ),
+          },
+          {
+            id: "preview",
+            label: "プレビュー・再計算",
+            children: (
+              <form onSubmit={(e) => void preview(e)}>
+                <label>対象月（YYYY-MM）</label>
+                <input type="month" value={previewYm} onChange={(e) => setPreviewYm(e.target.value)} required />
+                <label>プール率（bps、0–10000）</label>
+                <input value={poolBps} onChange={(e) => setPoolBps(e.target.value)} />
+                <button type="submit">プレビュー保存</button>
+              </form>
+            ),
+          },
+        ]}
+      />
+    </Card>
   );
 }

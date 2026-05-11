@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { Card, Err } from "../ui";
+import { Card, Err, Tabs } from "../ui";
 
 type Row = {
   tenantId: string;
@@ -97,6 +97,7 @@ function readDf(c: Record<string, unknown>): {
 }
 
 export default function TenantSettings(): JSX.Element {
+  const [settingsTab, setSettingsTab] = useState("basic");
   const [row, setRow] = useState<Row | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [hour, setHour] = useState("4");
@@ -352,92 +353,134 @@ export default function TenantSettings(): JSX.Element {
       <Err msg={err} />
       {row ? (
         <form onSubmit={(e) => void save(e)}>
-          <label>事業日切替時刻（0–23 時）</label>
-          <input type="number" min={0} max={23} value={hour} onChange={(e) => setHour(e.target.value)} />
-          <h3 style={{ fontSize: "1rem", margin: "1rem 0 0.5rem" }}>届出・帳票用プロファイル（dispatchProfile）</h3>
-          <p style={{ fontSize: "0.8rem", margin: "0 0 0.5rem" }}>
-            帳票9種の自動埋めに使います。未入力は空欄のまま出力されます。
-          </p>
-          <label>商号・屋号</label>
-          <input value={dpTradeName} onChange={(e) => setDpTradeName(e.target.value)} />
-          <label>本店・事業所所在地</label>
-          <textarea rows={2} value={dpAddress} onChange={(e) => setDpAddress(e.target.value)} style={{ width: "100%" }} />
-          <label>主たる事務所の名称</label>
-          <input value={dpMainOfficeName} onChange={(e) => setDpMainOfficeName(e.target.value)} />
-          <label>主たる事務所の所在地</label>
-          <textarea
-            rows={2}
-            value={dpMainOfficeAddress}
-            onChange={(e) => setDpMainOfficeAddress(e.target.value)}
-            style={{ width: "100%" }}
+          <Tabs
+            aria-label="設定セクション"
+            activeId={settingsTab}
+            onActiveChange={setSettingsTab}
+            items={[
+              {
+                id: "basic",
+                label: "基本",
+                children: (
+                  <>
+                    <label>事業日切替時刻（0–23 時）</label>
+                    <input type="number" min={0} max={23} value={hour} onChange={(e) => setHour(e.target.value)} />
+                    <label>featureFlags（JSON）</label>
+                    <textarea rows={8} value={flagsText} onChange={(e) => setFlagsText(e.target.value)} style={{ width: "100%" }} />
+                  </>
+                ),
+              },
+              {
+                id: "dispatch",
+                label: "届出プロファイル",
+                children: (
+                  <>
+                    <h3 style={{ fontSize: "1rem", margin: "0 0 0.5rem" }}>届出・帳票用プロファイル（dispatchProfile）</h3>
+                    <p style={{ fontSize: "0.8rem", margin: "0 0 0.5rem" }}>
+                      帳票9種の自動埋めに使います。未入力は空欄のまま出力されます。
+                    </p>
+                    <label>商号・屋号</label>
+                    <input value={dpTradeName} onChange={(e) => setDpTradeName(e.target.value)} />
+                    <label>本店・事業所所在地</label>
+                    <textarea rows={2} value={dpAddress} onChange={(e) => setDpAddress(e.target.value)} style={{ width: "100%" }} />
+                    <label>主たる事務所の名称</label>
+                    <input value={dpMainOfficeName} onChange={(e) => setDpMainOfficeName(e.target.value)} />
+                    <label>主たる事務所の所在地</label>
+                    <textarea
+                      rows={2}
+                      value={dpMainOfficeAddress}
+                      onChange={(e) => setDpMainOfficeAddress(e.target.value)}
+                      style={{ width: "100%" }}
+                    />
+                    <label>電話番号</label>
+                    <input value={dpPhone} onChange={(e) => setDpPhone(e.target.value)} />
+                    <label>代表者氏名</label>
+                    <input value={dpRep} onChange={(e) => setDpRep(e.target.value)} />
+                    <label>届出・認定番号など</label>
+                    <input value={dpReg} onChange={(e) => setDpReg(e.target.value)} />
+                    <label>認定年月日（DB: legalCertificationDate）</label>
+                    <input type="date" value={legalCertDate} onChange={(e) => setLegalCertDate(e.target.value)} />
+                    <label>認定を受けた公安委員会（認定帳票用）</label>
+                    <input value={dpCertAuthority} onChange={(e) => setDpCertAuthority(e.target.value)} />
+                    <label>変更届の提出先（例: ○○県公安委員会 殿）</label>
+                    <input value={dpPublicSafety} onChange={(e) => setDpPublicSafety(e.target.value)} />
+                    <label>運行管理者（氏名・乗務記録帳票用）</label>
+                    <input value={dpSafeManager} onChange={(e) => setDpSafeManager(e.target.value)} />
+                    <label>アルコール検知器の型式</label>
+                    <input value={dpAlcoholModel} onChange={(e) => setDpAlcoholModel(e.target.value)} />
+                    <label>点検の実施の有無（有 / 無 など）</label>
+                    <input value={dpInspectionYn} onChange={(e) => setDpInspectionYn(e.target.value)} />
+                    <label>点検実施日（YYYY-MM-DD など）</label>
+                    <input value={dpInspectionDate} onChange={(e) => setDpInspectionDate(e.target.value)} />
+                    <label>運輸支局・連絡</label>
+                    <textarea rows={2} value={dpTransport} onChange={(e) => setDpTransport(e.target.value)} style={{ width: "100%" }} />
+                    <label>その他備考（誓約文面の追記など）</label>
+                    <textarea rows={3} value={dpExtra} onChange={(e) => setDpExtra(e.target.value)} style={{ width: "100%" }} />
+                  </>
+                ),
+              },
+              {
+                id: "forms",
+                label: "帳票フォーム",
+                children: (
+                  <>
+                    <h3 style={{ fontSize: "1rem", margin: "0 0 0.5rem" }}>帳票専用入力（documentForms）</h3>
+                    <p style={{ fontSize: "0.8rem", margin: "0 0 0.5rem" }}>変更届・損害届・認定の記載欄です。</p>
+                    <h4 style={{ fontSize: "0.95rem", margin: "0.75rem 0 0.35rem" }}>変更届（henko）</h4>
+                    <label>提出年月日</label>
+                    <input value={hkSubmitted} onChange={(e) => setHkSubmitted(e.target.value)} placeholder="YYYY-MM-DD" />
+                    <label>変更の効力が生ずる日</label>
+                    <input value={hkEffective} onChange={(e) => setHkEffective(e.target.value)} />
+                    <label>協定組合 加入期間（変更前）</label>
+                    <input value={hkMutualOld} onChange={(e) => setHkMutualOld(e.target.value)} />
+                    <label>協定組合 加入期間（変更後）</label>
+                    <input value={hkMutualNew} onChange={(e) => setHkMutualNew(e.target.value)} />
+                    <label>変更の内容・理由</label>
+                    <textarea rows={4} value={hkReason} onChange={(e) => setHkReason(e.target.value)} style={{ width: "100%" }} />
+                    <h4 style={{ fontSize: "0.95rem", margin: "0.75rem 0 0.35rem" }}>損害てん補・協定（テナントDB列）</h4>
+                    <label>協定組合の名称（legalMutualAidOrganizationName）</label>
+                    <input value={legalMutualAidOrg} onChange={(e) => setLegalMutualAidOrg(e.target.value)} style={{ width: "100%", maxWidth: 480 }} />
+                    <label>協定組合の契約期間・開始日</label>
+                    <input type="date" value={sgContractFrom} onChange={(e) => setSgContractFrom(e.target.value)} />
+                    <label>協定組合の契約期間・終了日</label>
+                    <input type="date" value={sgContractTo} onChange={(e) => setSgContractTo(e.target.value)} />
+                    <label>対人賠償責任保険の補償限度額（例: 無制限）</label>
+                    <input value={legalBodilyCoverageText} onChange={(e) => setLegalBodilyCoverageText(e.target.value)} style={{ width: "100%", maxWidth: 480 }} />
+                    <label>対物賠償責任保険の補償限度額（例: 1億円）</label>
+                    <input value={legalPropertyCoverageText} onChange={(e) => setLegalPropertyCoverageText(e.target.value)} style={{ width: "100%", maxWidth: 480 }} />
+                    <h4 style={{ fontSize: "0.95rem", margin: "0.75rem 0 0.35rem" }}>損害てん補届（documentForms.songai）</h4>
+                    <label>車両共済の限度額（万円）</label>
+                    <input value={sgLimit} onChange={(e) => setSgLimit(e.target.value)} />
+                    <label>車両の認定番号</label>
+                    <input value={sgApprNo} onChange={(e) => setSgApprNo(e.target.value)} />
+                    <label>車両の認定年月日</label>
+                    <input value={sgApprDate} onChange={(e) => setSgApprDate(e.target.value)} />
+                    <label>事故・損害の経過・内容</label>
+                    <textarea rows={4} value={sgIncident} onChange={(e) => setSgIncident(e.target.value)} style={{ width: "100%" }} />
+                    <h4 style={{ fontSize: "0.95rem", margin: "0.75rem 0 0.35rem" }}>認定（nintei）</h4>
+                    <label>認定の内容・記載</label>
+                    <textarea rows={6} value={ntBody} onChange={(e) => setNtBody(e.target.value)} style={{ width: "100%" }} />
+                  </>
+                ),
+              },
+              {
+                id: "json",
+                label: "JSON",
+                children: (
+                  <>
+                    <p style={{ fontSize: "0.85rem", marginTop: 0 }}>
+                      拡張・上書き用。保存時に dispatchProfile / documentForms が合成されます。
+                    </p>
+                    <label>customJson</label>
+                    <textarea rows={12} value={customText} onChange={(e) => setCustomText(e.target.value)} style={{ width: "100%" }} />
+                  </>
+                ),
+              },
+            ]}
           />
-          <label>電話番号</label>
-          <input value={dpPhone} onChange={(e) => setDpPhone(e.target.value)} />
-          <label>代表者氏名</label>
-          <input value={dpRep} onChange={(e) => setDpRep(e.target.value)} />
-          <label>届出・認定番号など</label>
-          <input value={dpReg} onChange={(e) => setDpReg(e.target.value)} />
-          <label>認定年月日（DB: legalCertificationDate）</label>
-          <input type="date" value={legalCertDate} onChange={(e) => setLegalCertDate(e.target.value)} />
-          <label>認定を受けた公安委員会（認定帳票用）</label>
-          <input value={dpCertAuthority} onChange={(e) => setDpCertAuthority(e.target.value)} />
-          <label>変更届の提出先（例: ○○県公安委員会 殿）</label>
-          <input value={dpPublicSafety} onChange={(e) => setDpPublicSafety(e.target.value)} />
-          <label>運行管理者（氏名・乗務記録帳票用）</label>
-          <input value={dpSafeManager} onChange={(e) => setDpSafeManager(e.target.value)} />
-          <label>アルコール検知器の型式</label>
-          <input value={dpAlcoholModel} onChange={(e) => setDpAlcoholModel(e.target.value)} />
-          <label>点検の実施の有無（有 / 無 など）</label>
-          <input value={dpInspectionYn} onChange={(e) => setDpInspectionYn(e.target.value)} />
-          <label>点検実施日（YYYY-MM-DD など）</label>
-          <input value={dpInspectionDate} onChange={(e) => setDpInspectionDate(e.target.value)} />
-          <label>運輸支局・連絡</label>
-          <textarea rows={2} value={dpTransport} onChange={(e) => setDpTransport(e.target.value)} style={{ width: "100%" }} />
-          <label>その他備考（誓約文面の追記など）</label>
-          <textarea rows={3} value={dpExtra} onChange={(e) => setDpExtra(e.target.value)} style={{ width: "100%" }} />
-
-          <h3 style={{ fontSize: "1rem", margin: "1rem 0 0.5rem" }}>帳票専用入力（documentForms）</h3>
-          <p style={{ fontSize: "0.8rem", margin: "0 0 0.5rem" }}>変更届・損害届・認定の記載欄です。</p>
-          <h4 style={{ fontSize: "0.95rem", margin: "0.75rem 0 0.35rem" }}>変更届（henko）</h4>
-          <label>提出年月日</label>
-          <input value={hkSubmitted} onChange={(e) => setHkSubmitted(e.target.value)} placeholder="YYYY-MM-DD" />
-          <label>変更の効力が生ずる日</label>
-          <input value={hkEffective} onChange={(e) => setHkEffective(e.target.value)} />
-          <label>協定組合 加入期間（変更前）</label>
-          <input value={hkMutualOld} onChange={(e) => setHkMutualOld(e.target.value)} />
-          <label>協定組合 加入期間（変更後）</label>
-          <input value={hkMutualNew} onChange={(e) => setHkMutualNew(e.target.value)} />
-          <label>変更の内容・理由</label>
-          <textarea rows={4} value={hkReason} onChange={(e) => setHkReason(e.target.value)} style={{ width: "100%" }} />
-          <h4 style={{ fontSize: "0.95rem", margin: "0.75rem 0 0.35rem" }}>損害てん補・協定（テナントDB列）</h4>
-          <label>協定組合の名称（legalMutualAidOrganizationName）</label>
-          <input value={legalMutualAidOrg} onChange={(e) => setLegalMutualAidOrg(e.target.value)} style={{ width: "100%", maxWidth: 480 }} />
-          <label>協定組合の契約期間・開始日</label>
-          <input type="date" value={sgContractFrom} onChange={(e) => setSgContractFrom(e.target.value)} />
-          <label>協定組合の契約期間・終了日</label>
-          <input type="date" value={sgContractTo} onChange={(e) => setSgContractTo(e.target.value)} />
-          <label>対人賠償責任保険の補償限度額（例: 無制限）</label>
-          <input value={legalBodilyCoverageText} onChange={(e) => setLegalBodilyCoverageText(e.target.value)} style={{ width: "100%", maxWidth: 480 }} />
-          <label>対物賠償責任保険の補償限度額（例: 1億円）</label>
-          <input value={legalPropertyCoverageText} onChange={(e) => setLegalPropertyCoverageText(e.target.value)} style={{ width: "100%", maxWidth: 480 }} />
-          <h4 style={{ fontSize: "0.95rem", margin: "0.75rem 0 0.35rem" }}>損害てん補届（documentForms.songai）</h4>
-          <label>車両共済の限度額（万円）</label>
-          <input value={sgLimit} onChange={(e) => setSgLimit(e.target.value)} />
-          <label>車両の認定番号</label>
-          <input value={sgApprNo} onChange={(e) => setSgApprNo(e.target.value)} />
-          <label>車両の認定年月日</label>
-          <input value={sgApprDate} onChange={(e) => setSgApprDate(e.target.value)} />
-          <label>事故・損害の経過・内容</label>
-          <textarea rows={4} value={sgIncident} onChange={(e) => setSgIncident(e.target.value)} style={{ width: "100%" }} />
-          <h4 style={{ fontSize: "0.95rem", margin: "0.75rem 0 0.35rem" }}>認定（nintei）</h4>
-          <label>認定の内容・記載</label>
-          <textarea rows={6} value={ntBody} onChange={(e) => setNtBody(e.target.value)} style={{ width: "100%" }} />
-
-          <label>featureFlags（JSON）</label>
-          <textarea rows={6} value={flagsText} onChange={(e) => setFlagsText(e.target.value)} style={{ width: "100%" }} />
-          <label>customJson（上記以外の拡張・上書き用。保存時に dispatchProfile / documentForms が合成されます）</label>
-          <textarea rows={6} value={customText} onChange={(e) => setCustomText(e.target.value)} style={{ width: "100%" }} />
-          <button type="submit">保存</button>
+          <div className="form-actions">
+            <button type="submit">保存</button>
+          </div>
         </form>
       ) : null}
     </Card>

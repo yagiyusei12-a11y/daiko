@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { Card, Err } from "../ui";
+import { Card, Err, Tabs } from "../ui";
 
 type Employee = { id: string; familyName: string; givenName: string };
 
@@ -259,6 +259,7 @@ export default function Legal(): JSX.Element {
   const [guidances, setGuidances] = useState<Guidance[]>([]);
   const [changes, setChanges] = useState<ChangeNotice[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [legalTab, setLegalTab] = useState("complaints");
 
   const [newComplaint, setNewComplaint] = useState(() => emptyComplaintForm());
   const [editComplaintId, setEditComplaintId] = useState<string | null>(null);
@@ -434,9 +435,18 @@ export default function Legal(): JSX.Element {
   const fieldStyle = { width: "100%", maxWidth: 520 } as const;
 
   return (
-    <>
-      <Card title="法定入力（苦情処理簿）">
-        <Err msg={err} />
+    <Card title="法定記録">
+      <Err msg={err} />
+      <Tabs
+        aria-label="法定記録の種別"
+        activeId={legalTab}
+        onActiveChange={setLegalTab}
+        items={[
+          {
+            id: "complaints",
+            label: "苦情処理簿",
+            children: (
+              <>
         <h4 style={{ fontSize: "0.95rem", margin: "0 0 0.5rem" }}>新規登録（全項目）</h4>
         <form onSubmit={(e) => void createComplaint(e)} style={{ display: "grid", gap: "0.35rem", fontSize: "0.88rem" }}>
           <label>受付日</label>
@@ -552,9 +562,14 @@ export default function Legal(): JSX.Element {
             </button>
           </div>
         ))}
-      </Card>
-
-      <Card title="法定入力（指導記録簿）">
+              </>
+            ),
+          },
+          {
+            id: "guidance",
+            label: "指導記録簿",
+            children: (
+              <>
         <h4 style={{ fontSize: "0.95rem", margin: "0 0 0.5rem" }}>新規登録（全項目）</h4>
         <form onSubmit={(e) => void createGuidance(e)} style={{ display: "grid", gap: "0.35rem", fontSize: "0.88rem" }}>
           <label>指導開始日</label>
@@ -690,9 +705,14 @@ export default function Legal(): JSX.Element {
             </button>
           </div>
         ))}
-      </Card>
-
-      <Card title="法定入力（変更届履歴）">
+              </>
+            ),
+          },
+          {
+            id: "changes",
+            label: "変更届履歴",
+            children: (
+              <>
         <h4 style={{ fontSize: "0.95rem", margin: "0 0 0.5rem" }}>新規登録（全項目）</h4>
         <form onSubmit={(e) => void createChangeNotice(e)} style={{ display: "grid", gap: "0.35rem", fontSize: "0.88rem" }}>
           <label>変更事項</label>
@@ -754,7 +774,11 @@ export default function Legal(): JSX.Element {
             </button>
           </div>
         ))}
-      </Card>
-    </>
+              </>
+            ),
+          },
+        ]}
+      />
+    </Card>
   );
 }
