@@ -18,13 +18,21 @@ const links: { to: string; label: string; perm?: string }[] = [
 
 export default function Shell(): JSX.Element {
   const { me, loading, logout, can } = useAuth();
-  if (loading) return <div className="app-main">読み込み中…</div>;
+  if (loading) {
+    return (
+      <div className="app-loading">
+        <div className="app-loading-spinner" aria-hidden />
+        <span>読み込み中…</span>
+      </div>
+    );
+  }
   if (!me) return <Navigate to="/login" replace />;
 
   return (
     <div className="app-shell">
       <header className="app-header">
         <div className="app-header-bar">
+          <span className="app-header-brand">Daiko</span>
           <span className="app-header-meta">
             {me.tenant.slug} / {me.email}
           </span>

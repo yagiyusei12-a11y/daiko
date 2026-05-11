@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { useAuth } from "../auth";
-import { Card, Err, Tabs } from "../ui";
+import { Card, Err, StepWizard, Tabs, type StepWizardStep } from "../ui";
 
 type Role = { id: string; name: string; permissions: unknown };
 type UserRow = { id: string; email: string; displayName: string | null; roles: { id: string; name: string }[] };
@@ -17,6 +17,8 @@ export default function Rbac(): JSX.Element {
   const [newName, setNewName] = useState("");
   const [newPerms, setNewPerms] = useState("tenant.settings\npayroll.unlock");
   const [assignRole, setAssignRole] = useState<Record<string, string>>({});
+  const [roleWizardOpen, setRoleWizardOpen] = useState(false);
+  const [roleWizardSubmitting, setRoleWizardSubmitting] = useState(false);
 
   async function loadRoles(): Promise<void> {
     const r = await apiFetch<{ roles: Role[] }>("/roles");
@@ -44,21 +46,79 @@ export default function Rbac(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 初回と manage 切替のみで十分
   }, [manage]);
 
-  async function createRole(e: React.FormEvent): Promise<void> {
-    e.preventDefault();
+  async function submitNewRole(): Promise<void> {
     if (!manage) return;
     setErr(null);
-    const permissions = newPerms
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const r = await apiFetch<Role>("/roles", { method: "POST", json: { name: newName.trim(), permissions } });
-    if (!r.ok) setErr(r.error);
-    else {
+    setRoleWizardSubmitting(true);
+    try {
+      const permissions = newPerms
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const r = await apiFetch<Role>("/roles", { method: "POST", json: { name: newName.trim(), permissions } });
+      if (!r.ok) {
+        setErr(r.error);
+        return;
+      }
       setNewName("");
+      setNewPerms("tenant.settings\npayroll.unlock");
+      setRoleWizardOpen(false);
       await loadRoles();
+    } finally {
+      setRoleWizardSubmitting(false);
     }
   }
+
+  const nameOk = newName.trim().length > 0;
+  const permsOk = newPerms.trim().length > 0;
+
+  const roleWizardSteps: StepWizardStep[] = [
+    {
+      id: "rname",
+      title: "ロール名を入力してください",
+      description: "既存と重ならない名前を付けます。",
+      canProceed: nameOk,
+      children: (
+        <>
+          <label>名前</label>
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} autoFocus />
+        </>
+      ),
+    },
+    {
+      id: "rperms",
+      title: "権限を入力してください",
+      description: "1 行に 1 つの権限文字列（例: tenant.settings）。",
+      canProceed: permsOk,
+      children: (
+        <>
+          <label>権限（1 行 1 権限文字列）</label>
+          <textarea rows={6} value={newPerms} onChange={(e) => setNewPerms(e.target.value)} style={{ width: "100%" }} />
+        </>
+      ),
+    },
+    {
+      id: "rconfirm",
+      title: "作成内容の確認",
+      canProceed: nameOk && permsOk,
+      children: (
+        <dl className="step-wizard-summary">
+          <dt>名前</dt>
+          <dd>{newName.trim()}</dd>
+          <dt>権限行数</dt>
+          <dd>
+            {
+              newPerms
+                .split(/\r?\n/)
+                .map((s) => s.trim())
+                .filter(Boolean).length
+            }{" "}
+            件
+          </dd>
+        </dl>
+      ),
+    },
+  ];
 
   async function delRole(id: string, name: string): Promise<void> {
     if (!manage || !confirm(`ロール「${name}」を削除しますか？`)) return;
@@ -129,13 +189,26 @@ export default function Rbac(): JSX.Element {
             id: "create",
             label: "ロール作成",
             children: (
-              <form onSubmit={(e) => void createRole(e)}>
-                <label>名前</label>
-                <input value={newName} onChange={(e) => setNewName(e.target.value)} required />
-                <label>権限（1 行 1 権限文字列）</label>
-                <textarea rows={5} value={newPerms} onChange={(e) => setNewPerms(e.target.value)} style={{ width: "100%" }} />
-                <button type="submit">作成</button>
-              </form>
+              <>
+                <p style={{ marginTop: 0 }}>
+                  <button type="button" onClick={() => setRoleWizardOpen(true)}>
+                    ロールを作成
+                  </button>
+                </p>
+                <StepWizard
+                  open={roleWizardOpen}
+                  onClose={() => {
+                    setRoleWizardOpen(false);
+                    setNewName("");
+                    setNewPerms("tenant.settings\npayroll.unlock");
+                  }}
+                  title="ロールを作成"
+                  steps={roleWizardSteps}
+                  finishLabel="作成"
+                  onFinish={submitNewRole}
+                  isSubmitting={roleWizardSubmitting}
+                />
+              </>
             ),
           },
           {

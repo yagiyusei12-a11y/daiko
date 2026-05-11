@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../api";
-import { Card, Err } from "../ui";
+import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 type Emp = { id: string; familyName: string; givenName: string };
 type Veh = { id: string; label: string };
@@ -27,6 +27,8 @@ export default function DailyReports(): JSX.Element {
   const [emps, setEmps] = useState<Emp[]>([]);
   const [vehs, setVehs] = useState<Veh[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [vehicleId, setVehicleId] = useState("");
   const [mainEmployeeId, setMainEmployeeId] = useState("");
   const [meterStart, setMeterStart] = useState("");
@@ -48,70 +50,157 @@ export default function DailyReports(): JSX.Element {
     void load();
   }, []);
 
-  async function add(e: React.FormEvent): Promise<void> {
-    e.preventDefault();
-    setErr(null);
-    const r = await apiFetch<DR>("/daily-reports", {
-      method: "POST",
-      json: {
-        vehicleId,
-        mainEmployeeId,
-        meterStart: Number(meterStart),
-        meterEnd: Number(meterEnd),
-      },
-    });
-    if (!r.ok) setErr(r.error);
-    else await load();
+  function closeWizard(): void {
+    setWizardOpen(false);
+    setVehicleId("");
+    setMainEmployeeId("");
+    setMeterStart("");
+    setMeterEnd("");
   }
+
+  async function submitReport(): Promise<void> {
+    setErr(null);
+    setSubmitting(true);
+    try {
+      const r = await apiFetch<DR>("/daily-reports", {
+        method: "POST",
+        json: {
+          vehicleId,
+          mainEmployeeId,
+          meterStart: Number(meterStart),
+          meterEnd: Number(meterEnd),
+        },
+      });
+      if (!r.ok) {
+        setErr(r.error);
+        return;
+      }
+      closeWizard();
+      await load();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const vehOk = Boolean(vehicleId);
+  const empOk = Boolean(mainEmployeeId);
+  const msOk = meterStart.trim() !== "" && !Number.isNaN(Number(meterStart));
+  const meOk = meterEnd.trim() !== "" && !Number.isNaN(Number(meterEnd));
+  const metersOk = msOk && meOk && Number(meterEnd) >= Number(meterStart);
+
+  const vehLabel = vehs.find((v) => v.id === vehicleId)?.label;
+  const drvLabel = emps.find((e) => e.id === mainEmployeeId);
+
+  const steps: StepWizardStep[] = [
+    {
+      id: "veh",
+      title: "車両を選んでください",
+      description: "この日報に紐づく車両です。",
+      canProceed: vehOk,
+      children: (
+        <>
+          <label>車両</label>
+          <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} autoFocus>
+            <option value="">選択</option>
+            {vehs.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.label}
+              </option>
+            ))}
+          </select>
+        </>
+      ),
+    },
+    {
+      id: "drv",
+      title: "主ドライバーを選んでください",
+      canProceed: empOk,
+      children: (
+        <>
+          <label>主ドライバー</label>
+          <select value={mainEmployeeId} onChange={(e) => setMainEmployeeId(e.target.value)}>
+            <option value="">選択</option>
+            {emps.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.familyName} {x.givenName}
+              </option>
+            ))}
+          </select>
+        </>
+      ),
+    },
+    {
+      id: "meter",
+      title: "メーター値を入力してください",
+      description: "開始と終了を入力します。終了は開始以上である必要があります。",
+      canProceed: metersOk,
+      children: (
+        <>
+          <label>メーター開始</label>
+          <input value={meterStart} onChange={(e) => setMeterStart(e.target.value)} inputMode="numeric" />
+          <label>メーター終了</label>
+          <input value={meterEnd} onChange={(e) => setMeterEnd(e.target.value)} inputMode="numeric" />
+        </>
+      ),
+    },
+    {
+      id: "confirm",
+      title: "内容を確認してください",
+      canProceed: vehOk && empOk && metersOk,
+      children: (
+        <dl className="step-wizard-summary">
+          <dt>車両</dt>
+          <dd>{vehLabel ?? "—"}</dd>
+          <dt>主ドライバー</dt>
+          <dd>{drvLabel ? `${drvLabel.familyName} ${drvLabel.givenName}` : "—"}</dd>
+          <dt>メーター</dt>
+          <dd>
+            {meterStart} → {meterEnd}
+          </dd>
+        </dl>
+      ),
+    },
+  ];
 
   return (
     <Card title="日報">
       <Err msg={err} />
-      <form onSubmit={(e) => void add(e)}>
-        <label>車両</label>
-        <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} required>
-          <option value="">選択</option>
-          {vehs.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.label}
-            </option>
-          ))}
-        </select>
-        <label>主ドライバー</label>
-        <select value={mainEmployeeId} onChange={(e) => setMainEmployeeId(e.target.value)} required>
-          <option value="">選択</option>
-          {emps.map((x) => (
-            <option key={x.id} value={x.id}>
-              {x.familyName} {x.givenName}
-            </option>
-          ))}
-        </select>
-        <label>メーター開始</label>
-        <input value={meterStart} onChange={(e) => setMeterStart(e.target.value)} required />
-        <label>メーター終了</label>
-        <input value={meterEnd} onChange={(e) => setMeterEnd(e.target.value)} required />
-        <button type="submit">日報作成</button>
-      </form>
-      <table style={{ marginTop: "0.75rem" }}>
-        <thead>
-          <tr>
-            <th>日付</th>
-            <th>運行</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((x) => (
-            <tr key={x.id}>
-              <td>{x.businessDate}</td>
-              <td>{x.trips.length} 件</td>
-              <td>
-                <Link to={`/daily-reports/${x.id}`}>詳細</Link>
-              </td>
+      <p style={{ marginTop: 0 }}>
+        <button type="button" onClick={() => setWizardOpen(true)}>
+          日報を作成
+        </button>
+      </p>
+      <StepWizard
+        open={wizardOpen}
+        onClose={closeWizard}
+        title="日報を作成"
+        steps={steps}
+        finishLabel="日報作成"
+        onFinish={submitReport}
+        isSubmitting={submitting}
+      />
+      <div className="table-wrap" style={{ marginTop: "0.75rem" }}>
+        <table>
+          <thead>
+            <tr>
+              <th>日付</th>
+              <th>運行</th>
+              <th />
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td>{r.businessDate}</td>
+                <td>{r.trips.length} 件</td>
+                <td>
+                  <Link to={`/daily-reports/${r.id}`}>開く</Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Card>
   );
 }

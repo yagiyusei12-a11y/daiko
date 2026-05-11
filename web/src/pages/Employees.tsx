@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { REGISTER_EXTENSION_UI_FIELDS } from "../lib/registerExtensionFields";
-import { Card, Err } from "../ui";
+import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 type RegisterExt = Record<string, string>;
 
@@ -33,6 +33,8 @@ function ext(e: Emp, key: string): string {
 export default function Employees(): JSX.Element {
   const [rows, setRows] = useState<Emp[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [addWizardOpen, setAddWizardOpen] = useState(false);
+  const [addSubmitting, setAddSubmitting] = useState(false);
   const [familyName, setFamilyName] = useState("");
   const [givenName, setGivenName] = useState("");
   const [newFurigana, setNewFurigana] = useState("");
@@ -53,6 +55,102 @@ export default function Employees(): JSX.Element {
   useEffect(() => {
     void load();
   }, []);
+
+  function resetAddFields(): void {
+    setFamilyName("");
+    setGivenName("");
+    setNewFurigana("");
+    setNewAddress("");
+  }
+
+  function closeAddWizard(): void {
+    setAddWizardOpen(false);
+    resetAddFields();
+  }
+
+  async function submitNewEmployee(): Promise<void> {
+    setErr(null);
+    setAddSubmitting(true);
+    try {
+      const r = await apiFetch<Emp>("/employees", {
+        method: "POST",
+        json: {
+          familyName: familyName.trim(),
+          givenName: givenName.trim(),
+          furigana: newFurigana.trim() || undefined,
+          address: newAddress.trim() || undefined,
+        },
+      });
+      if (!r.ok) {
+        setErr(r.error);
+        return;
+      }
+      resetAddFields();
+      setAddWizardOpen(false);
+      await load();
+    } finally {
+      setAddSubmitting(false);
+    }
+  }
+
+  const nameOk = familyName.trim().length > 0 && givenName.trim().length > 0;
+
+  const addSteps: StepWizardStep[] = [
+    {
+      id: "name",
+      title: "氏名を入力してください",
+      description: "姓と名は必須です。名簿・帳票の表記に使われます。",
+      canProceed: nameOk,
+      children: (
+        <>
+          <label>姓</label>
+          <input value={familyName} onChange={(e) => setFamilyName(e.target.value)} autoFocus />
+          <label>名</label>
+          <input value={givenName} onChange={(e) => setGivenName(e.target.value)} />
+        </>
+      ),
+    },
+    {
+      id: "furigana",
+      title: "ふりがなを入力してください",
+      description: "任意です。未入力のまま次へ進めます。",
+      children: (
+        <>
+          <label>ふりがな（任意）</label>
+          <input value={newFurigana} onChange={(e) => setNewFurigana(e.target.value)} />
+        </>
+      ),
+    },
+    {
+      id: "address",
+      title: "住所を入力してください",
+      description: "任意です。名簿用の住所があれば入力してください。",
+      children: (
+        <>
+          <label>住所（任意）</label>
+          <textarea rows={3} value={newAddress} onChange={(e) => setNewAddress(e.target.value)} style={{ width: "100%", maxWidth: 480 }} />
+        </>
+      ),
+    },
+    {
+      id: "confirm",
+      title: "内容を確認してください",
+      description: "問題なければ「登録する」で保存します。",
+      canProceed: nameOk,
+      children: (
+        <dl className="step-wizard-summary">
+          <dt>氏名</dt>
+          <dd>
+            {familyName.trim()} {givenName.trim()}
+          </dd>
+          <dt>ふりがな</dt>
+          <dd>{newFurigana.trim() || "—"}</dd>
+          <dt>住所</dt>
+          <dd>{newAddress.trim() || "—"}</dd>
+        </dl>
+      ),
+    },
+  ];
 
   function openEdit(e: Emp): void {
     setEditId(e.id);
@@ -88,28 +186,6 @@ export default function Employees(): JSX.Element {
     }
   }
 
-  async function add(ev: React.FormEvent): Promise<void> {
-    ev.preventDefault();
-    setErr(null);
-    const r = await apiFetch<Emp>("/employees", {
-      method: "POST",
-      json: {
-        familyName,
-        givenName,
-        furigana: newFurigana.trim() || undefined,
-        address: newAddress.trim() || undefined,
-      },
-    });
-    if (!r.ok) setErr(r.error);
-    else {
-      setFamilyName("");
-      setGivenName("");
-      setNewFurigana("");
-      setNewAddress("");
-      await load();
-    }
-  }
-
   async function retire(id: string): Promise<void> {
     setErr(null);
     const r = await apiFetch(`/employees/${id}`, { method: "PATCH", json: { status: "RETIRED" } });
@@ -123,18 +199,21 @@ export default function Employees(): JSX.Element {
       <p style={{ fontSize: "0.82rem", marginTop: 0 }}>
         一覧の免許・電話は参照のみです。編集は各行の「名簿・基本情報」から全項目を入力してください。
       </p>
-      <form onSubmit={(e) => void add(e)}>
-        <label>姓</label>
-        <input value={familyName} onChange={(e) => setFamilyName(e.target.value)} required />
-        <label>名</label>
-        <input value={givenName} onChange={(e) => setGivenName(e.target.value)} required />
-        <label>ふりがな（任意）</label>
-        <input value={newFurigana} onChange={(e) => setNewFurigana(e.target.value)} />
-        <label>住所（任意）</label>
-        <textarea rows={2} value={newAddress} onChange={(e) => setNewAddress(e.target.value)} style={{ width: "100%", maxWidth: 480 }} />
-        <button type="submit">追加</button>
-      </form>
-      <div style={{ marginTop: "0.75rem", overflowX: "auto" }}>
+      <p style={{ marginTop: "0.5rem" }}>
+        <button type="button" onClick={() => setAddWizardOpen(true)}>
+          従業員を追加
+        </button>
+      </p>
+      <StepWizard
+        open={addWizardOpen}
+        onClose={closeAddWizard}
+        title="従業員を追加"
+        steps={addSteps}
+        finishLabel="登録する"
+        onFinish={submitNewEmployee}
+        isSubmitting={addSubmitting}
+      />
+      <div className="table-wrap">
         <table style={{ fontSize: "0.78rem", borderCollapse: "collapse", minWidth: 720 }}>
           <thead>
             <tr>

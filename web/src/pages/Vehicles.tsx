@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { Card, Err } from "../ui";
+import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 type V = {
   id: string;
@@ -18,6 +18,8 @@ function toYmd(iso: string | null | undefined): string {
 export default function Vehicles(): JSX.Element {
   const [rows, setRows] = useState<V[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [label, setLabel] = useState("");
   const [newPlate, setNewPlate] = useState("");
   const [newLegalStart, setNewLegalStart] = useState("");
@@ -32,21 +34,81 @@ export default function Vehicles(): JSX.Element {
     void load();
   }, []);
 
-  async function add(e: React.FormEvent): Promise<void> {
-    e.preventDefault();
+  function resetAdd(): void {
+    setLabel("");
+    setNewPlate("");
+    setNewLegalStart("");
+  }
+
+  function closeWizard(): void {
+    setWizardOpen(false);
+    resetAdd();
+  }
+
+  async function submitVehicle(): Promise<void> {
     setErr(null);
-    const json: Record<string, unknown> = { label };
-    if (newPlate.trim()) json.plate = newPlate.trim();
-    if (newLegalStart.trim()) json.legalCoverageStartOn = `${newLegalStart.trim()}T00:00:00.000Z`;
-    const r = await apiFetch<V>("/vehicles", { method: "POST", json });
-    if (!r.ok) setErr(r.error);
-    else {
-      setLabel("");
-      setNewPlate("");
-      setNewLegalStart("");
+    setSubmitting(true);
+    try {
+      const json: Record<string, unknown> = { label: label.trim() };
+      if (newPlate.trim()) json.plate = newPlate.trim();
+      if (newLegalStart.trim()) json.legalCoverageStartOn = `${newLegalStart.trim()}T00:00:00.000Z`;
+      const r = await apiFetch<V>("/vehicles", { method: "POST", json });
+      if (!r.ok) {
+        setErr(r.error);
+        return;
+      }
+      resetAdd();
+      setWizardOpen(false);
       await load();
+    } finally {
+      setSubmitting(false);
     }
   }
+
+  const labelOk = label.trim().length > 0;
+
+  const steps: StepWizardStep[] = [
+    {
+      id: "label",
+      title: "表示名を入力してください",
+      description: "一覧や日報で表示される車両名です（必須）。",
+      canProceed: labelOk,
+      children: (
+        <>
+          <label>表示名</label>
+          <input value={label} onChange={(e) => setLabel(e.target.value)} autoFocus />
+        </>
+      ),
+    },
+    {
+      id: "extra",
+      title: "ナンバーと補償開始日（任意）",
+      description: "わかる範囲で入力してください。後から編集できます。",
+      children: (
+        <>
+          <label>ナンバー（任意）</label>
+          <input value={newPlate} onChange={(e) => setNewPlate(e.target.value)} />
+          <label>補償開始日（任意・YYYY-MM-DD）</label>
+          <input type="date" value={newLegalStart} onChange={(e) => setNewLegalStart(e.target.value)} />
+        </>
+      ),
+    },
+    {
+      id: "confirm",
+      title: "内容を確認してください",
+      canProceed: labelOk,
+      children: (
+        <dl className="step-wizard-summary">
+          <dt>表示名</dt>
+          <dd>{label.trim()}</dd>
+          <dt>ナンバー</dt>
+          <dd>{newPlate.trim() || "—"}</dd>
+          <dt>補償開始日</dt>
+          <dd>{newLegalStart.trim() || "—"}</dd>
+        </dl>
+      ),
+    },
+  ];
 
   async function toggleActive(v: V): Promise<void> {
     setErr(null);
@@ -69,16 +131,21 @@ export default function Vehicles(): JSX.Element {
   return (
     <Card title="車両">
       <Err msg={err} />
-      <form onSubmit={(e) => void add(e)}>
-        <label>表示名</label>
-        <input value={label} onChange={(e) => setLabel(e.target.value)} required />
-        <label>ナンバー（任意）</label>
-        <input value={newPlate} onChange={(e) => setNewPlate(e.target.value)} />
-        <label>補償開始日 legalCoverageStartOn（任意・YYYY-MM-DD）</label>
-        <input type="date" value={newLegalStart} onChange={(e) => setNewLegalStart(e.target.value)} />
-        <button type="submit">追加</button>
-      </form>
-      <div style={{ marginTop: "0.75rem", overflowX: "auto" }}>
+      <p style={{ marginTop: 0 }}>
+        <button type="button" onClick={() => setWizardOpen(true)}>
+          車両を追加
+        </button>
+      </p>
+      <StepWizard
+        open={wizardOpen}
+        onClose={closeWizard}
+        title="車両を追加"
+        steps={steps}
+        finishLabel="登録する"
+        onFinish={submitVehicle}
+        isSubmitting={submitting}
+      />
+      <div className="table-wrap">
         <table style={{ fontSize: "0.88rem", borderCollapse: "collapse", minWidth: 560 }}>
           <thead>
             <tr>
@@ -121,18 +188,18 @@ function VehicleRow({
     <tr>
       <td style={{ border: "1px solid #ccc", padding: 6 }}>{v.label}</td>
       <td style={{ border: "1px solid #ccc", padding: 6 }}>
-        <input value={plate} onChange={(e) => setPlate(e.target.value)} style={{ width: 120 }} />
+        <input value={plate} onChange={(e) => setPlate(e.target.value)} style={{ width: "100%", minWidth: 100 }} />
       </td>
       <td style={{ border: "1px solid #ccc", padding: 6 }}>
         <input type="date" value={legalYmd} onChange={(e) => setLegalYmd(e.target.value)} />
       </td>
       <td style={{ border: "1px solid #ccc", padding: 6 }}>{v.active ? "はい" : "いいえ"}</td>
-      <td style={{ border: "1px solid #ccc", padding: 6, whiteSpace: "nowrap" }}>
+      <td style={{ border: "1px solid #ccc", padding: 6 }}>
         <button type="button" onClick={() => onSave(v, plate, legalYmd)}>
           保存
         </button>{" "}
         <button type="button" onClick={onToggle}>
-          有効切替
+          {v.active ? "無効化" : "有効化"}
         </button>
       </td>
     </tr>

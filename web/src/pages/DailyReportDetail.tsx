@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { apiFetch } from "../api";
-import { Card, Err } from "../ui";
+import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 type Trip = {
   id: string;
@@ -28,6 +28,8 @@ export default function DailyReportDetail(): JSX.Element {
   const [rep, setRep] = useState<DR | null>(null);
   const [versions, setVersions] = useState<Ver[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [tripWizardOpen, setTripWizardOpen] = useState(false);
+  const [tripSubmitting, setTripSubmitting] = useState(false);
   const [clientName, setClientName] = useState("顧客");
   const [origin, setOrigin] = useState("A");
   const [destination, setDestination] = useState("B");
@@ -48,7 +50,7 @@ export default function DailyReportDetail(): JSX.Element {
     if (rp.ok) {
       const vers = rp.data.plans.flatMap((p) => p.versions);
       setVersions(vers);
-      if (!tariffVersionId && vers[0]) setTariffVersionId(vers[0].id);
+      setTariffVersionId((tid) => tid || (vers[0]?.id ?? ""));
     }
   }
 
@@ -56,26 +58,110 @@ export default function DailyReportDetail(): JSX.Element {
     void load();
   }, [id]);
 
-  async function addTrip(e: React.FormEvent): Promise<void> {
-    e.preventDefault();
+  function closeTripWizard(): void {
+    setTripWizardOpen(false);
+    setClientName("顧客");
+    setOrigin("A");
+    setDestination("B");
+    setDistanceM("3000");
+    setWaitingMinutes("0");
+  }
+
+  async function submitTrip(): Promise<void> {
     if (!id) return;
     setErr(null);
-    const r = await apiFetch<Trip>(`/daily-reports/${id}/trips`, {
-      method: "POST",
-      json: {
-        clientName,
-        origin,
-        destination,
-        departedAt: new Date().toISOString(),
-        arrivedAt: new Date().toISOString(),
-        distanceM: Number(distanceM),
-        waitingMinutes: Number(waitingMinutes || 0),
-        tariffVersionId: tariffVersionId || null,
-      },
-    });
-    if (!r.ok) setErr(r.error);
-    else await load();
+    setTripSubmitting(true);
+    try {
+      const r = await apiFetch<Trip>(`/daily-reports/${id}/trips`, {
+        method: "POST",
+        json: {
+          clientName,
+          origin,
+          destination,
+          departedAt: new Date().toISOString(),
+          arrivedAt: new Date().toISOString(),
+          distanceM: Number(distanceM),
+          waitingMinutes: Number(waitingMinutes || 0),
+          tariffVersionId: tariffVersionId || null,
+        },
+      });
+      if (!r.ok) {
+        setErr(r.error);
+        return;
+      }
+      closeTripWizard();
+      await load();
+    } finally {
+      setTripSubmitting(false);
+    }
   }
+
+  const routeOk = clientName.trim().length > 0 && origin.trim().length > 0 && destination.trim().length > 0;
+  const distOk = distanceM.trim() !== "" && !Number.isNaN(Number(distanceM));
+  const waitOk = waitingMinutes.trim() === "" || !Number.isNaN(Number(waitingMinutes));
+
+  const steps: StepWizardStep[] = [
+    {
+      id: "route",
+      title: "顧客と区間を入力してください",
+      description: "運行の基本情報です。",
+      canProceed: routeOk,
+      children: (
+        <>
+          <label>顧客名</label>
+          <input value={clientName} onChange={(e) => setClientName(e.target.value)} autoFocus />
+          <label>出発地</label>
+          <input value={origin} onChange={(e) => setOrigin(e.target.value)} />
+          <label>到着地</label>
+          <input value={destination} onChange={(e) => setDestination(e.target.value)} />
+        </>
+      ),
+    },
+    {
+      id: "metrics",
+      title: "距離・待機・料金版",
+      description: "距離はメートル単位です。料金版は任意です。",
+      canProceed: distOk && waitOk,
+      children: (
+        <>
+          <label>距離 (m)</label>
+          <input value={distanceM} onChange={(e) => setDistanceM(e.target.value)} inputMode="numeric" />
+          <label>待機 (分)</label>
+          <input value={waitingMinutes} onChange={(e) => setWaitingMinutes(e.target.value)} inputMode="numeric" />
+          <label>料金版（任意）</label>
+          <select value={tariffVersionId} onChange={(e) => setTariffVersionId(e.target.value)}>
+            <option value="">なし</option>
+            {versions.map((v) => (
+              <option key={v.id} value={v.id}>
+                v{v.version}
+              </option>
+            ))}
+          </select>
+        </>
+      ),
+    },
+    {
+      id: "confirm",
+      title: "運行追加の確認",
+      canProceed: routeOk && distOk && waitOk,
+      children: (
+        <dl className="step-wizard-summary">
+          <dt>顧客</dt>
+          <dd>{clientName}</dd>
+          <dt>区間</dt>
+          <dd>
+            {origin} → {destination}
+          </dd>
+          <dt>距離 / 待機</dt>
+          <dd>
+            {distanceM} m / {waitingMinutes || "0"} 分
+          </dd>
+          <dt>料金版</dt>
+          <dd>{tariffVersionId ? `v${versions.find((x) => x.id === tariffVersionId)?.version ?? ""}` : "なし"}</dd>
+        </dl>
+      ),
+    },
+  ];
 
   async function delRep(): Promise<void> {
     if (!id || !confirm("この日報を削除しますか？")) return;
@@ -97,54 +183,48 @@ export default function DailyReportDetail(): JSX.Element {
         </button>
       </Card>
       <Card title="運行追加">
-        <form onSubmit={(e) => void addTrip(e)}>
-          <label>顧客名</label>
-          <input value={clientName} onChange={(e) => setClientName(e.target.value)} />
-          <label>出発地</label>
-          <input value={origin} onChange={(e) => setOrigin(e.target.value)} />
-          <label>到着地</label>
-          <input value={destination} onChange={(e) => setDestination(e.target.value)} />
-          <label>距離 (m)</label>
-          <input value={distanceM} onChange={(e) => setDistanceM(e.target.value)} />
-          <label>待機 (分)</label>
-          <input value={waitingMinutes} onChange={(e) => setWaitingMinutes(e.target.value)} />
-          <label>料金版（任意）</label>
-          <select value={tariffVersionId} onChange={(e) => setTariffVersionId(e.target.value)}>
-            <option value="">なし</option>
-            {versions.map((v) => (
-              <option key={v.id} value={v.id}>
-                v{v.version}
-              </option>
-            ))}
-          </select>
-          <button type="submit">運行追加</button>
-        </form>
+        <p style={{ marginTop: 0 }}>
+          <button type="button" onClick={() => setTripWizardOpen(true)}>
+            運行を追加
+          </button>
+        </p>
+        <StepWizard
+          open={tripWizardOpen}
+          onClose={closeTripWizard}
+          title="運行を追加"
+          steps={steps}
+          finishLabel="運行追加"
+          onFinish={submitTrip}
+          isSubmitting={tripSubmitting}
+        />
       </Card>
       <Card title="運行一覧">
-        <table>
-          <thead>
-            <tr>
-              <th>顧客</th>
-              <th>区間</th>
-              <th>運賃</th>
-              <th>距離</th>
-              <th>待機</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rep.trips.map((t) => (
-              <tr key={t.id}>
-                <td>{t.clientName}</td>
-                <td>
-                  {t.origin}→{t.destination}
-                </td>
-                <td>{t.fareYen}</td>
-                <td>{t.distanceM}</td>
-                <td>{t.waitingMinutes}</td>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>顧客</th>
+                <th>区間</th>
+                <th>運賃</th>
+                <th>距離</th>
+                <th>待機</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rep.trips.map((t) => (
+                <tr key={t.id}>
+                  <td>{t.clientName}</td>
+                  <td>
+                    {t.origin}→{t.destination}
+                  </td>
+                  <td>{t.fareYen}</td>
+                  <td>{t.distanceM}</td>
+                  <td>{t.waitingMinutes}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </>
   );

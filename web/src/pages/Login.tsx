@@ -20,8 +20,9 @@ export default function Login(): JSX.Element {
   }
 
   return (
-    <div className="app-main">
+    <div className="auth-screen">
       <Card title="ログイン">
+        <p className="auth-lede">テナント ID とメールでサインインします。</p>
         <form onSubmit={(e) => void onSubmit(e)}>
           <label>テナント slug</label>
           <input value={slug} onChange={(e) => setSlug(e.target.value)} autoComplete="organization" required />
@@ -32,7 +33,7 @@ export default function Login(): JSX.Element {
           <Err msg={err} />
           <button type="submit">ログイン</button>
         </form>
-        <p style={{ fontSize: "0.85rem", marginTop: "0.75rem" }}>
+        <p className="auth-footer">
           <Link to="/register">新規テナント登録</Link>
         </p>
       </Card>

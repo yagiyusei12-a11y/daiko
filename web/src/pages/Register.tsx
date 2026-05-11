@@ -28,8 +28,9 @@ export default function Register(): JSX.Element {
   }
 
   return (
-    <div className="app-main">
+    <div className="auth-screen auth-screen--wide">
       <Card title="新規テナント登録">
+        <p className="auth-lede">事業者・slug・オーナーアカウントを一度に作成します。</p>
         <form onSubmit={(e) => void onSubmit(e)}>
           <label>事業者名</label>
           <input value={tenantName} onChange={(e) => setTenantName(e.target.value)} required />
@@ -44,7 +45,7 @@ export default function Register(): JSX.Element {
           <Err msg={err} />
           <button type="submit">登録してログイン</button>
         </form>
-        <p style={{ fontSize: "0.85rem", marginTop: "0.75rem" }}>
+        <p className="auth-footer">
           <Link to="/login">ログインへ</Link>
         </p>
       </Card>

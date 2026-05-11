@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { Card, Err, Tabs } from "../ui";
+import { Card, Err, StepWizard, Tabs, type StepWizardStep } from "../ui";
 
 type Employee = { id: string; familyName: string; givenName: string };
 
@@ -260,6 +260,12 @@ export default function Legal(): JSX.Element {
   const [changes, setChanges] = useState<ChangeNotice[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [legalTab, setLegalTab] = useState("complaints");
+  const [complaintWizardOpen, setComplaintWizardOpen] = useState(false);
+  const [complaintWizardSubmitting, setComplaintWizardSubmitting] = useState(false);
+  const [guidanceWizardOpen, setGuidanceWizardOpen] = useState(false);
+  const [guidanceWizardSubmitting, setGuidanceWizardSubmitting] = useState(false);
+  const [changeWizardOpen, setChangeWizardOpen] = useState(false);
+  const [changeWizardSubmitting, setChangeWizardSubmitting] = useState(false);
 
   const [newComplaint, setNewComplaint] = useState(() => emptyComplaintForm());
   const [editComplaintId, setEditComplaintId] = useState<string | null>(null);
@@ -293,19 +299,22 @@ export default function Legal(): JSX.Element {
     void loadAll();
   }, []);
 
-  async function createComplaint(e: React.FormEvent): Promise<void> {
-    e.preventDefault();
+  async function submitNewComplaint(): Promise<void> {
     setErr(null);
+    setComplaintWizardSubmitting(true);
     try {
       const json = complaintPayload(newComplaint);
       const r = await apiFetch("/legal/complaints", { method: "POST", json });
       if (!r.ok) setErr(r.error);
       else {
         setNewComplaint(emptyComplaintForm());
+        setComplaintWizardOpen(false);
         await loadAll();
       }
     } catch (x) {
       setErr(String(x));
+    } finally {
+      setComplaintWizardSubmitting(false);
     }
   }
 
@@ -324,19 +333,22 @@ export default function Legal(): JSX.Element {
     }
   }
 
-  async function createGuidance(e: React.FormEvent): Promise<void> {
-    e.preventDefault();
+  async function submitNewGuidance(): Promise<void> {
     setErr(null);
+    setGuidanceWizardSubmitting(true);
     try {
       const json = guidancePayload(newGuidance);
       const r = await apiFetch("/legal/guidance", { method: "POST", json });
       if (!r.ok) setErr(r.error);
       else {
         setNewGuidance(emptyGuidanceForm());
+        setGuidanceWizardOpen(false);
         await loadAll();
       }
     } catch (x) {
       setErr(String(x));
+    } finally {
+      setGuidanceWizardSubmitting(false);
     }
   }
 
@@ -355,19 +367,22 @@ export default function Legal(): JSX.Element {
     }
   }
 
-  async function createChangeNotice(e: React.FormEvent): Promise<void> {
-    e.preventDefault();
+  async function submitNewChangeNotice(): Promise<void> {
     setErr(null);
+    setChangeWizardSubmitting(true);
     try {
       const json = changePayload(newChange);
       const r = await apiFetch("/legal/change-notices", { method: "POST", json });
       if (!r.ok) setErr(r.error);
       else {
         setNewChange(emptyChangeForm());
+        setChangeWizardOpen(false);
         await loadAll();
       }
     } catch (x) {
       setErr(String(x));
+    } finally {
+      setChangeWizardSubmitting(false);
     }
   }
 
@@ -434,21 +449,14 @@ export default function Legal(): JSX.Element {
 
   const fieldStyle = { width: "100%", maxWidth: 520 } as const;
 
-  return (
-    <Card title="法定記録">
-      <Err msg={err} />
-      <Tabs
-        aria-label="法定記録の種別"
-        activeId={legalTab}
-        onActiveChange={setLegalTab}
-        items={[
-          {
-            id: "complaints",
-            label: "苦情処理簿",
-            children: (
-              <>
-        <h4 style={{ fontSize: "0.95rem", margin: "0 0 0.5rem" }}>新規登録（全項目）</h4>
-        <form onSubmit={(e) => void createComplaint(e)} style={{ display: "grid", gap: "0.35rem", fontSize: "0.88rem" }}>
+  const complaintWizardSteps: StepWizardStep[] = [
+    {
+      id: "c_recv",
+      title: "受付・現場",
+      description: "受付日と受付者を入力してください。",
+      canProceed: Boolean(String(newComplaint.receivedAtYmd).trim()),
+      children: (
+        <div style={{ display: "grid", gap: "0.35rem", fontSize: "0.88rem" }}>
           <label>受付日</label>
           <input type="date" value={String(newComplaint.receivedAtYmd)} onChange={(ev) => setNc("receivedAtYmd", ev.target.value)} />
           <label>受付者</label>
@@ -466,12 +474,29 @@ export default function Legal(): JSX.Element {
               </option>
             ))}
           </select>
+        </div>
+      ),
+    },
+    {
+      id: "c_person",
+      title: "苦情者",
+      description: "苦情者の連絡先情報です（任意項目あり）。",
+      children: (
+        <div style={{ display: "grid", gap: "0.35rem", fontSize: "0.88rem" }}>
           <label>苦情者氏名</label>
           <input value={String(newComplaint.complainantName)} onChange={(ev) => setNc("complainantName", ev.target.value)} style={fieldStyle} />
           <label>苦情者住所</label>
           <textarea rows={2} value={String(newComplaint.complainantAddress)} onChange={(ev) => setNc("complainantAddress", ev.target.value)} style={fieldStyle} />
           <label>苦情者連絡先</label>
           <input value={String(newComplaint.complainantContact)} onChange={(ev) => setNc("complainantContact", ev.target.value)} style={fieldStyle} />
+        </div>
+      ),
+    },
+    {
+      id: "c_detail",
+      title: "内容・区分",
+      children: (
+        <div style={{ display: "grid", gap: "0.35rem", fontSize: "0.88rem" }}>
           <label>区分</label>
           <input value={String(newComplaint.category)} onChange={(ev) => setNc("category", ev.target.value)} style={fieldStyle} />
           <label>区分（その他）</label>
@@ -482,6 +507,14 @@ export default function Legal(): JSX.Element {
           <textarea rows={2} value={String(newComplaint.causeAnalysis)} onChange={(ev) => setNc("causeAnalysis", ev.target.value)} style={fieldStyle} />
           <label>反論・主張</label>
           <textarea rows={2} value={String(newComplaint.rebuttal)} onChange={(ev) => setNc("rebuttal", ev.target.value)} style={fieldStyle} />
+        </div>
+      ),
+    },
+    {
+      id: "c_action",
+      title: "対応・確認",
+      children: (
+        <div style={{ display: "grid", gap: "0.35rem", fontSize: "0.88rem" }}>
           <label>是正処置</label>
           <textarea rows={2} value={String(newComplaint.correctiveAction)} onChange={(ev) => setNc("correctiveAction", ev.target.value)} style={fieldStyle} />
           <label>担当者名</label>
@@ -492,8 +525,208 @@ export default function Legal(): JSX.Element {
             <input type="checkbox" checked={Boolean(newComplaint.representativeChecked)} onChange={(ev) => setNc("representativeChecked", ev.target.checked)} />{" "}
             代表者確認済
           </label>
-          <button type="submit">苦情を追加</button>
-        </form>
+        </div>
+      ),
+    },
+    {
+      id: "c_confirm",
+      title: "登録前の確認",
+      canProceed: Boolean(String(newComplaint.receivedAtYmd).trim()),
+      children: (
+        <dl className="step-wizard-summary">
+          <dt>受付日</dt>
+          <dd>{String(newComplaint.receivedAtYmd)}</dd>
+          <dt>苦情内容（抜粋）</dt>
+          <dd>{String(newComplaint.detail).slice(0, 120) || "—"}</dd>
+        </dl>
+      ),
+    },
+  ];
+
+  const guidanceStartedOk = Boolean(String(newGuidance.startedAtYmd).trim());
+
+  const guidanceWizardSteps: StepWizardStep[] = [
+    {
+      id: "g_when",
+      title: "日時・場所・指導者",
+      description: "指導開始日は必須です。",
+      canProceed: guidanceStartedOk,
+      children: (
+        <div style={{ display: "grid", gap: "0.35rem", fontSize: "0.88rem" }}>
+          <label>指導開始日</label>
+          <input type="date" value={String(newGuidance.startedAtYmd)} onChange={(ev) => setNg("startedAtYmd", ev.target.value)} />
+          <label>指導終了日</label>
+          <input type="date" value={String(newGuidance.endedAtYmd)} onChange={(ev) => setNg("endedAtYmd", ev.target.value)} />
+          <label>場所</label>
+          <input value={String(newGuidance.location)} onChange={(ev) => setNg("location", ev.target.value)} style={fieldStyle} />
+          <label>指導者氏名</label>
+          <input value={String(newGuidance.instructorName)} onChange={(ev) => setNg("instructorName", ev.target.value)} style={fieldStyle} />
+        </div>
+      ),
+    },
+    {
+      id: "g_topics",
+      title: "題目・備考",
+      children: (
+        <div style={{ display: "grid", gap: "0.35rem", fontSize: "0.88rem" }}>
+          <label>題目（チェック）</label>
+          <label>
+            <input type="checkbox" checked={Boolean(newGuidance.topicFeeCollection)} onChange={(ev) => setNg("topicFeeCollection", ev.target.checked)} />{" "}
+            運賃の収受
+          </label>
+          <label>
+            <input type="checkbox" checked={Boolean(newGuidance.topicTerms)} onChange={(ev) => setNg("topicTerms", ev.target.checked)} /> 約款
+          </label>
+          <label>
+            <input type="checkbox" checked={Boolean(newGuidance.topicConditionExplain)} onChange={(ev) => setNg("topicConditionExplain", ev.target.checked)} />{" "}
+            運送条件の説明
+          </label>
+          <label>
+            <input type="checkbox" checked={Boolean(newGuidance.topicMarking)} onChange={(ev) => setNg("topicMarking", ev.target.checked)} /> 標識の取付け
+          </label>
+          <label>
+            <input type="checkbox" checked={Boolean(newGuidance.topicRoadTransportLaw)} onChange={(ev) => setNg("topicRoadTransportLaw", ev.target.checked)} />{" "}
+            道路運送法
+          </label>
+          <label>題目（その他・名称）</label>
+          <input value={String(newGuidance.topicOther)} onChange={(ev) => setNg("topicOther", ev.target.value)} style={fieldStyle} />
+          <label>題目（その他・内容）</label>
+          <textarea rows={2} value={String(newGuidance.topicOtherDetail)} onChange={(ev) => setNg("topicOtherDetail", ev.target.value)} style={fieldStyle} />
+          <label>備考</label>
+          <textarea rows={2} value={String(newGuidance.remarks)} onChange={(ev) => setNg("remarks", ev.target.value)} style={fieldStyle} />
+          <label>
+            <input type="checkbox" checked={Boolean(newGuidance.representativeChecked)} onChange={(ev) => setNg("representativeChecked", ev.target.checked)} />{" "}
+            代表者確認済
+          </label>
+        </div>
+      ),
+    },
+    {
+      id: "g_attendees",
+      title: "受講者",
+      description: "社内従業員または氏名手入力で追加できます。",
+      children: (
+        <div style={{ display: "grid", gap: "0.35rem", fontSize: "0.88rem" }}>
+          <span>受講者（複数可）</span>
+          {(newGuidance.attendees as { employeeId: string | null; attendeeName: string }[]).map((a, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <select value={a.employeeId ?? ""} onChange={(ev) => setAttendee("new", i, "employeeId", ev.target.value)}>
+                <option value="">（氏名手入力）</option>
+                {employees.map((em) => (
+                  <option key={em.id} value={em.id}>
+                    {em.familyName} {em.givenName}
+                  </option>
+                ))}
+              </select>
+              <input placeholder="氏名（外部受講者等）" value={a.attendeeName} onChange={(ev) => setAttendee("new", i, "attendeeName", ev.target.value)} style={{ minWidth: 160 }} />
+            </div>
+          ))}
+          <button type="button" onClick={() => addAttendee("new")}>
+            受講者を追加
+          </button>
+        </div>
+      ),
+    },
+    {
+      id: "g_confirm",
+      title: "登録前の確認",
+      canProceed: guidanceStartedOk,
+      children: (
+        <dl className="step-wizard-summary">
+          <dt>指導開始日</dt>
+          <dd>{String(newGuidance.startedAtYmd)}</dd>
+          <dt>場所</dt>
+          <dd>{String(newGuidance.location) || "—"}</dd>
+        </dl>
+      ),
+    },
+  ];
+
+  const changeWizardSteps: StepWizardStep[] = [
+    {
+      id: "ch_meta",
+      title: "変更の概要と日付",
+      children: (
+        <div style={{ display: "grid", gap: "0.35rem", fontSize: "0.88rem" }}>
+          <label>変更事項</label>
+          <input value={newChange.changeType} onChange={(ev) => setNewChange((p) => ({ ...p, changeType: ev.target.value }))} style={fieldStyle} />
+          <label>提出日</label>
+          <input type="date" value={newChange.submittedOnYmd} onChange={(ev) => setNewChange((p) => ({ ...p, submittedOnYmd: ev.target.value }))} />
+          <label>変更日</label>
+          <input type="date" value={newChange.changedOnYmd} onChange={(ev) => setNewChange((p) => ({ ...p, changedOnYmd: ev.target.value }))} />
+          <label>効力発生日</label>
+          <input type="date" value={newChange.effectiveOnYmd} onChange={(ev) => setNewChange((p) => ({ ...p, effectiveOnYmd: ev.target.value }))} />
+        </div>
+      ),
+    },
+    {
+      id: "ch_values",
+      title: "旧・新の内容",
+      children: (
+        <div style={{ display: "grid", gap: "0.35rem", fontSize: "0.88rem" }}>
+          <label>旧</label>
+          <textarea rows={2} value={newChange.oldValue} onChange={(ev) => setNewChange((p) => ({ ...p, oldValue: ev.target.value }))} style={fieldStyle} />
+          <label>新</label>
+          <textarea rows={2} value={newChange.newValue} onChange={(ev) => setNewChange((p) => ({ ...p, newValue: ev.target.value }))} style={fieldStyle} />
+        </div>
+      ),
+    },
+    {
+      id: "ch_reason",
+      title: "理由・備考",
+      children: (
+        <div style={{ display: "grid", gap: "0.35rem", fontSize: "0.88rem" }}>
+          <label>変更理由</label>
+          <textarea rows={2} value={newChange.reason} onChange={(ev) => setNewChange((p) => ({ ...p, reason: ev.target.value }))} style={fieldStyle} />
+          <label>備考</label>
+          <textarea rows={2} value={newChange.notes} onChange={(ev) => setNewChange((p) => ({ ...p, notes: ev.target.value }))} style={fieldStyle} />
+        </div>
+      ),
+    },
+    {
+      id: "ch_confirm",
+      title: "登録前の確認",
+      children: (
+        <dl className="step-wizard-summary">
+          <dt>変更事項</dt>
+          <dd>{newChange.changeType || "—"}</dd>
+          <dt>新</dt>
+          <dd>{(newChange.newValue || "—").slice(0, 120)}</dd>
+        </dl>
+      ),
+    },
+  ];
+
+  return (
+    <Card title="法定記録">
+      <Err msg={err} />
+      <Tabs
+        aria-label="法定記録の種別"
+        activeId={legalTab}
+        onActiveChange={setLegalTab}
+        items={[
+          {
+            id: "complaints",
+            label: "苦情処理簿",
+            children: (
+              <>
+        <p style={{ marginTop: 0 }}>
+          <button type="button" onClick={() => setComplaintWizardOpen(true)}>
+            苦情を新規登録
+          </button>
+        </p>
+        <StepWizard
+          open={complaintWizardOpen}
+          onClose={() => {
+            setComplaintWizardOpen(false);
+            setNewComplaint(emptyComplaintForm());
+          }}
+          title="苦情処理（新規）"
+          steps={complaintWizardSteps}
+          finishLabel="苦情を登録"
+          onFinish={submitNewComplaint}
+          isSubmitting={complaintWizardSubmitting}
+        />
         <p style={{ fontSize: "0.85rem", marginTop: "0.75rem" }}>登録件数: {complaints.length}</p>
         {complaints.slice(0, 30).map((x) => (
           <div key={x.id} style={{ borderTop: "1px solid #ddd", marginTop: 8, paddingTop: 8 }}>
@@ -570,64 +803,23 @@ export default function Legal(): JSX.Element {
             label: "指導記録簿",
             children: (
               <>
-        <h4 style={{ fontSize: "0.95rem", margin: "0 0 0.5rem" }}>新規登録（全項目）</h4>
-        <form onSubmit={(e) => void createGuidance(e)} style={{ display: "grid", gap: "0.35rem", fontSize: "0.88rem" }}>
-          <label>指導開始日</label>
-          <input type="date" value={String(newGuidance.startedAtYmd)} onChange={(ev) => setNg("startedAtYmd", ev.target.value)} />
-          <label>指導終了日</label>
-          <input type="date" value={String(newGuidance.endedAtYmd)} onChange={(ev) => setNg("endedAtYmd", ev.target.value)} />
-          <label>場所</label>
-          <input value={String(newGuidance.location)} onChange={(ev) => setNg("location", ev.target.value)} style={fieldStyle} />
-          <label>指導者氏名</label>
-          <input value={String(newGuidance.instructorName)} onChange={(ev) => setNg("instructorName", ev.target.value)} style={fieldStyle} />
-          <label>題目（チェック）</label>
-          <label>
-            <input type="checkbox" checked={Boolean(newGuidance.topicFeeCollection)} onChange={(ev) => setNg("topicFeeCollection", ev.target.checked)} />{" "}
-            運賃の収受
-          </label>
-          <label>
-            <input type="checkbox" checked={Boolean(newGuidance.topicTerms)} onChange={(ev) => setNg("topicTerms", ev.target.checked)} /> 約款
-          </label>
-          <label>
-            <input type="checkbox" checked={Boolean(newGuidance.topicConditionExplain)} onChange={(ev) => setNg("topicConditionExplain", ev.target.checked)} />{" "}
-            運送条件の説明
-          </label>
-          <label>
-            <input type="checkbox" checked={Boolean(newGuidance.topicMarking)} onChange={(ev) => setNg("topicMarking", ev.target.checked)} /> 標識の取付け
-          </label>
-          <label>
-            <input type="checkbox" checked={Boolean(newGuidance.topicRoadTransportLaw)} onChange={(ev) => setNg("topicRoadTransportLaw", ev.target.checked)} />{" "}
-            道路運送法
-          </label>
-          <label>題目（その他・名称）</label>
-          <input value={String(newGuidance.topicOther)} onChange={(ev) => setNg("topicOther", ev.target.value)} style={fieldStyle} />
-          <label>題目（その他・内容）</label>
-          <textarea rows={2} value={String(newGuidance.topicOtherDetail)} onChange={(ev) => setNg("topicOtherDetail", ev.target.value)} style={fieldStyle} />
-          <label>備考</label>
-          <textarea rows={2} value={String(newGuidance.remarks)} onChange={(ev) => setNg("remarks", ev.target.value)} style={fieldStyle} />
-          <label>
-            <input type="checkbox" checked={Boolean(newGuidance.representativeChecked)} onChange={(ev) => setNg("representativeChecked", ev.target.checked)} />{" "}
-            代表者確認済
-          </label>
-          <span>受講者（複数可）</span>
-          {(newGuidance.attendees as { employeeId: string | null; attendeeName: string }[]).map((a, i) => (
-            <div key={i} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <select value={a.employeeId ?? ""} onChange={(ev) => setAttendee("new", i, "employeeId", ev.target.value)}>
-                <option value="">（氏名手入力）</option>
-                {employees.map((em) => (
-                  <option key={em.id} value={em.id}>
-                    {em.familyName} {em.givenName}
-                  </option>
-                ))}
-              </select>
-              <input placeholder="氏名（外部受講者等）" value={a.attendeeName} onChange={(ev) => setAttendee("new", i, "attendeeName", ev.target.value)} style={{ minWidth: 160 }} />
-            </div>
-          ))}
-          <button type="button" onClick={() => addAttendee("new")}>
-            受講者を追加
+        <p style={{ marginTop: 0 }}>
+          <button type="button" onClick={() => setGuidanceWizardOpen(true)}>
+            指導記録を新規登録
           </button>
-          <button type="submit">指導記録を追加</button>
-        </form>
+        </p>
+        <StepWizard
+          open={guidanceWizardOpen}
+          onClose={() => {
+            setGuidanceWizardOpen(false);
+            setNewGuidance(emptyGuidanceForm());
+          }}
+          title="指導記録（新規）"
+          steps={guidanceWizardSteps}
+          finishLabel="指導記録を登録"
+          onFinish={submitNewGuidance}
+          isSubmitting={guidanceWizardSubmitting}
+        />
         <p style={{ fontSize: "0.85rem", marginTop: "0.75rem" }}>登録件数: {guidances.length}</p>
         {guidances.slice(0, 30).map((x) => (
           <div key={x.id} style={{ borderTop: "1px solid #ddd", marginTop: 8, paddingTop: 8 }}>
@@ -713,26 +905,23 @@ export default function Legal(): JSX.Element {
             label: "変更届履歴",
             children: (
               <>
-        <h4 style={{ fontSize: "0.95rem", margin: "0 0 0.5rem" }}>新規登録（全項目）</h4>
-        <form onSubmit={(e) => void createChangeNotice(e)} style={{ display: "grid", gap: "0.35rem", fontSize: "0.88rem" }}>
-          <label>変更事項</label>
-          <input value={newChange.changeType} onChange={(ev) => setNewChange((p) => ({ ...p, changeType: ev.target.value }))} style={fieldStyle} />
-          <label>提出日</label>
-          <input type="date" value={newChange.submittedOnYmd} onChange={(ev) => setNewChange((p) => ({ ...p, submittedOnYmd: ev.target.value }))} />
-          <label>変更日</label>
-          <input type="date" value={newChange.changedOnYmd} onChange={(ev) => setNewChange((p) => ({ ...p, changedOnYmd: ev.target.value }))} />
-          <label>効力発生日</label>
-          <input type="date" value={newChange.effectiveOnYmd} onChange={(ev) => setNewChange((p) => ({ ...p, effectiveOnYmd: ev.target.value }))} />
-          <label>旧</label>
-          <textarea rows={2} value={newChange.oldValue} onChange={(ev) => setNewChange((p) => ({ ...p, oldValue: ev.target.value }))} style={fieldStyle} />
-          <label>新</label>
-          <textarea rows={2} value={newChange.newValue} onChange={(ev) => setNewChange((p) => ({ ...p, newValue: ev.target.value }))} style={fieldStyle} />
-          <label>変更理由</label>
-          <textarea rows={2} value={newChange.reason} onChange={(ev) => setNewChange((p) => ({ ...p, reason: ev.target.value }))} style={fieldStyle} />
-          <label>備考</label>
-          <textarea rows={2} value={newChange.notes} onChange={(ev) => setNewChange((p) => ({ ...p, notes: ev.target.value }))} style={fieldStyle} />
-          <button type="submit">変更履歴を追加</button>
-        </form>
+        <p style={{ marginTop: 0 }}>
+          <button type="button" onClick={() => setChangeWizardOpen(true)}>
+            変更届履歴を新規登録
+          </button>
+        </p>
+        <StepWizard
+          open={changeWizardOpen}
+          onClose={() => {
+            setChangeWizardOpen(false);
+            setNewChange(emptyChangeForm());
+          }}
+          title="変更届履歴（新規）"
+          steps={changeWizardSteps}
+          finishLabel="変更履歴を登録"
+          onFinish={submitNewChangeNotice}
+          isSubmitting={changeWizardSubmitting}
+        />
         <p style={{ fontSize: "0.85rem", marginTop: "0.75rem" }}>登録件数: {changes.length}</p>
         {changes.slice(0, 30).map((x) => (
           <div key={x.id} style={{ borderTop: "1px solid #ddd", marginTop: 8, paddingTop: 8 }}>
