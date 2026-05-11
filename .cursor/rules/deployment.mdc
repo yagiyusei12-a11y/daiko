@@ -1,11 +1,11 @@
 ---
-description: 本番デプロイまでをエージェント責務に含める（VPS / deploy-vps）
+description: 作業完了時は本番デプロイまで自動で行う（VPS / deploy-vps）
 alwaysApply: true
 ---
 
-# 本番までの責務
+# 本番までの責務（デフォルトで最後まで）
 
-- コード変更後は **`npm run build`** で型・ビルドを確認する。
-- 本番反映が妥当な変更では、可能な範囲で **`npm run deploy:vps`**（[`scripts/deploy-vps.ps1`](scripts/deploy-vps.ps1)）まで実行する。前提は [README.md](README.md) の「本番（VPS）」およびルートの [AGENTS.md](AGENTS.md)。
-- **`.env.deploy`** に `DAIKO_VPS_HOST` と `DAIKO_VPS_KEY`（SSH 鍵パス）が無い環境ではデプロイできない。その場合はユーザーに設定または手動デプロイを依頼し、試みなかったことと理由を明示する。
-- ワーキングツリーが汚いときはスクリプトが止まる。必要ならコミットするか、意図が明確な場合のみ `-AllowDirty` を検討する。
+- ユーザーが **「本番に出さない」「デプロイ不要」** と明示したセッションを除き、**コードやプロダクトに触れた作業の完了時は、追加の依頼を待たず** 次まで一気に行う: **`npm run build`**（または同等の検証）→ 変更の **コミット** → **`npm run deploy:vps`**。手順の前提は [README.md](README.md) の「本番（VPS）」および [AGENTS.md](AGENTS.md)。
+- **`npm run deploy:vps`** は [`scripts/deploy-vps.ps1`](scripts/deploy-vps.ps1) が **`git push origin main`** する。**未コミットの変更だけでは本番に載らない**ため、デプロイ前に意図したファイルをステージしてコミットする（メッセージは変更内容が分かる一文）。
+- **`.env.deploy`** に `DAIKO_VPS_HOST` と `DAIKO_VPS_KEY`（SSH 鍵パス）が無い環境ではデプロイできない。その場合は試みなかったことと理由を明示し、設定または手動デプロイを依頼する。
+- ワーキングツリーが汚いとスクリプトが止まる。上記のとおり **先にコミット** する。ユーザーが意図的に未コミットを残したい場合のみ `-AllowDirty` を検討する。
