@@ -21,12 +21,46 @@ export const registerExtensionSchema = z
     licenseNumber: z.string().max(100).optional(),
     licenseExpiresOnYmd: z.string().max(20).optional(),
     licenseConditionsNote: z.string().max(500).optional(),
+    /** 従事者名簿「運転免許」欄の「その他」 */
+    licenseOtherNotes: z.string().max(2000).optional(),
     pledgeSignedOnYmd: z.string().max(20).optional(),
     educationNotes: z.string().max(2000).optional(),
     rosterNotes: z.string().max(4000).optional(),
   });
 
 export type RegisterExtension = z.infer<typeof registerExtensionSchema>;
+
+const ymdStrict = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD形式で入力してください");
+
+/**
+ * 従事者名簿（様式）相当の項目を新規作成時にそろえる。
+ * 写真・写し添付はシステム外のため含めない。
+ */
+export const employeeRegisterForCreateSchema = registerExtensionSchema
+  .merge(
+    z.object({
+      gender: z.string().trim().min(1).max(20),
+      postalCode: z.string().trim().min(1).max(20),
+      dateOfBirthYmd: ymdStrict,
+      phoneHome: z.string().max(100).default(""),
+      phoneMobile: z.string().max(100).default(""),
+      emergencyContactName: z.string().trim().min(1).max(200),
+      emergencyPhone: z.string().trim().min(1).max(100),
+      hiredOnYmd: ymdStrict,
+      employmentType: z.string().trim().min(1).max(100),
+      interviewerName: z.string().trim().min(1).max(200),
+      licenseTypes: z.string().trim().min(1).max(200),
+      licenseNumber: z.string().trim().min(1).max(100),
+      licenseExpiresOnYmd: ymdStrict,
+    })
+  )
+  .refine((d) => d.phoneHome.trim().length > 0 || d.phoneMobile.trim().length > 0, {
+    message: "自宅または携帯のいずれかの電話番号が必要です",
+    path: ["phoneHome"],
+  });
 
 /** TenantSettings.customJson.documentForms（様式ごとの自由記入欄） */
 export const documentFormsSchema = z.object({

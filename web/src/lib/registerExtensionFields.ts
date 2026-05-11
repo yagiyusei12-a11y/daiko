@@ -20,6 +20,7 @@ export const REGISTER_EXTENSION_UI_FIELDS: { key: string; label: string }[] = [
   { key: "licenseNumber", label: "免許証の番号" },
   { key: "licenseExpiresOnYmd", label: "免許有効期限" },
   { key: "licenseConditionsNote", label: "免許の条件等" },
+  { key: "licenseOtherNotes", label: "その他（免許欄・名簿）" },
   { key: "pledgeSignedOnYmd", label: "誓約日" },
   { key: "educationNotes", label: "教育・講習の記録" },
   { key: "rosterNotes", label: "名簿備考" },

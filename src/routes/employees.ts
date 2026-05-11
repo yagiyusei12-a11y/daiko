@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { authenticate } from "../auth/pre.js";
-import { registerExtensionSchema } from "../lib/dispatch-profile.js";
+import { employeeRegisterForCreateSchema, registerExtensionSchema } from "../lib/dispatch-profile.js";
 import { prisma } from "../db.js";
 import { tenantIdFromReq } from "./tenant-scope.js";
 
@@ -38,21 +38,43 @@ export async function registerEmployeeRoutes(app: FastifyInstance): Promise<void
       givenName?: string;
       furigana?: string;
       address?: string;
+      registerExtension?: Record<string, unknown>;
     };
   }>("/employees", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
     const familyName = String(req.body?.familyName || "").trim();
     const givenName = String(req.body?.givenName || "").trim();
+    const furigana = String(req.body?.furigana || "").trim();
+    const address = String(req.body?.address || "").trim();
     if (!familyName || !givenName) return reply.code(400).send({ error: "familyName, givenName required" });
+    if (!furigana) return reply.code(400).send({ error: "furigana required" });
+    if (!address) return reply.code(400).send({ error: "address required" });
+
+    const extRaw = req.body?.registerExtension;
+    if (!extRaw || typeof extRaw !== "object" || Array.isArray(extRaw)) {
+      return reply.code(400).send({ error: "registerExtension object required" });
+    }
+    const trimmedExt: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(extRaw as Record<string, unknown>)) {
+      trimmedExt[k] = typeof v === "string" ? v.trim() : v;
+    }
+    const extParsed = employeeRegisterForCreateSchema.safeParse(trimmedExt);
+    if (!extParsed.success) {
+      return reply.code(400).send({
+        error: "registerExtension invalid",
+        details: extParsed.error.flatten(),
+      });
+    }
+
     const row = await prisma.employee.create({
       data: {
         tenantId: tid,
         familyName,
         givenName,
-        furigana: req.body?.furigana ? String(req.body.furigana).trim() || null : null,
-        address: req.body?.address ? String(req.body.address).trim() || null : null,
+        furigana,
+        address,
         status: "ACTIVE",
-        registerExtension: {},
+        registerExtension: extParsed.data as Prisma.InputJsonValue,
       },
     });
     return row;

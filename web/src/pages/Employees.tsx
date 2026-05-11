@@ -15,6 +15,13 @@ type Emp = {
   status: string;
 };
 
+const GENDER_OPTIONS = ["男", "女", "その他"] as const;
+const EMPLOYMENT_TYPE_OPTIONS = ["正規雇用", "非正規雇用（アルバイト・パート等）"] as const;
+
+function ymdOk(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s.trim());
+}
+
 function asExt(raw: unknown): RegisterExt {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const o = raw as Record<string, unknown>;
@@ -30,6 +37,26 @@ function ext(e: Emp, key: string): string {
   return asExt(e.registerExtension)[key] ?? "";
 }
 
+function emptyCreateExt(): RegisterExt {
+  return {
+    gender: "",
+    postalCode: "",
+    dateOfBirthYmd: "",
+    phoneHome: "",
+    phoneMobile: "",
+    emergencyContactName: "",
+    emergencyPhone: "",
+    hiredOnYmd: "",
+    employmentType: "",
+    interviewerName: "",
+    licenseTypes: "",
+    licenseNumber: "",
+    licenseExpiresOnYmd: "",
+    licenseConditionsNote: "",
+    licenseOtherNotes: "",
+  };
+}
+
 export default function Employees(): JSX.Element {
   const [rows, setRows] = useState<Emp[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -39,6 +66,7 @@ export default function Employees(): JSX.Element {
   const [givenName, setGivenName] = useState("");
   const [newFurigana, setNewFurigana] = useState("");
   const [newAddress, setNewAddress] = useState("");
+  const [createExt, setCreateExt] = useState<RegisterExt>(() => emptyCreateExt());
   const [editId, setEditId] = useState<string | null>(null);
   const [editFamily, setEditFamily] = useState("");
   const [editGiven, setEditGiven] = useState("");
@@ -56,11 +84,16 @@ export default function Employees(): JSX.Element {
     void load();
   }, []);
 
+  function setCreateField(key: string, v: string): void {
+    setCreateExt((p) => ({ ...p, [key]: v }));
+  }
+
   function resetAddFields(): void {
     setFamilyName("");
     setGivenName("");
     setNewFurigana("");
     setNewAddress("");
+    setCreateExt(emptyCreateExt());
   }
 
   function closeAddWizard(): void {
@@ -72,13 +105,36 @@ export default function Employees(): JSX.Element {
     setErr(null);
     setAddSubmitting(true);
     try {
+      const registerExtension: Record<string, string> = {
+        gender: createExt.gender.trim(),
+        postalCode: createExt.postalCode.trim(),
+        dateOfBirthYmd: createExt.dateOfBirthYmd.trim(),
+        phoneHome: (createExt.phoneHome ?? "").trim(),
+        phoneMobile: (createExt.phoneMobile ?? "").trim(),
+        emergencyContactName: createExt.emergencyContactName.trim(),
+        emergencyPhone: createExt.emergencyPhone.trim(),
+        hiredOnYmd: createExt.hiredOnYmd.trim(),
+        employmentType: createExt.employmentType.trim(),
+        interviewerName: createExt.interviewerName.trim(),
+        licenseTypes: createExt.licenseTypes.trim(),
+        licenseNumber: createExt.licenseNumber.trim(),
+        licenseExpiresOnYmd: createExt.licenseExpiresOnYmd.trim(),
+      };
+      if (createExt.licenseConditionsNote.trim()) {
+        registerExtension.licenseConditionsNote = createExt.licenseConditionsNote.trim();
+      }
+      if (createExt.licenseOtherNotes.trim()) {
+        registerExtension.licenseOtherNotes = createExt.licenseOtherNotes.trim();
+      }
+
       const r = await apiFetch<Emp>("/employees", {
         method: "POST",
         json: {
           familyName: familyName.trim(),
           givenName: givenName.trim(),
-          furigana: newFurigana.trim() || undefined,
-          address: newAddress.trim() || undefined,
+          furigana: newFurigana.trim(),
+          address: newAddress.trim(),
+          registerExtension,
         },
       });
       if (!r.ok) {
@@ -94,12 +150,34 @@ export default function Employees(): JSX.Element {
   }
 
   const nameOk = familyName.trim().length > 0 && givenName.trim().length > 0;
+  const stepRosterPersonOk =
+    newFurigana.trim().length > 0 && createExt.gender.trim().length > 0 && ymdOk(createExt.dateOfBirthYmd ?? "");
+  const stepAddressOk = createExt.postalCode.trim().length > 0 && newAddress.trim().length > 0;
+  const stepContactOk =
+    ((createExt.phoneHome ?? "").trim().length > 0 || (createExt.phoneMobile ?? "").trim().length > 0) &&
+    createExt.emergencyContactName.trim().length > 0 &&
+    createExt.emergencyPhone.trim().length > 0;
+  const stepEmploymentOk =
+    ymdOk(createExt.hiredOnYmd ?? "") &&
+    createExt.employmentType.trim().length > 0 &&
+    createExt.interviewerName.trim().length > 0;
+  const stepLicenseOk =
+    createExt.licenseTypes.trim().length > 0 &&
+    createExt.licenseNumber.trim().length > 0 &&
+    ymdOk(createExt.licenseExpiresOnYmd ?? "");
+  const allCreateOk =
+    nameOk &&
+    stepRosterPersonOk &&
+    stepAddressOk &&
+    stepContactOk &&
+    stepEmploymentOk &&
+    stepLicenseOk;
 
   const addSteps: StepWizardStep[] = [
     {
       id: "name",
-      title: "氏名を入力してください",
-      description: "姓と名は必須です。名簿・帳票の表記に使われます。",
+      title: "氏名",
+      description: "従事者名簿の「氏名」欄です。姓・名は必須です。",
       canProceed: nameOk,
       children: (
         <>
@@ -111,42 +189,174 @@ export default function Employees(): JSX.Element {
       ),
     },
     {
-      id: "furigana",
-      title: "ふりがなを入力してください",
-      description: "任意です。未入力のまま次へ進めます。",
+      id: "roster_person",
+      title: "フリガナ・性別・生年月日",
+      description: "名簿の氏名行（フリガナ・男・女・生年月日）に相当します。生年月日はカレンダーで選択してください。",
+      canProceed: stepRosterPersonOk,
       children: (
         <>
-          <label>ふりがな（任意）</label>
-          <input value={newFurigana} onChange={(e) => setNewFurigana(e.target.value)} />
+          <label>フリガナ（必須）</label>
+          <input value={newFurigana} onChange={(e) => setNewFurigana(e.target.value)} placeholder="例: ヤマダ タロウ" />
+          <label>性別</label>
+          <select value={createExt.gender ?? ""} onChange={(e) => setCreateField("gender", e.target.value)}>
+            <option value="">選択してください</option>
+            {GENDER_OPTIONS.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
+          <label>生年月日</label>
+          <input
+            type="date"
+            value={createExt.dateOfBirthYmd ?? ""}
+            onChange={(e) => setCreateField("dateOfBirthYmd", e.target.value)}
+          />
         </>
       ),
     },
     {
       id: "address",
-      title: "住所を入力してください",
-      description: "任意です。名簿用の住所があれば入力してください。",
+      title: "住所（〒・住所）",
+      description: "名簿の住所欄です。郵便番号と住所の両方が必要です。",
+      canProceed: stepAddressOk,
       children: (
         <>
-          <label>住所（任意）</label>
+          <label>郵便番号（必須）</label>
+          <input
+            value={createExt.postalCode ?? ""}
+            onChange={(e) => setCreateField("postalCode", e.target.value)}
+            placeholder="例: 1234567"
+          />
+          <label>住所（必須）</label>
           <textarea rows={3} value={newAddress} onChange={(e) => setNewAddress(e.target.value)} style={{ width: "100%", maxWidth: 480 }} />
         </>
       ),
     },
     {
+      id: "contact",
+      title: "連絡先",
+      description: "自宅または携帯のいずれかは必須です。緊急連絡先の氏名・電話も必須です。",
+      canProceed: stepContactOk,
+      children: (
+        <>
+          <label>電話（自宅）</label>
+          <input value={createExt.phoneHome ?? ""} onChange={(e) => setCreateField("phoneHome", e.target.value)} />
+          <label>電話（携帯）</label>
+          <input value={createExt.phoneMobile ?? ""} onChange={(e) => setCreateField("phoneMobile", e.target.value)} />
+          <p style={{ fontSize: "0.8rem", margin: "0.25rem 0 0.5rem", opacity: 0.85 }}>
+            自宅・携帯のどちらか一方以上を入力してください。
+          </p>
+          <label>緊急連絡先 氏名（必須）</label>
+          <input
+            value={createExt.emergencyContactName ?? ""}
+            onChange={(e) => setCreateField("emergencyContactName", e.target.value)}
+          />
+          <label>緊急連絡先 電話（必須）</label>
+          <input value={createExt.emergencyPhone ?? ""} onChange={(e) => setCreateField("emergencyPhone", e.target.value)} />
+        </>
+      ),
+    },
+    {
+      id: "employment",
+      title: "採用・面接",
+      description: "採用年月日・採用区分・面接担当者名は名簿の該当欄に相当します。",
+      canProceed: stepEmploymentOk,
+      children: (
+        <>
+          <label>採用年月日</label>
+          <input type="date" value={createExt.hiredOnYmd ?? ""} onChange={(e) => setCreateField("hiredOnYmd", e.target.value)} />
+          <label>採用区分</label>
+          <select value={createExt.employmentType ?? ""} onChange={(e) => setCreateField("employmentType", e.target.value)}>
+            <option value="">選択してください</option>
+            {EMPLOYMENT_TYPE_OPTIONS.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          <label>面接担当者名</label>
+          <input value={createExt.interviewerName ?? ""} onChange={(e) => setCreateField("interviewerName", e.target.value)} />
+        </>
+      ),
+    },
+    {
+      id: "license",
+      title: "運転免許",
+      description: "種類・番号・有効期限は必須です。条件・限定や「その他」は任意です（写し添付は紙で保管してください）。",
+      canProceed: stepLicenseOk,
+      children: (
+        <>
+          <label>免許の種類（必須）</label>
+          <input
+            value={createExt.licenseTypes ?? ""}
+            onChange={(e) => setCreateField("licenseTypes", e.target.value)}
+            placeholder="例: 普通一種"
+          />
+          <label>免許証の番号（必須）</label>
+          <input value={createExt.licenseNumber ?? ""} onChange={(e) => setCreateField("licenseNumber", e.target.value)} />
+          <label>有効期限</label>
+          <input
+            type="date"
+            value={createExt.licenseExpiresOnYmd ?? ""}
+            onChange={(e) => setCreateField("licenseExpiresOnYmd", e.target.value)}
+          />
+          <label>免許の条件等（任意）</label>
+          <textarea
+            rows={2}
+            value={createExt.licenseConditionsNote ?? ""}
+            onChange={(e) => setCreateField("licenseConditionsNote", e.target.value)}
+            style={{ width: "100%", maxWidth: 480 }}
+          />
+          <label>その他・免許欄（任意）</label>
+          <textarea
+            rows={2}
+            value={createExt.licenseOtherNotes ?? ""}
+            onChange={(e) => setCreateField("licenseOtherNotes", e.target.value)}
+            style={{ width: "100%", maxWidth: 480 }}
+          />
+        </>
+      ),
+    },
+    {
       id: "confirm",
-      title: "内容を確認してください",
-      description: "問題なければ「登録する」で保存します。",
-      canProceed: nameOk,
+      title: "内容の確認",
+      description: "問題なければ「登録する」で保存します。写真・免許写しは名簿様式どおり紙で保管してください。",
+      canProceed: allCreateOk,
       children: (
         <dl className="step-wizard-summary">
           <dt>氏名</dt>
           <dd>
             {familyName.trim()} {givenName.trim()}
           </dd>
-          <dt>ふりがな</dt>
-          <dd>{newFurigana.trim() || "—"}</dd>
-          <dt>住所</dt>
-          <dd>{newAddress.trim() || "—"}</dd>
+          <dt>フリガナ</dt>
+          <dd>{newFurigana.trim()}</dd>
+          <dt>性別 / 生年月日</dt>
+          <dd>
+            {createExt.gender} / {createExt.dateOfBirthYmd}
+          </dd>
+          <dt>郵便番号 / 住所</dt>
+          <dd>
+            〒{createExt.postalCode} {newAddress.trim()}
+          </dd>
+          <dt>電話</dt>
+          <dd>
+            自宅: {createExt.phoneHome || "—"} / 携帯: {createExt.phoneMobile || "—"}
+          </dd>
+          <dt>緊急連絡先</dt>
+          <dd>
+            {createExt.emergencyContactName}（{createExt.emergencyPhone}）
+          </dd>
+          <dt>採用 / 区分 / 面接担当</dt>
+          <dd>
+            {createExt.hiredOnYmd} / {createExt.employmentType} / {createExt.interviewerName}
+          </dd>
+          <dt>免許</dt>
+          <dd>
+            {createExt.licenseTypes} 第{createExt.licenseNumber}号 有効 {createExt.licenseExpiresOnYmd}
+            {createExt.licenseConditionsNote.trim() ? ` / 条件: ${createExt.licenseConditionsNote.trim()}` : ""}
+            {createExt.licenseOtherNotes.trim() ? ` / その他: ${createExt.licenseOtherNotes.trim()}` : ""}
+          </dd>
         </dl>
       ),
     },
@@ -197,7 +407,7 @@ export default function Employees(): JSX.Element {
     <Card title="従業員">
       <Err msg={err} />
       <p style={{ fontSize: "0.82rem", marginTop: 0 }}>
-        一覧の免許・電話は参照のみです。編集は各行の「名簿・基本情報」から全項目を入力してください。
+        新規追加は従事者名簿の項目（氏名・フリガナ・性別・生年月日・住所・連絡先・採用・免許など）をウィザードで入力します。一覧の免許・電話は参照のみです。退職日や続柄などは「名簿・基本情報」から追加入力できます。
       </p>
       <p style={{ marginTop: "0.5rem" }}>
         <button type="button" onClick={() => setAddWizardOpen(true)}>
@@ -207,7 +417,7 @@ export default function Employees(): JSX.Element {
       <StepWizard
         open={addWizardOpen}
         onClose={closeAddWizard}
-        title="従業員を追加"
+        title="従業員を追加（従事者名簿項目）"
         steps={addSteps}
         finishLabel="登録する"
         onFinish={submitNewEmployee}
@@ -271,7 +481,7 @@ export default function Employees(): JSX.Element {
               {REGISTER_EXTENSION_UI_FIELDS.map((f) => (
                 <div key={f.key} style={{ marginTop: "0.35rem" }}>
                   <label>{f.label}</label>
-                  {f.key === "educationNotes" || f.key === "rosterNotes" || f.key === "licenseConditionsNote" ? (
+                  {f.key === "educationNotes" || f.key === "rosterNotes" || f.key === "licenseConditionsNote" || f.key === "licenseOtherNotes" ? (
                     <textarea
                       rows={2}
                       value={editExt[f.key] ?? ""}
