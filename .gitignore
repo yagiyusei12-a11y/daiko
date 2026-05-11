@@ -1,0 +1,9 @@
+node_modules/
+dist/
+public/app/
+.env
+.env.deploy
+prisma/dev.db
+prisma/dev.db-journal
+uploads/
+.cursor/debug-*.log

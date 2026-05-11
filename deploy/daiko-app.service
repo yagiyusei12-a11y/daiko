@@ -1,0 +1,16 @@
+[Unit]
+Description=Daiko SaaS API (harunoyukoto)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+# サーバ上のパスに合わせて編集（daiko 専用 clone のルート）
+WorkingDirectory=/home/ubuntu/daiko
+EnvironmentFile=/home/ubuntu/daiko/.env
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
