@@ -14,6 +14,8 @@ export type MeUser = {
   email: string;
   displayName: string | null;
   employeeId: string | null;
+  tradeName: string;
+  employeeDisplayName: string;
   tenant: { id: string; name: string; slug: string };
   roles: string[];
   permissions: string[];
@@ -29,7 +31,9 @@ type AuthCtx = {
     slug: string;
     email: string;
     password: string;
-    displayName?: string;
+    familyName: string;
+    givenName: string;
+    representativeAdmin: boolean;
   }) => Promise<string | undefined>;
   logout: () => void;
   can: (perm: string) => boolean;
@@ -78,7 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       slug: string;
       email: string;
       password: string;
-      displayName?: string;
+      familyName: string;
+      givenName: string;
+      representativeAdmin: boolean;
     }) => {
       const r = await apiFetch<{ accessToken: string; refreshToken: string }>("/auth/register", {
         method: "POST",

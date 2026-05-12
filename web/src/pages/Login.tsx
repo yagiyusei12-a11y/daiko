@@ -22,14 +22,14 @@ export default function Login(): JSX.Element {
   return (
     <div className="auth-screen">
       <Card title="ログイン">
-        <p className="auth-lede">テナント ID とメールでサインインします。</p>
+        <p className="auth-lede">店舗IDとログインID（メールアドレス）・パスワードでサインインします。</p>
         <form onSubmit={(e) => void onSubmit(e)}>
-          <label>テナント slug</label>
+          <label>店舗ID</label>
           <input value={slug} onChange={(e) => setSlug(e.target.value)} autoComplete="organization" required />
-          <label>メール</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <label>ログインID（メールアドレス）</label>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required />
           <label>パスワード</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
           <Err msg={err} />
           <button type="submit">ログイン</button>
         </form>

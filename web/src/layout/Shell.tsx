@@ -1,4 +1,5 @@
 import { NavLink, Outlet, Navigate, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import { useAuth } from "../auth";
 import { useDeviceKind } from "../hooks/useDeviceKind";
 import { SavedToastProvider } from "../saved-toast";
@@ -24,6 +25,15 @@ export default function Shell(): JSX.Element {
   const location = useLocation();
   const pathname = location.pathname;
   const touchNav = device === "phone" || device === "tablet";
+
+  useEffect(() => {
+    if (!me) {
+      document.title = "Daiko";
+      return;
+    }
+    const t = me.tradeName?.trim() || me.tenant.name;
+    document.title = t ? `${t} · Daiko` : "Daiko";
+  }, [me]);
 
   if (loading) {
     return (
@@ -53,10 +63,8 @@ export default function Shell(): JSX.Element {
     <div className="app-shell" data-device={device}>
       <header className="app-header">
         <div className="app-header-bar">
-          <span className="app-header-brand">Daiko</span>
-          <span className="app-header-meta">
-            {me.tenant.slug} / {me.email}
-          </span>
+          <span className="app-header-brand">{me.tradeName?.trim() || me.tenant.name}</span>
+          <span className="app-header-meta">{me.employeeDisplayName}</span>
           <button type="button" className="app-header-logout" onClick={logout}>
             ログアウト
           </button>
