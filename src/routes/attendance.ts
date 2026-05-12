@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { TimeCardPunchKind } from "@prisma/client";
 import { authenticate, jwtUser } from "../auth/pre.js";
 import { loadUserAccess } from "../lib/permissions.js";
 import { prisma } from "../db.js";
@@ -43,6 +44,11 @@ function daysBelongToYm(days: Record<string, DaySlot>, ym: string): boolean {
     if (d < 1 || d > 31) return false;
   }
   return true;
+}
+
+function slotMeaningful(slot: DaySlot | undefined): boolean {
+  if (!slot) return false;
+  return isValidFlexHm(slot.start.trim()) && isValidFlexHm(slot.end.trim());
 }
 
 export async function registerAttendanceRoutes(app: FastifyInstance): Promise<void> {
@@ -120,6 +126,114 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
     return reply.send({ ok: true });
   });
 
+  app.put<{ Body: Record<string, unknown> }>("/shift-applications/day", async (req, reply) => {
+    const { tenantId, sub: userId } = jwtUser(req);
+    const access = await loadUserAccess(userId, tenantId);
+    const b = req.body || {};
+    let employeeId = String(b.employeeId ?? "").trim();
+    const businessDate = String(b.businessDate ?? "").trim();
+    const start = String(b.start ?? "").trim();
+    const end = String(b.end ?? "").trim();
+
+    if (!YMD_RE.test(businessDate)) {
+      return reply.code(400).send({ error: "businessDate は yyyy-MM-dd 形式で指定してください" });
+    }
+    const yearMonth = businessDate.slice(0, 7);
+    if (!YM_RE.test(yearMonth)) {
+      return reply.code(400).send({ error: "日付が不正です" });
+    }
+
+    if (access.isStaffShiftOnly) {
+      if (!access.employeeId) {
+        return reply.code(403).send({ error: "従業員に紐づいていないためシフトを保存できません" });
+      }
+      employeeId = access.employeeId;
+    } else if (!employeeId) {
+      return reply.code(400).send({ error: "employeeId が必要です" });
+    }
+
+    const emp = await prisma.employee.findFirst({
+      where: { id: employeeId, tenantId },
+      select: { id: true },
+    });
+    if (!emp) return reply.code(404).send({ error: "従業員が見つかりません" });
+
+    const row = await prisma.shiftApplication.findUnique({
+      where: { tenantId_employeeId_yearMonth: { tenantId, employeeId, yearMonth } },
+    });
+    const days = row ? coerceDays(row.daysJson) : {};
+
+    if (start === "" && end === "") {
+      delete days[businessDate];
+    } else {
+      if (!isValidFlexHm(start) || !isValidFlexHm(end)) {
+        return reply
+          .code(400)
+          .send({ error: "start / end は 0:00〜48:59 の「時:分」形式で指定してください（両方空でその日の申請を削除）" });
+      }
+      days[businessDate] = { start, end };
+    }
+
+    if (!daysBelongToYm(days, yearMonth)) {
+      return reply.code(400).send({ error: "日付は指定した月（yearMonth）内のみにしてください" });
+    }
+
+    await prisma.shiftApplication.upsert({
+      where: { tenantId_employeeId_yearMonth: { tenantId, employeeId, yearMonth } },
+      create: { tenantId, employeeId, yearMonth, daysJson: days },
+      update: { daysJson: days },
+    });
+
+    return reply.send({ ok: true });
+  });
+
+  app.get<{ Querystring: { yearMonth?: string } }>("/shift-adjust/month-indicators", async (req, reply) => {
+    const { tenantId, sub: userId } = jwtUser(req);
+    const access = await loadUserAccess(userId, tenantId);
+    const yearMonth = String(req.query?.yearMonth ?? "").trim();
+    if (!YM_RE.test(yearMonth)) {
+      return reply.code(400).send({ error: "yearMonth は yyyy-MM 形式で指定してください" });
+    }
+    const prefix = `${yearMonth}-`;
+
+    if (access.isStaffShiftOnly) {
+      if (!access.employeeId) {
+        return reply.code(403).send({ error: "従業員に紐づいていないため参照できません" });
+      }
+      const appDates = new Set<string>();
+      const row = await prisma.shiftApplication.findUnique({
+        where: { tenantId_employeeId_yearMonth: { tenantId, employeeId: access.employeeId, yearMonth } },
+      });
+      if (row) {
+        const d = coerceDays(row.daysJson);
+        for (const [k, v] of Object.entries(d)) {
+          if (k.startsWith(prefix) && slotMeaningful(v)) appDates.add(k);
+        }
+      }
+      const confs = await prisma.confirmedShiftDay.findMany({
+        where: { tenantId, employeeId: access.employeeId, businessDate: { startsWith: prefix } },
+        select: { businessDate: true },
+      });
+      const confDates = [...new Set(confs.map((c) => c.businessDate))].sort();
+      return { applicationDates: [...appDates].sort(), confirmedDates: confDates };
+    }
+
+    const apps = await prisma.shiftApplication.findMany({ where: { tenantId, yearMonth } });
+    const appDates = new Set<string>();
+    for (const a of apps) {
+      const d = coerceDays(a.daysJson);
+      for (const [k, v] of Object.entries(d)) {
+        if (k.startsWith(prefix) && slotMeaningful(v)) appDates.add(k);
+      }
+    }
+    const confs = await prisma.confirmedShiftDay.findMany({
+      where: { tenantId, businessDate: { startsWith: prefix } },
+      select: { businessDate: true },
+    });
+    const confDates = [...new Set(confs.map((c) => c.businessDate))].sort();
+    return { applicationDates: [...appDates].sort(), confirmedDates: confDates };
+  });
+
   const DUTY_WHITELIST = new Set(["客車", "随伴車", "電話", "スケジュール"]);
 
   function parseDutiesJson(raw: unknown): string[] {
@@ -130,6 +244,89 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
     }
     return [...new Set(out)];
   }
+
+  app.get<{ Querystring: { date?: string } }>("/shift-adjust/day", async (req, reply) => {
+    const { tenantId, sub: userId } = jwtUser(req);
+    const access = await loadUserAccess(userId, tenantId);
+    const date = String(req.query?.date ?? "").trim();
+    if (!YMD_RE.test(date)) {
+      return reply.code(400).send({ error: "date は yyyy-MM-dd 形式で指定してください" });
+    }
+    const yearMonth = date.slice(0, 7);
+    if (!YM_RE.test(yearMonth)) {
+      return reply.code(400).send({ error: "日付が不正です" });
+    }
+
+    type RowOut = {
+      employeeId: string;
+      familyName: string;
+      givenName: string;
+      application: { start: string; end: string } | null;
+      confirmed: { startTime: string; endTime: string; duties: string[] } | null;
+    };
+
+    const rowMap = new Map<string, RowOut>();
+
+    const apps = await prisma.shiftApplication.findMany({
+      where: access.isStaffShiftOnly
+        ? { tenantId, yearMonth, employeeId: access.employeeId! }
+        : { tenantId, yearMonth },
+      include: { employee: { select: { id: true, familyName: true, givenName: true } } },
+    });
+
+    const confRowsForDate = await prisma.confirmedShiftDay.findMany({
+      where: {
+        tenantId,
+        businessDate: date,
+        ...(access.isStaffShiftOnly ? { employeeId: access.employeeId! } : {}),
+      },
+      include: { employee: { select: { familyName: true, givenName: true } } },
+    });
+    const confByEmp = new Map(confRowsForDate.map((c) => [c.employeeId, c]));
+
+    for (const a of apps) {
+      const days = coerceDays(a.daysJson);
+      const slot = days[date];
+      const confRow = confByEmp.get(a.employeeId) ?? null;
+      const hasApp = slotMeaningful(slot);
+      const hasConf = confRow !== null;
+      if (!hasApp && !hasConf) continue;
+      rowMap.set(a.employeeId, {
+        employeeId: a.employeeId,
+        familyName: a.employee.familyName,
+        givenName: a.employee.givenName,
+        application: hasApp ? { start: slot!.start.trim(), end: slot!.end.trim() } : null,
+        confirmed: hasConf
+          ? {
+              startTime: confRow!.startTime,
+              endTime: confRow!.endTime,
+              duties: parseDutiesJson(confRow!.dutiesJson),
+            }
+          : null,
+      });
+    }
+
+    const confOnly = confRowsForDate.filter((c) => !rowMap.has(c.employeeId));
+    for (const c of confOnly) {
+      rowMap.set(c.employeeId, {
+        employeeId: c.employeeId,
+        familyName: c.employee.familyName,
+        givenName: c.employee.givenName,
+        application: null,
+        confirmed: {
+          startTime: c.startTime,
+          endTime: c.endTime,
+          duties: parseDutiesJson(c.dutiesJson),
+        },
+      });
+    }
+
+    const rows = [...rowMap.values()].sort((a, b) =>
+      `${a.familyName}${a.givenName}`.localeCompare(`${b.familyName}${b.givenName}`, "ja"),
+    );
+
+    return { date, yearMonth, rows };
+  });
 
   app.get<{ Querystring: { employeeId?: string; yearMonth?: string } }>("/confirmed-shifts", async (req, reply) => {
     const { tenantId, sub: userId } = jwtUser(req);
@@ -265,5 +462,95 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
     });
 
     return reply.send({ ok: true });
+  });
+
+  app.get<{ Querystring: { employeeId?: string; businessDate?: string } }>("/timecard/punches", async (req, reply) => {
+    const { tenantId, sub: userId } = jwtUser(req);
+    const access = await loadUserAccess(userId, tenantId);
+    let employeeId = String(req.query?.employeeId ?? "").trim();
+    const businessDate = String(req.query?.businessDate ?? "").trim();
+
+    if (!YMD_RE.test(businessDate)) {
+      return reply.code(400).send({ error: "businessDate は yyyy-MM-dd 形式で指定してください" });
+    }
+
+    if (access.isStaffShiftOnly) {
+      if (!access.employeeId) {
+        return reply.code(403).send({ error: "従業員に紐づいていないため打刻を参照できません" });
+      }
+      employeeId = access.employeeId;
+    } else if (!employeeId) {
+      return reply.code(400).send({ error: "employeeId が必要です" });
+    }
+
+    const emp = await prisma.employee.findFirst({
+      where: { id: employeeId, tenantId },
+      select: { id: true },
+    });
+    if (!emp) return reply.code(404).send({ error: "従業員が見つかりません" });
+
+    const punches = await prisma.timeCardPunch.findMany({
+      where: { tenantId, employeeId, businessDate },
+      orderBy: { punchedAt: "asc" },
+      select: { id: true, kind: true, punchedAt: true },
+    });
+
+    return {
+      employeeId,
+      businessDate,
+      punches: punches.map((p) => ({
+        id: p.id,
+        kind: p.kind,
+        punchedAt: p.punchedAt.toISOString(),
+      })),
+    };
+  });
+
+  app.post<{ Body: Record<string, unknown> }>("/timecard/punch", async (req, reply) => {
+    const { tenantId, sub: userId } = jwtUser(req);
+    const access = await loadUserAccess(userId, tenantId);
+    const b = req.body || {};
+    let employeeId = String(b.employeeId ?? "").trim();
+    const businessDate = String(b.businessDate ?? "").trim();
+    const kindStr = String(b.kind ?? "").trim();
+
+    if (!YMD_RE.test(businessDate)) {
+      return reply.code(400).send({ error: "businessDate は yyyy-MM-dd 形式で指定してください" });
+    }
+
+    if (access.isStaffShiftOnly) {
+      if (!access.employeeId) {
+        return reply.code(403).send({ error: "従業員に紐づいていないため打刻できません" });
+      }
+      employeeId = access.employeeId;
+    } else if (!employeeId) {
+      return reply.code(400).send({ error: "employeeId が必要です" });
+    }
+
+    if (!Object.values(TimeCardPunchKind).includes(kindStr as TimeCardPunchKind)) {
+      return reply.code(400).send({ error: "kind は CLOCK_IN / CLOCK_OUT / BREAK_START / BREAK_END のいずれかです" });
+    }
+
+    const emp = await prisma.employee.findFirst({
+      where: { id: employeeId, tenantId },
+      select: { id: true },
+    });
+    if (!emp) return reply.code(404).send({ error: "従業員が見つかりません" });
+
+    const row = await prisma.timeCardPunch.create({
+      data: {
+        tenantId,
+        employeeId,
+        businessDate,
+        kind: kindStr as TimeCardPunchKind,
+      },
+      select: { id: true, kind: true, punchedAt: true },
+    });
+
+    return {
+      id: row.id,
+      kind: row.kind,
+      punchedAt: row.punchedAt.toISOString(),
+    };
   });
 }

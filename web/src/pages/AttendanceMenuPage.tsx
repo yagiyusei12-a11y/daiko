@@ -39,6 +39,12 @@ function isValidFlexHm(s: string): boolean {
   return h >= 0 && h <= 48 && min >= 0 && min <= 59;
 }
 
+function flexHmToMinutes(s: string): number {
+  const m = FLEX_HM.exec(s.trim());
+  if (!m) return NaN;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
 function validateDaysForSave(days: Record<string, ShiftDaySlot>): string | null {
   for (const [date, slot] of Object.entries(days)) {
     const st = slot.start.trim();
@@ -565,10 +571,42 @@ export default function AttendanceMenuPage(): JSX.Element {
   const [listBusy, setListBusy] = useState(false);
   const [monthLoading, setMonthLoading] = useState(false);
   const [confirmedMap, setConfirmedMap] = useState<Record<string, ConfirmedDayInfo>>({});
-  const [adjustDayModal, setAdjustDayModal] = useState<string | null>(null);
-  const [adjustForm, setAdjustForm] = useState({ start: "", end: "", duties: [] as string[] });
   const [adjustBusy, setAdjustBusy] = useState(false);
   const [allDialogOpen, setAllDialogOpen] = useState(false);
+  const [adjustAppDates, setAdjustAppDates] = useState<string[]>([]);
+  const [adjustConfDates, setAdjustConfDates] = useState<string[]>([]);
+  const [adjustIndLoading, setAdjustIndLoading] = useState(false);
+  const [adjustDialogDate, setAdjustDialogDate] = useState<string | null>(null);
+  type AdjustUiRow = {
+    employeeId: string;
+    familyName: string;
+    givenName: string;
+    applyStart: string;
+    applyEnd: string;
+    confStart: string;
+    confEnd: string;
+    duties: string[];
+  };
+  const [adjustUiRows, setAdjustUiRows] = useState<AdjustUiRow[]>([]);
+  const [adjustRowBusy, setAdjustRowBusy] = useState<string | null>(null);
+
+  const [tcDate, setTcDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
+  const [tcEmployeeId, setTcEmployeeId] = useState("");
+  const [tcPunches, setTcPunches] = useState<Array<{ id: string; kind: string; punchedAt: string }>>([]);
+  const [tcLoading, setTcLoading] = useState(false);
+
+  const [scheduleDate, setScheduleDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
+  const [scheduleBasicsSlots, setScheduleBasicsSlots] = useState<Array<{ open: string; close: string }>>([]);
+  const [scheduleDriverRows, setScheduleDriverRows] = useState<
+    Array<{ employeeId: string; name: string; startTime: string; endTime: string }>
+  >([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
 
   const roster = useMemo(
     () => employees.filter((e) => e.status === "ACTIVE" && !e.retiredAt),
@@ -596,7 +634,6 @@ export default function AttendanceMenuPage(): JSX.Element {
 
   const loadMonthApp = useCallback(
     async (ym: string) => {
-      setMonthAppYm(ym);
       if (!selectedEmployeeId) {
         setListDraft({});
         setConfirmedMap({});
@@ -641,13 +678,38 @@ export default function AttendanceMenuPage(): JSX.Element {
     [selectedEmployeeId],
   );
 
+  const loadAdjustIndicators = useCallback(async (ym: string) => {
+    setAdjustIndLoading(true);
+    setErr(null);
+    const r = await apiFetch<{ applicationDates: string[]; confirmedDates: string[] }>(
+      `/attendance/shift-adjust/month-indicators?yearMonth=${encodeURIComponent(ym)}`,
+    );
+    setAdjustIndLoading(false);
+    if (!r.ok) {
+      setErr(r.error);
+      setAdjustAppDates([]);
+      setAdjustConfDates([]);
+      return;
+    }
+    setAdjustAppDates(r.data.applicationDates ?? []);
+    setAdjustConfDates(r.data.confirmedDates ?? []);
+  }, []);
+
   useEffect(() => {
-    if ((tab === "shift" || tab === "adjust") && selectedEmployeeId) void loadMonthApp(monthAppYm);
+    if (tab === "shift" && selectedEmployeeId) void loadMonthApp(monthAppYm);
   }, [tab, selectedEmployeeId, monthAppYm, loadMonthApp]);
 
-  const bumpMonth = (delta: number): void => {
+  useEffect(() => {
+    if (tab === "adjust") void loadAdjustIndicators(monthAppYm);
+  }, [tab, monthAppYm, loadAdjustIndicators]);
+
+  const bumpShiftMonth = (delta: number): void => {
     if (!selectedEmployeeId) return;
-    void loadMonthApp(shiftYearMonth(monthAppYm, delta));
+    setMonthAppYm((prev) => shiftYearMonth(prev, delta));
+  };
+
+  const bumpAdjustMonth = (delta: number): void => {
+    setMonthAppYm((prev) => shiftYearMonth(prev, delta));
   };
 
   const selectedLabel = useMemo(() => {
@@ -711,54 +773,205 @@ export default function AttendanceMenuPage(): JSX.Element {
     }
   }
 
-  function openAdjustDay(date: string): void {
-    setAdjustDayModal(date);
-    const app = listDraft[date];
-    const conf = confirmedMap[date];
-    setAdjustForm({
-      start: (conf?.startTime ?? app?.start ?? "").trim(),
-      end: (conf?.endTime ?? app?.end ?? "").trim(),
-      duties: conf?.duties?.length ? [...conf.duties] : [],
-    });
+  const adjustAppSet = useMemo(() => new Set(adjustAppDates), [adjustAppDates]);
+  const adjustConfSet = useMemo(() => new Set(adjustConfDates), [adjustConfDates]);
+
+  async function openAdjustDayDialog(date: string, opts?: { quiet?: boolean }): Promise<void> {
+    const quiet = Boolean(opts?.quiet);
+    if (!quiet) setAdjustBusy(true);
     setErr(null);
+    const r = await apiFetch<{
+      rows: Array<{
+        employeeId: string;
+        familyName: string;
+        givenName: string;
+        application: { start: string; end: string } | null;
+        confirmed: { startTime: string; endTime: string; duties: string[] } | null;
+      }>;
+    }>(`/attendance/shift-adjust/day?date=${encodeURIComponent(date)}`);
+    if (!quiet) setAdjustBusy(false);
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    setAdjustUiRows(
+      (r.data.rows ?? []).map((row) => ({
+        employeeId: row.employeeId,
+        familyName: row.familyName,
+        givenName: row.givenName,
+        applyStart: row.application?.start ?? "",
+        applyEnd: row.application?.end ?? "",
+        confStart: row.confirmed?.startTime ?? row.application?.start ?? "",
+        confEnd: row.confirmed?.endTime ?? row.application?.end ?? "",
+        duties: row.confirmed?.duties?.length ? [...row.confirmed.duties] : [],
+      })),
+    );
+    setAdjustDialogDate(date);
   }
 
-  function toggleAdjustDuty(duty: string): void {
-    setAdjustForm((f) => ({
-      ...f,
-      duties: f.duties.includes(duty) ? f.duties.filter((x) => x !== duty) : [...f.duties, duty],
-    }));
+  function patchAdjustUiRow(employeeId: string, patch: Partial<AdjustUiRow>): void {
+    setAdjustUiRows((rows) => rows.map((x) => (x.employeeId === employeeId ? { ...x, ...patch } : x)));
   }
 
-  async function saveAdjustConfirm(): Promise<void> {
-    if (!adjustDayModal || !selectedEmployeeId) return;
-    const msg = validateOneDaySlot(adjustDayModal, adjustForm.start, adjustForm.end);
+  function toggleAdjustRowDuty(employeeId: string, duty: string): void {
+    setAdjustUiRows((rows) =>
+      rows.map((x) => {
+        if (x.employeeId !== employeeId) return x;
+        const has = x.duties.includes(duty);
+        return { ...x, duties: has ? x.duties.filter((d) => d !== duty) : [...x.duties, duty] };
+      }),
+    );
+  }
+
+  async function saveAdjustApplicationRow(employeeId: string): Promise<void> {
+    if (!adjustDialogDate) return;
+    const row = adjustUiRows.find((x) => x.employeeId === employeeId);
+    if (!row) return;
+    setAdjustRowBusy(employeeId);
+    setErr(null);
+    const r = await apiFetch("/attendance/shift-applications/day", {
+      method: "PUT",
+      json: {
+        employeeId,
+        businessDate: adjustDialogDate,
+        start: row.applyStart.trim(),
+        end: row.applyEnd.trim(),
+      },
+    });
+    setAdjustRowBusy(null);
+    if (!r.ok) setErr(r.error);
+    else {
+      flashSaved();
+      void loadAdjustIndicators(monthAppYm);
+      if (adjustDialogDate) void openAdjustDayDialog(adjustDialogDate, { quiet: true });
+    }
+  }
+
+  async function saveAdjustConfirmedRow(employeeId: string): Promise<void> {
+    if (!adjustDialogDate) return;
+    const row = adjustUiRows.find((x) => x.employeeId === employeeId);
+    if (!row) return;
+    const msg = validateOneDaySlot(adjustDialogDate, row.confStart, row.confEnd);
     if (msg) {
       setErr(msg);
       return;
     }
-    setAdjustBusy(true);
+    setAdjustRowBusy(employeeId);
     setErr(null);
     const r = await apiFetch("/attendance/confirmed-shifts", {
       method: "PUT",
       json: {
-        employeeId: selectedEmployeeId,
-        businessDate: adjustDayModal,
-        startTime: adjustForm.start.trim(),
-        endTime: adjustForm.end.trim(),
-        duties: adjustForm.duties,
+        employeeId,
+        businessDate: adjustDialogDate,
+        startTime: row.confStart.trim(),
+        endTime: row.confEnd.trim(),
+        duties: row.duties,
       },
     });
-    setAdjustBusy(false);
+    setAdjustRowBusy(null);
     if (!r.ok) setErr(r.error);
     else {
       flashSaved();
-      setAdjustDayModal(null);
-      void loadMonthApp(monthAppYm);
+      void loadAdjustIndicators(monthAppYm);
+      if (adjustDialogDate) void openAdjustDayDialog(adjustDialogDate, { quiet: true });
     }
   }
 
   const adjustCalCells = useMemo(() => monthCalendarCells(monthAppYm), [monthAppYm]);
+
+  const loadTcPunches = useCallback(async () => {
+    if (!tcEmployeeId || !tcDate) return;
+    setTcLoading(true);
+    const r = await apiFetch<{ punches: Array<{ id: string; kind: string; punchedAt: string }> }>(
+      `/attendance/timecard/punches?employeeId=${encodeURIComponent(tcEmployeeId)}&businessDate=${encodeURIComponent(tcDate)}`,
+    );
+    setTcLoading(false);
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    setTcPunches(r.data.punches ?? []);
+  }, [tcEmployeeId, tcDate]);
+
+  useEffect(() => {
+    if (tab === "timecard" && tcEmployeeId) void loadTcPunches();
+  }, [tab, tcEmployeeId, tcDate, loadTcPunches]);
+
+  useEffect(() => {
+    if (staffOnly && me?.employeeId) setTcEmployeeId(me.employeeId);
+  }, [staffOnly, me?.employeeId]);
+
+  const loadSchedule = useCallback(async () => {
+    setScheduleLoading(true);
+    setErr(null);
+    const [b, c] = await Promise.all([
+      apiFetch<{ businessHours: Array<{ open: string; close: string }> }>("/settings/basics"),
+      apiFetch<{ rows: AllDateShiftRow[] }>(
+        `/attendance/confirmed-shifts/by-date?date=${encodeURIComponent(scheduleDate)}`,
+      ),
+    ]);
+    setScheduleLoading(false);
+    if (!b.ok) {
+      setErr(b.error);
+      return;
+    }
+    if (!c.ok) {
+      setErr(c.error);
+      return;
+    }
+    setScheduleBasicsSlots(b.data.businessHours ?? []);
+    setScheduleDriverRows(
+      (c.data.rows ?? [])
+        .filter((r) => r.duties.includes("客車"))
+        .map((r) => ({
+          employeeId: r.employeeId,
+          name: `${r.familyName} ${r.givenName}`,
+          startTime: r.startTime,
+          endTime: r.endTime,
+        })),
+    );
+  }, [scheduleDate]);
+
+  useEffect(() => {
+    if (tab === "schedule") void loadSchedule();
+  }, [tab, scheduleDate, loadSchedule]);
+
+  const scheduleAxis = useMemo(() => {
+    let mn = 7 * 60;
+    let mx = 22 * 60;
+    for (const s of scheduleBasicsSlots) {
+      const a = flexHmToMinutes(s.open);
+      const b = flexHmToMinutes(s.close);
+      if (!Number.isNaN(a)) mn = Math.min(mn, a);
+      if (!Number.isNaN(b)) mx = Math.max(mx, b);
+    }
+    for (const d of scheduleDriverRows) {
+      const a = flexHmToMinutes(d.startTime);
+      const b = flexHmToMinutes(d.endTime);
+      if (!Number.isNaN(a)) mn = Math.min(mn, a);
+      if (!Number.isNaN(b)) mx = Math.max(mx, b);
+    }
+    if (mx <= mn) mx = mn + 15 * 4;
+    const step = 15;
+    const slotCount = Math.max(1, Math.ceil((mx - mn) / step));
+    return { mn, mx, slotCount, step };
+  }, [scheduleBasicsSlots, scheduleDriverRows]);
+
+  async function postTimecardPunch(kind: string): Promise<void> {
+    if (!tcEmployeeId || !tcDate) return;
+    setTcLoading(true);
+    setErr(null);
+    const r = await apiFetch("/attendance/timecard/punch", {
+      method: "POST",
+      json: { employeeId: tcEmployeeId, businessDate: tcDate, kind },
+    });
+    setTcLoading(false);
+    if (!r.ok) setErr(r.error);
+    else {
+      flashSaved();
+      void loadTcPunches();
+    }
+  }
 
   const shiftPanel = (
     <div className="settings-form attend-shift-root">
@@ -787,7 +1000,12 @@ export default function AttendanceMenuPage(): JSX.Element {
             </button>
           </div>
 
-          <h3 className="attend-shift-section-title">今月のシフト（確定）</h3>
+          <div className="attend-shift-section-head">
+            <h3 className="attend-shift-section-title attend-shift-section-title--inline">今月のシフト（確定）</h3>
+            <button type="button" className="settings-secondary" onClick={() => setAllDialogOpen(true)}>
+              全員
+            </button>
+          </div>
           {!selectedEmployeeId ? (
             <p className="settings-hint">従業員を選ぶと、確定済みのシフトが表示されます。</p>
           ) : confirmedListRows.length === 0 ? (
@@ -816,7 +1034,7 @@ export default function AttendanceMenuPage(): JSX.Element {
                   type="button"
                   className="settings-secondary"
                   disabled={listBusy || monthLoading}
-                  onClick={() => bumpMonth(-1)}
+                  onClick={() => bumpShiftMonth(-1)}
                 >
                   前の月
                 </button>
@@ -825,7 +1043,7 @@ export default function AttendanceMenuPage(): JSX.Element {
                   type="button"
                   className="settings-secondary"
                   disabled={listBusy || monthLoading}
-                  onClick={() => bumpMonth(1)}
+                  onClick={() => bumpShiftMonth(1)}
                 >
                   次の月
                 </button>
@@ -885,11 +1103,75 @@ export default function AttendanceMenuPage(): JSX.Element {
         <p className="settings-hint">このアカウントは従業員に紐づいていないため、シフト調整を利用できません。</p>
       ) : (
         <>
+          <p className="settings-hint">
+            氏名の選択は不要です。日付をタップすると、その日のシフト申請一覧が表示されます。各行で申請の修正・保存と、確定シフトの保存ができます。
+          </p>
+
+          <div className="attend-shift-month-nav">
+            <button
+              type="button"
+              className="settings-secondary"
+              disabled={adjustIndLoading || adjustBusy}
+              onClick={() => bumpAdjustMonth(-1)}
+            >
+              前の月
+            </button>
+            <strong>{monthAppYm}</strong>
+            <button
+              type="button"
+              className="settings-secondary"
+              disabled={adjustIndLoading || adjustBusy}
+              onClick={() => bumpAdjustMonth(1)}
+            >
+              次の月
+            </button>
+          </div>
+          {adjustIndLoading ? <p className="settings-hint">読み込み中…</p> : null}
+          <div className="attend-cal">
+            <div className="attend-cal-weekdays">
+              {WEEK_LABELS.map((w) => (
+                <span key={w} className="attend-cal-wd">
+                  {w}
+                </span>
+              ))}
+            </div>
+            <div className="attend-cal-grid">
+              {adjustCalCells.map((c) => {
+                const hasApp = Boolean(c.date && adjustAppSet.has(c.date));
+                const hasConf = Boolean(c.date && adjustConfSet.has(c.date));
+                const isActive = Boolean(c.date && adjustDialogDate === c.date);
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    className={`attend-cal-cell${!c.date ? " attend-cal-cell--empty" : ""}${isActive ? " attend-cal-cell--active" : ""}${hasApp ? " attend-cal-cell--has" : ""}${hasConf ? " attend-cal-cell--confirmed" : ""}`}
+                    disabled={!c.date || adjustBusy}
+                    onClick={() => {
+                      if (c.date) void openAdjustDayDialog(c.date);
+                    }}
+                  >
+                    {c.dayNum != null ? c.dayNum : ""}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  const timeCardPanel = (
+    <div className="settings-form attend-shift-root">
+      {staffOnly && !me?.employeeId ? (
+        <p className="settings-hint">このアカウントは従業員に紐づいていないため、タイムカードを利用できません。</p>
+      ) : (
+        <>
           <label>氏名（名簿）</label>
           <select
-            value={selectedEmployeeId}
+            value={tcEmployeeId}
             disabled={staffOnly}
-            onChange={(e) => setSelectedEmployeeId(e.target.value)}
+            onChange={(e) => setTcEmployeeId(e.target.value)}
           >
             <option value="">選択してください</option>
             {roster.map((e) => (
@@ -900,84 +1182,132 @@ export default function AttendanceMenuPage(): JSX.Element {
           </select>
           {staffOnly ? <p className="settings-hint">スタッフ権限のため、ご自身のみ選択できます。</p> : null}
 
-          <div className="settings-toolbar" style={{ marginTop: "0.75rem" }}>
-            <button type="button" className="settings-secondary" onClick={() => setAllDialogOpen(true)}>
-              全員
+          <label htmlFor="tc-date">日付（事業日）</label>
+          <input
+            id="tc-date"
+            type="date"
+            value={tcDate}
+            onChange={(e) => setTcDate(e.target.value)}
+          />
+
+          <div className="settings-toolbar attend-tc-buttons">
+            <button
+              type="button"
+              className="settings-primary"
+              disabled={!tcEmployeeId || tcLoading}
+              onClick={() => void postTimecardPunch("CLOCK_IN")}
+            >
+              出勤
+            </button>
+            <button
+              type="button"
+              className="settings-primary"
+              disabled={!tcEmployeeId || tcLoading}
+              onClick={() => void postTimecardPunch("CLOCK_OUT")}
+            >
+              退勤
+            </button>
+            <button
+              type="button"
+              className="settings-secondary"
+              disabled={!tcEmployeeId || tcLoading}
+              onClick={() => void postTimecardPunch("BREAK_START")}
+            >
+              休憩入
+            </button>
+            <button
+              type="button"
+              className="settings-secondary"
+              disabled={!tcEmployeeId || tcLoading}
+              onClick={() => void postTimecardPunch("BREAK_END")}
+            >
+              休憩終
             </button>
           </div>
 
-          <p className="settings-hint">
-            日付をタップすると申請内容を確認し、確定シフトの開始・終了と担当業務を入力して確定できます。
-          </p>
-
-          {!selectedEmployeeId ? (
-            <p className="settings-hint">従業員を選んでください。</p>
+          <h3 className="attend-shift-section-title">打刻一覧</h3>
+          {!tcEmployeeId ? (
+            <p className="settings-hint">従業員を選ぶと打刻一覧が表示されます。</p>
+          ) : tcLoading ? (
+            <p className="settings-hint">読み込み中…</p>
+          ) : tcPunches.length === 0 ? (
+            <p className="settings-hint">この日の打刻はまだありません。</p>
           ) : (
-            <>
-              <div className="attend-shift-month-nav">
-                <button
-                  type="button"
-                  className="settings-secondary"
-                  disabled={monthLoading}
-                  onClick={() => bumpMonth(-1)}
-                >
-                  前の月
-                </button>
-                <strong>{monthAppYm}</strong>
-                <button
-                  type="button"
-                  className="settings-secondary"
-                  disabled={monthLoading}
-                  onClick={() => bumpMonth(1)}
-                >
-                  次の月
-                </button>
-              </div>
-              {monthLoading ? <p className="settings-hint">読み込み中…</p> : null}
-              <div className="attend-cal">
-                <div className="attend-cal-weekdays">
-                  {WEEK_LABELS.map((w) => (
-                    <span key={w} className="attend-cal-wd">
-                      {w}
-                    </span>
-                  ))}
-                </div>
-                <div className="attend-cal-grid">
-                  {adjustCalCells.map((c) => {
-                    const slotDay = c.date ? listDraft[c.date] : null;
-                    const hasApp = Boolean(
-                      slotDay &&
-                        isValidFlexHm(slotDay.start.trim()) &&
-                        isValidFlexHm(slotDay.end.trim()),
-                    );
-                    const hasConf = Boolean(c.date && confirmedMap[c.date]);
-                    const isActive = Boolean(c.date && adjustDayModal === c.date);
-                    return (
-                      <button
-                        key={c.key}
-                        type="button"
-                        className={`attend-cal-cell${!c.date ? " attend-cal-cell--empty" : ""}${isActive ? " attend-cal-cell--active" : ""}${hasApp ? " attend-cal-cell--has" : ""}${hasConf ? " attend-cal-cell--confirmed" : ""}`}
-                        disabled={!c.date}
-                        onClick={() => {
-                          if (c.date) openAdjustDay(c.date);
-                        }}
-                      >
-                        {c.dayNum != null ? c.dayNum : ""}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </>
+            <ul className="settings-sf-list">
+              {tcPunches.map((p) => (
+                <li key={p.id} className="settings-sf-row attend-shift-list-row">
+                  <span className="settings-sf-name">
+                    {p.kind === "CLOCK_IN"
+                      ? "出勤"
+                      : p.kind === "CLOCK_OUT"
+                        ? "退勤"
+                        : p.kind === "BREAK_START"
+                          ? "休憩入"
+                          : p.kind === "BREAK_END"
+                            ? "休憩終"
+                            : p.kind}
+                  </span>
+                  <span className="settings-sf-meta">{new Date(p.punchedAt).toLocaleString("ja-JP")}</span>
+                </li>
+              ))}
+            </ul>
           )}
         </>
       )}
     </div>
   );
 
-  const timeCardPanel = (
-    <div className="settings-form">
-      <p className="settings-hint">タイムカード（打刻・集計）は今後実装予定です。</p>
+  const schedulePanel = (
+    <div className="settings-form attend-shift-root">
+      <p className="settings-hint">
+        設定の「基本」に登録した営業時間を横軸（15分刻み）にし、その日の確定シフトで「客車」を担当する従業員を縦に並べて表示します。
+      </p>
+      <label htmlFor="sched-date">表示する日</label>
+      <input
+        id="sched-date"
+        type="date"
+        value={scheduleDate}
+        onChange={(e) => setScheduleDate(e.target.value)}
+      />
+      {scheduleLoading ? (
+        <p className="settings-hint">読み込み中…</p>
+      ) : scheduleDriverRows.length === 0 ? (
+        <p className="settings-hint">この日に客車担当の確定シフトはありません。</p>
+      ) : (
+        <div className="attend-schedule-wrap">
+          <div className="attend-schedule-axis">
+            <div className="attend-schedule-corner" />
+            <div className="attend-schedule-ticks" style={{ gridTemplateColumns: `repeat(${scheduleAxis.slotCount}, minmax(0, 1fr))` }}>
+              {Array.from({ length: scheduleAxis.slotCount }, (_, i) => {
+                const t = scheduleAxis.mn + i * scheduleAxis.step;
+                const h = Math.floor(t / 60);
+                const m = t % 60;
+                const show = m === 0;
+                return (
+                  <span key={i} className={`attend-schedule-tick${show ? " attend-schedule-tick--hour" : ""}`}>
+                    {show ? `${h}` : ""}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+          {scheduleDriverRows.map((row) => {
+            const st = flexHmToMinutes(row.startTime);
+            const en = flexHmToMinutes(row.endTime);
+            const span = scheduleAxis.mx - scheduleAxis.mn;
+            const left = Number.isNaN(st) || Number.isNaN(en) ? 0 : Math.max(0, ((st - scheduleAxis.mn) / span) * 100);
+            const width = Number.isNaN(st) || Number.isNaN(en) ? 0 : Math.max(0.5, ((en - st) / span) * 100);
+            return (
+              <div key={row.employeeId} className="attend-schedule-row">
+                <div className="attend-schedule-name">{row.name}</div>
+                <div className="attend-schedule-track">
+                  <div className="attend-schedule-bar" style={{ left: `${left}%`, width: `${width}%` }} title={`${row.startTime}–${row.endTime}`} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 
@@ -985,20 +1315,8 @@ export default function AttendanceMenuPage(): JSX.Element {
     { id: "shift", label: "シフト", children: shiftPanel },
     { id: "adjust", label: "シフト調整", children: adjustPanel },
     { id: "timecard", label: "タイムカード", children: timeCardPanel },
+    { id: "schedule", label: "スケジュール", children: schedulePanel },
   ];
-
-  let adjustAppSummary = "";
-  if (adjustDayModal) {
-    const s = listDraft[adjustDayModal];
-    if (!s) adjustAppSummary = "この日の申請はまだありません。";
-    else {
-      const st = s.start.trim();
-      const en = s.end.trim();
-      if (!st && !en) adjustAppSummary = "この日の申請はまだありません。";
-      else if (isValidFlexHm(st) && isValidFlexHm(en)) adjustAppSummary = `${st} ～ ${en}`;
-      else adjustAppSummary = `申請入力中: ${st || "（開始）"} ～ ${en || "（終了）"}`;
-    }
-  }
 
   return (
     <>
@@ -1007,69 +1325,125 @@ export default function AttendanceMenuPage(): JSX.Element {
         <Tabs items={tabItems} activeId={tab} onActiveChange={setTab} aria-label="勤怠の種類" />
       </Card>
 
-      {adjustDayModal ? (
+      {adjustDialogDate ? (
         <div
           className="pricing-modal-backdrop"
           role="presentation"
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setAdjustDayModal(null);
+            if (e.target === e.currentTarget) setAdjustDialogDate(null);
           }}
         >
           <div
-            className="pricing-modal attend-shift-dialog"
+            className="pricing-modal attend-shift-dialog attend-adjust-day-dialog"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="adjust-shift-title"
+            aria-labelledby="adjust-shift-day-title"
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <h2 id="adjust-shift-title" className="pricing-modal-title">
-              シフト確定（{adjustDayModal}）
+            <h2 id="adjust-shift-day-title" className="pricing-modal-title">
+              シフト調整（{adjustDialogDate}）
             </h2>
             <div className="attend-shift-dialog-scroll">
-              <p className="settings-hint">申請内容: {adjustAppSummary}</p>
-              <div className="settings-form">
-                <label htmlFor="adjust-start">開始</label>
-                <input
-                  id="adjust-start"
-                  className="attend-shift-time-field"
-                  autoComplete="off"
-                  value={adjustForm.start}
-                  onChange={(e) => setAdjustForm({ ...adjustForm, start: e.target.value })}
-                />
-                <label htmlFor="adjust-end">終了</label>
-                <input
-                  id="adjust-end"
-                  className="attend-shift-time-field"
-                  autoComplete="off"
-                  value={adjustForm.end}
-                  onChange={(e) => setAdjustForm({ ...adjustForm, end: e.target.value })}
-                />
-                <p className="settings-hint">担当業務（複数選択可）</p>
-                <div className="settings-checkbox-row">
-                  {SHIFT_DUTY_OPTIONS.map((d) => (
-                    <label key={d} className="settings-inline-check">
-                      <input
-                        type="checkbox"
-                        checked={adjustForm.duties.includes(d)}
-                        onChange={() => toggleAdjustDuty(d)}
-                      />
-                      {d}
-                    </label>
-                  ))}
+              {adjustUiRows.length === 0 ? (
+                <p className="settings-hint">この日の申請または確定シフトはまだありません。</p>
+              ) : (
+                <div className="attend-adjust-table-wrap">
+                  <table className="attend-adjust-table">
+                    <thead>
+                      <tr>
+                        <th>氏名</th>
+                        <th>申請（開始）</th>
+                        <th>申請（終了）</th>
+                        <th>申請</th>
+                        <th>確定（開始）</th>
+                        <th>確定（終了）</th>
+                        <th>担当</th>
+                        <th>確定</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adjustUiRows.map((row) => (
+                        <tr key={row.employeeId}>
+                          <td>
+                            {row.familyName} {row.givenName}
+                          </td>
+                          <td>
+                            <input
+                              className="attend-shift-time-field"
+                              aria-label={`${row.familyName} 申請開始`}
+                              value={row.applyStart}
+                              onChange={(e) => patchAdjustUiRow(row.employeeId, { applyStart: e.target.value })}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="attend-shift-time-field"
+                              aria-label={`${row.familyName} 申請終了`}
+                              value={row.applyEnd}
+                              onChange={(e) => patchAdjustUiRow(row.employeeId, { applyEnd: e.target.value })}
+                            />
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="settings-secondary"
+                              disabled={adjustRowBusy === row.employeeId}
+                              onClick={() => void saveAdjustApplicationRow(row.employeeId)}
+                            >
+                              保存
+                            </button>
+                          </td>
+                          <td>
+                            <input
+                              className="attend-shift-time-field"
+                              aria-label={`${row.familyName} 確定開始`}
+                              value={row.confStart}
+                              onChange={(e) => patchAdjustUiRow(row.employeeId, { confStart: e.target.value })}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="attend-shift-time-field"
+                              aria-label={`${row.familyName} 確定終了`}
+                              value={row.confEnd}
+                              onChange={(e) => patchAdjustUiRow(row.employeeId, { confEnd: e.target.value })}
+                            />
+                          </td>
+                          <td>
+                            <div className="settings-checkbox-row attend-adjust-duty-cell">
+                              {SHIFT_DUTY_OPTIONS.map((d) => (
+                                <label key={d} className="settings-inline-check">
+                                  <input
+                                    type="checkbox"
+                                    checked={row.duties.includes(d)}
+                                    onChange={() => toggleAdjustRowDuty(row.employeeId, d)}
+                                  />
+                                  {d}
+                                </label>
+                              ))}
+                            </div>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="settings-primary"
+                              disabled={adjustRowBusy === row.employeeId}
+                              onClick={() => void saveAdjustConfirmedRow(row.employeeId)}
+                            >
+                              確定
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
+              )}
+              <p className="settings-hint">申請の「保存」はシフト申請のみ更新します。「確定」は確定シフトに反映します（0:00〜48:59）。</p>
             </div>
             <div className="pricing-modal-actions">
-              <button
-                type="button"
-                className="settings-primary"
-                disabled={adjustBusy}
-                onClick={() => void saveAdjustConfirm()}
-              >
-                確定
-              </button>
-              <button type="button" disabled={adjustBusy} onClick={() => setAdjustDayModal(null)}>
-                キャンセル
+              <button type="button" disabled={adjustBusy} onClick={() => setAdjustDialogDate(null)}>
+                閉じる
               </button>
             </div>
           </div>

@@ -1141,6 +1141,124 @@ td {
   font-weight: 600;
 }
 
+.attend-shift-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.attend-shift-section-title--inline {
+  margin: 0;
+}
+
+.attend-adjust-day-dialog.pricing-modal {
+  max-width: min(96vw, 56rem);
+  width: 100%;
+}
+
+.attend-adjust-table-wrap {
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+
+.attend-adjust-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.attend-adjust-table th,
+.attend-adjust-table td {
+  border: 1px solid var(--color-border);
+  padding: 0.35rem 0.4rem;
+  vertical-align: middle;
+}
+
+.attend-adjust-table th {
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-border));
+  text-align: left;
+  white-space: nowrap;
+}
+
+.attend-adjust-duty-cell {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
+.attend-tc-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.attend-schedule-wrap {
+  margin-top: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.attend-schedule-axis {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-border));
+}
+
+.attend-schedule-corner {
+  border-right: 1px solid var(--color-border);
+}
+
+.attend-schedule-ticks {
+  display: grid;
+  font-size: 0.68rem;
+  color: var(--color-muted);
+  padding: 0.25rem 0;
+}
+
+.attend-schedule-tick--hour {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.attend-schedule-row {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  border-bottom: 1px solid var(--color-border);
+  min-height: 2.25rem;
+}
+
+.attend-schedule-row:last-child {
+  border-bottom: none;
+}
+
+.attend-schedule-name {
+  padding: 0.45rem 0.5rem;
+  font-size: 0.84rem;
+  border-right: 1px solid var(--color-border);
+  align-self: center;
+}
+
+.attend-schedule-track {
+  position: relative;
+  min-height: 2.25rem;
+  background: var(--color-surface);
+}
+
+.attend-schedule-bar {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 0.65rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-accent) 75%, #1e3a5f);
+  min-width: 3px;
+}
+
 .trip-editor {
   margin-bottom: 1rem;
 }
