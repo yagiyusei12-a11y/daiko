@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import { useAuth, isStaffShiftOnlyMe } from "../auth";
+import { useDeviceKind } from "../hooks/useDeviceKind";
 import { useSavedToast } from "../saved-toast";
 import { Card, Err, Tabs, type TabDef } from "../ui";
 
@@ -43,6 +44,20 @@ function flexHmToMinutes(s: string): number {
   const m = FLEX_HM.exec(s.trim());
   if (!m) return NaN;
   return Number(m[1]) * 60 + Number(m[2]);
+}
+
+function scheduleBarPercentages(
+  startTime: string,
+  endTime: string,
+  axis: { mn: number; mx: number },
+): { startPct: number; sizePct: number } {
+  const st = flexHmToMinutes(startTime);
+  const en = flexHmToMinutes(endTime);
+  const span = axis.mx - axis.mn;
+  if (Number.isNaN(st) || Number.isNaN(en) || span <= 0) return { startPct: 0, sizePct: 0 };
+  const startPct = Math.max(0, ((st - axis.mn) / span) * 100);
+  const sizePct = Math.max(0.5, ((en - st) / span) * 100);
+  return { startPct, sizePct };
 }
 
 function validateDaysForSave(days: Record<string, ShiftDaySlot>): string | null {
@@ -559,6 +574,7 @@ export default function AttendanceMenuPage(): JSX.Element {
   const { me } = useAuth();
   const { flashSaved } = useSavedToast();
   const staffOnly = me ? isStaffShiftOnlyMe(me.permissions) : false;
+  const deviceKind = useDeviceKind();
 
   const [tab, setTab] = useState("shift");
   const [err, setErr] = useState<string | null>(null);
@@ -905,7 +921,9 @@ export default function AttendanceMenuPage(): JSX.Element {
     setScheduleLoading(true);
     setErr(null);
     const [b, c] = await Promise.all([
-      apiFetch<{ businessHours: Array<{ open: string; close: string }> }>("/settings/basics"),
+      apiFetch<{ businessHours: Array<{ open: string; close: string }> }>(
+        `/settings/basics/resolved-hours?date=${encodeURIComponent(scheduleDate)}`,
+      ),
       apiFetch<{ rows: AllDateShiftRow[] }>(
         `/attendance/confirmed-shifts/by-date?date=${encodeURIComponent(scheduleDate)}`,
       ),
@@ -1257,10 +1275,15 @@ export default function AttendanceMenuPage(): JSX.Element {
     </div>
   );
 
+  const scheduleTranspose = deviceKind === "phone";
+  const scheduleSlotPx = 11;
+  const scheduleHeadPx = 36;
+  const scheduleGridPx = scheduleAxis.slotCount * scheduleSlotPx;
+
   const schedulePanel = (
     <div className="settings-form attend-shift-root">
       <p className="settings-hint">
-        設定の「基本」に登録した営業時間を横軸（15分刻み）にし、その日の確定シフトで「客車」を担当する従業員を縦に並べて表示します。
+        設定の「基本」（および曜日別・特定日）で解決したその日の営業時間を軸に15分刻みで表示し、その日の確定シフトで「客車」の従業員を並べます。スマホ表示では時間軸と担当者軸を入れ替えます。
       </p>
       <label htmlFor="sched-date">表示する日</label>
       <input
@@ -1273,6 +1296,86 @@ export default function AttendanceMenuPage(): JSX.Element {
         <p className="settings-hint">読み込み中…</p>
       ) : scheduleDriverRows.length === 0 ? (
         <p className="settings-hint">この日に客車担当の確定シフトはありません。</p>
+      ) : scheduleTranspose ? (
+        <div className="attend-schedule-wrap attend-schedule-wrap--transpose">
+          <div className="attend-schedule-transpose-inner">
+            <div className="attend-schedule-time-rail" style={{ width: "2.35rem", flexShrink: 0 }}>
+              <div className="attend-schedule-corner" style={{ minHeight: scheduleHeadPx, boxSizing: "border-box" }} />
+              <div style={{ height: scheduleGridPx, position: "relative", borderTop: "1px solid var(--color-border)" }}>
+                {Array.from({ length: scheduleAxis.slotCount }, (_, i) => {
+                  const t = scheduleAxis.mn + i * scheduleAxis.step;
+                  const h = Math.floor(t / 60);
+                  const m = t % 60;
+                  const show = m === 0;
+                  return (
+                    <div
+                      key={i}
+                      className={`attend-schedule-tick-slot${show ? " attend-schedule-tick-slot--hour" : ""}`}
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        width: "100%",
+                        top: `${(i / scheduleAxis.slotCount) * 100}%`,
+                        height: `${100 / scheduleAxis.slotCount}%`,
+                        boxSizing: "border-box",
+                        borderBottom: "1px solid color-mix(in srgb, var(--color-border) 55%, transparent)",
+                        fontSize: "0.62rem",
+                        color: "var(--color-muted)",
+                        textAlign: "right",
+                        paddingRight: 2,
+                        lineHeight: 1,
+                      }}
+                    >
+                      {show ? `${h}` : ""}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {scheduleDriverRows.map((row) => {
+              const { startPct, sizePct } = scheduleBarPercentages(row.startTime, row.endTime, scheduleAxis);
+              return (
+                <div
+                  key={row.employeeId}
+                  className="attend-schedule-driver-col"
+                  style={{ width: "4.75rem", flexShrink: 0, borderLeft: "1px solid var(--color-border)" }}
+                >
+                  <div
+                    className="attend-schedule-col-head"
+                    style={{
+                      minHeight: scheduleHeadPx,
+                      maxHeight: scheduleHeadPx,
+                      boxSizing: "border-box",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      textAlign: "center",
+                      padding: "0.2rem",
+                      fontSize: "0.78rem",
+                      fontWeight: 600,
+                      borderBottom: "1px solid var(--color-border)",
+                    }}
+                  >
+                    {row.name}
+                  </div>
+                  <div
+                    style={{
+                      height: scheduleGridPx,
+                      position: "relative",
+                      background: "var(--color-surface)",
+                    }}
+                  >
+                    <div
+                      className="attend-schedule-bar attend-schedule-bar--transpose"
+                      style={{ top: `${startPct}%`, height: `${sizePct}%` }}
+                      title={`${row.startTime}–${row.endTime}`}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       ) : (
         <div className="attend-schedule-wrap">
           <div className="attend-schedule-axis">
@@ -1292,16 +1395,12 @@ export default function AttendanceMenuPage(): JSX.Element {
             </div>
           </div>
           {scheduleDriverRows.map((row) => {
-            const st = flexHmToMinutes(row.startTime);
-            const en = flexHmToMinutes(row.endTime);
-            const span = scheduleAxis.mx - scheduleAxis.mn;
-            const left = Number.isNaN(st) || Number.isNaN(en) ? 0 : Math.max(0, ((st - scheduleAxis.mn) / span) * 100);
-            const width = Number.isNaN(st) || Number.isNaN(en) ? 0 : Math.max(0.5, ((en - st) / span) * 100);
+            const { startPct, sizePct } = scheduleBarPercentages(row.startTime, row.endTime, scheduleAxis);
             return (
               <div key={row.employeeId} className="attend-schedule-row">
                 <div className="attend-schedule-name">{row.name}</div>
                 <div className="attend-schedule-track">
-                  <div className="attend-schedule-bar" style={{ left: `${left}%`, width: `${width}%` }} title={`${row.startTime}–${row.endTime}`} />
+                  <div className="attend-schedule-bar" style={{ left: `${startPct}%`, width: `${sizePct}%` }} title={`${row.startTime}–${row.endTime}`} />
                 </div>
               </div>
             );

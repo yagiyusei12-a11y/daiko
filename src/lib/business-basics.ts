@@ -33,9 +33,25 @@ export type BusinessBasicsV1 = {
   temporaryClosureDates: string[];
 };
 
-const DEFAULTS: BusinessBasicsV1 = {
-  version: 1,
+/** 保存形式 v2（v1 は読み込み時に昇格） */
+export type BusinessBasicsV2 = {
+  version: 2;
+  businessHours: BusinessHoursSlot[];
+  /** 曜日 0–6 の文字列キー → 営業時間（空でないときのみデフォルトより優先） */
+  businessHoursByWeekday: Record<string, BusinessHoursSlot[]>;
+  /** yyyy-MM-dd → 営業時間（曜日より優先） */
+  businessHoursByDate: Record<string, BusinessHoursSlot[]>;
+  paymentMethods: string[];
+  regularHolidays: RegularHolidayEntry[];
+  temporaryClosureDates: string[];
+};
+
+const DEFAULTS_V2: BusinessBasicsV2 = {
+  version: 2,
   businessHours: [],
+  businessHoursByWeekday: {},
+  businessHoursByDate: {},
+  paymentMethods: [],
   regularHolidays: [],
   temporaryClosureDates: [],
 };
@@ -98,21 +114,51 @@ function coerceDates(raw: unknown): string[] {
   return [...new Set(out)].sort((a, b) => a.localeCompare(b));
 }
 
-/** customJson の一部から正規化（不正要素は落とす） */
-export function coerceBusinessBasicsFromCustomJson(customJson: unknown): BusinessBasicsV1 {
+function coerceSlotArray(raw: unknown): BusinessHoursSlot[] {
+  if (!Array.isArray(raw)) return [];
+  const out: BusinessHoursSlot[] = [];
+  for (const x of raw) {
+    const s = coerceSlot(x);
+    if (s) out.push(s);
+  }
+  return out;
+}
+
+function coercePaymentMethods(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const x of raw) {
+    if (typeof x !== "string") continue;
+    const t = x.trim();
+    if (t.length === 0 || t.length > 80) continue;
+    out.push(t);
+  }
+  return [...new Set(out)];
+}
+
+function coerceHoursMap(raw: unknown, keyKind: "weekday" | "date"): Record<string, BusinessHoursSlot[]> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, BusinessHoursSlot[]> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (keyKind === "weekday") {
+      if (!/^[0-6]$/.test(k)) continue;
+    } else if (!YMD_RE.test(k)) continue;
+    const slots = coerceSlotArray(v);
+    if (slots.length > 0) out[k] = slots;
+  }
+  return out;
+}
+
+/** customJson の一部から正規化（v1 は v2 に昇格） */
+export function coerceBusinessBasicsFromCustomJson(customJson: unknown): BusinessBasicsV2 {
   const root = asObj(customJson);
   const raw = root.businessBasics;
-  if (!raw || typeof raw !== "object") return { ...DEFAULTS };
+  if (!raw || typeof raw !== "object") return { ...DEFAULTS_V2 };
 
   const o = raw as Record<string, unknown>;
-  const slots: BusinessHoursSlot[] = [];
-  if (Array.isArray(o.businessHours)) {
-    for (const x of o.businessHours) {
-      const s = coerceSlot(x);
-      if (s) slots.push(s);
-    }
-  }
+  const ver = o.version === 2 ? 2 : 1;
 
+  const slots = coerceSlotArray(o.businessHours);
   const regular: RegularHolidayEntry[] = [];
   if (Array.isArray(o.regularHolidays)) {
     for (const x of o.regularHolidays) {
@@ -120,16 +166,45 @@ export function coerceBusinessBasicsFromCustomJson(customJson: unknown): Busines
       if (r) regular.push(r);
     }
   }
+  const temporaryClosureDates = coerceDates(o.temporaryClosureDates);
+
+  if (ver === 1) {
+    return {
+      version: 2,
+      businessHours: slots,
+      businessHoursByWeekday: {},
+      businessHoursByDate: {},
+      paymentMethods: [],
+      regularHolidays: regular,
+      temporaryClosureDates,
+    };
+  }
 
   return {
-    version: 1,
+    version: 2,
     businessHours: slots,
+    businessHoursByWeekday: coerceHoursMap(o.businessHoursByWeekday, "weekday"),
+    businessHoursByDate: coerceHoursMap(o.businessHoursByDate, "date"),
+    paymentMethods: coercePaymentMethods(o.paymentMethods),
     regularHolidays: regular,
-    temporaryClosureDates: coerceDates(o.temporaryClosureDates),
+    temporaryClosureDates,
   };
 }
 
-export function parseBusinessBasicsPut(body: Record<string, unknown>): { ok: true; value: BusinessBasicsV1 } | { ok: false; error: string } {
+/** 指定日の営業時間（特定日 → 曜日 → デフォルト） */
+export function resolveBusinessHoursForYmd(ymd: string, basics: BusinessBasicsV2): BusinessHoursSlot[] {
+  if (!YMD_RE.test(ymd)) return basics.businessHours;
+  const byDate = basics.businessHoursByDate[ymd];
+  if (byDate && byDate.length > 0) return byDate;
+  const d = new Date(`${ymd}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return basics.businessHours;
+  const wd = String(d.getDay());
+  const byWd = basics.businessHoursByWeekday[wd];
+  if (byWd && byWd.length > 0) return byWd;
+  return basics.businessHours;
+}
+
+export function parseBusinessBasicsPut(body: Record<string, unknown>): { ok: true; value: BusinessBasicsV2 } | { ok: false; error: string } {
   const slots: BusinessHoursSlot[] = [];
   if (!Array.isArray(body.businessHours)) {
     return { ok: false, error: "businessHours は配列で指定してください" };
@@ -160,21 +235,70 @@ export function parseBusinessBasicsPut(body: Record<string, unknown>): { ok: tru
   }
   const dates = coerceDates(body.temporaryClosureDates);
 
+  let businessHoursByWeekday: Record<string, BusinessHoursSlot[]> = {};
+  if (body.businessHoursByWeekday === undefined) {
+    businessHoursByWeekday = {};
+  } else if (!body.businessHoursByWeekday || typeof body.businessHoursByWeekday !== "object" || Array.isArray(body.businessHoursByWeekday)) {
+    return { ok: false, error: "businessHoursByWeekday はオブジェクトで指定してください" };
+  } else {
+    businessHoursByWeekday = {};
+    for (const [k, v] of Object.entries(body.businessHoursByWeekday as Record<string, unknown>)) {
+      if (!/^[0-6]$/.test(k)) return { ok: false, error: "businessHoursByWeekday のキーは 0〜6 の文字列にしてください" };
+      if (!Array.isArray(v)) return { ok: false, error: `businessHoursByWeekday[${k}] は配列で指定してください` };
+      const row: BusinessHoursSlot[] = [];
+      for (const x of v) {
+        const s = coerceSlot(x);
+        if (!s) return { ok: false, error: `営業時間（曜日 ${k}）の形式が不正です` };
+        row.push(s);
+      }
+      if (row.length > 0) businessHoursByWeekday[k] = row;
+    }
+  }
+
+  let businessHoursByDate: Record<string, BusinessHoursSlot[]> = {};
+  if (body.businessHoursByDate === undefined) {
+    businessHoursByDate = {};
+  } else if (!body.businessHoursByDate || typeof body.businessHoursByDate !== "object" || Array.isArray(body.businessHoursByDate)) {
+    return { ok: false, error: "businessHoursByDate はオブジェクトで指定してください" };
+  } else {
+    businessHoursByDate = {};
+    for (const [k, v] of Object.entries(body.businessHoursByDate as Record<string, unknown>)) {
+      if (!YMD_RE.test(k)) return { ok: false, error: "businessHoursByDate のキーは yyyy-MM-dd 形式にしてください" };
+      if (!Array.isArray(v)) return { ok: false, error: `businessHoursByDate[${k}] は配列で指定してください` };
+      const row: BusinessHoursSlot[] = [];
+      for (const x of v) {
+        const s = coerceSlot(x);
+        if (!s) return { ok: false, error: `営業時間（日付 ${k}）の形式が不正です` };
+        row.push(s);
+      }
+      if (row.length > 0) businessHoursByDate[k] = row;
+    }
+  }
+
+  let paymentMethods: string[] = [];
+  if (body.paymentMethods === undefined) {
+    paymentMethods = [];
+  } else if (!Array.isArray(body.paymentMethods)) {
+    return { ok: false, error: "paymentMethods は文字列の配列で指定してください" };
+  } else {
+    paymentMethods = coercePaymentMethods(body.paymentMethods);
+  }
+
   return {
     ok: true,
     value: {
-      version: 1,
+      version: 2,
       businessHours: slots,
+      businessHoursByWeekday,
+      businessHoursByDate,
+      paymentMethods,
       regularHolidays: regular,
       temporaryClosureDates: dates,
     },
   };
 }
 
-export function mergeBusinessBasicsIntoCustomJson(
-  prevCustomJson: unknown,
-  basics: BusinessBasicsV1,
-): JsonObj {
+export function mergeBusinessBasicsIntoCustomJson(prevCustomJson: unknown, basics: BusinessBasicsV2): JsonObj {
   const prev = asObj(prevCustomJson);
   return { ...prev, businessBasics: basics as unknown as JsonObj };
 }

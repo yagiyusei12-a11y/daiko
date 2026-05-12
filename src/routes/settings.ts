@@ -8,7 +8,9 @@ import {
   coerceBusinessBasicsFromCustomJson,
   mergeBusinessBasicsIntoCustomJson,
   parseBusinessBasicsPut,
+  resolveBusinessHoursForYmd,
 } from "../lib/business-basics.js";
+import { coerceTillFromCustomJson, mergeTillIntoCustomJson, parseTillPut } from "../lib/till-settings.js";
 import { coercePricingPrefs, mergePricingPrefsUpdate } from "../lib/pricing-prefs.js";
 import { prisma } from "../db.js";
 
@@ -208,6 +210,48 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
     const prevRoot = asObj(s?.customJson);
     const nextCustom = mergeBusinessBasicsIntoCustomJson(prevRoot, parsed.value);
+
+    await prisma.tenantSettings.upsert({
+      where: { tenantId },
+      create: {
+        tenantId,
+        businessDayRollHour: 4,
+        featureFlags: {},
+        customJson: nextCustom as Prisma.InputJsonValue,
+      },
+      update: { customJson: nextCustom as Prisma.InputJsonValue },
+    });
+    return reply.send({ ok: true });
+  });
+
+  app.get<{ Querystring: { date?: string } }>("/basics/resolved-hours", async (req, reply) => {
+    const { tenantId } = jwtUser(req);
+    const date = String(req.query?.date ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return reply.code(400).send({ error: "date は yyyy-MM-dd で指定してください" });
+    }
+    const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+    const basics = coerceBusinessBasicsFromCustomJson(s?.customJson);
+    return {
+      date,
+      businessHours: resolveBusinessHoursForYmd(date, basics),
+    };
+  });
+
+  app.get("/till", async (req) => {
+    const { tenantId } = jwtUser(req);
+    const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+    return coerceTillFromCustomJson(s?.customJson);
+  });
+
+  app.put<{ Body: Record<string, unknown> }>("/till", async (req, reply) => {
+    const { tenantId } = jwtUser(req);
+    const parsed = parseTillPut((req.body || {}) as Record<string, unknown>);
+    if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
+
+    const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+    const prevRoot = asObj(s?.customJson);
+    const nextCustom = mergeTillIntoCustomJson(prevRoot, parsed.value);
 
     await prisma.tenantSettings.upsert({
       where: { tenantId },

@@ -7,6 +7,7 @@ import DailyReportDetailPage from "./pages/DailyReportDetailPage";
 import DailyReportsMenuPage from "./pages/DailyReportsMenuPage";
 import AttendanceMenuPage from "./pages/AttendanceMenuPage";
 import SettingsMenuPage from "./pages/SettingsMenuPage";
+import DashboardPage from "./pages/DashboardPage";
 
 export default function App(): JSX.Element {
   return (
@@ -16,6 +17,7 @@ export default function App(): JSX.Element {
       <Route element={<Shell />}>
         <Route index element={<TodaySchedulePage />} />
         <Route path="schedule" element={<TodaySchedulePage />} />
+        <Route path="dashboard" element={<DashboardPage />} />
         <Route path="daily-reports" element={<DailyReportsMenuPage />} />
         <Route path="daily-reports/:reportId" element={<DailyReportDetailPage />} />
         <Route path="attendance" element={<AttendanceMenuPage />} />

@@ -13,15 +13,51 @@ type RegularHolidayNthWeekday = { id: string; kind: "nthWeekday"; nth: number; w
 type RegularHolidayMonthlyDay = { id: string; kind: "monthlyDay"; day: number };
 type RegularHolidayEntry = RegularHolidayWeekly | RegularHolidayNthWeekday | RegularHolidayMonthlyDay;
 
-type BusinessBasicsV1 = {
-  version: 1;
+type BusinessBasicsV2 = {
+  version: 2;
   businessHours: BusinessHoursSlot[];
+  businessHoursByWeekday: Record<string, BusinessHoursSlot[]>;
+  businessHoursByDate: Record<string, BusinessHoursSlot[]>;
+  paymentMethods: string[];
   regularHolidays: RegularHolidayEntry[];
   temporaryClosureDates: string[];
 };
 
+type BasicsApi = {
+  version?: number;
+  businessHours?: BusinessHoursSlot[];
+  businessHoursByWeekday?: Record<string, BusinessHoursSlot[]>;
+  businessHoursByDate?: Record<string, BusinessHoursSlot[]>;
+  paymentMethods?: string[];
+  regularHolidays?: RegularHolidayEntry[];
+  temporaryClosureDates?: string[];
+};
+
 function newId(prefix: string): string {
   return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${prefix}_${Date.now()}`;
+}
+
+function fromApiBasics(a: BasicsApi): BusinessBasicsV2 {
+  if (a.version === 2) {
+    return {
+      version: 2,
+      businessHours: a.businessHours ?? [],
+      businessHoursByWeekday: { ...(a.businessHoursByWeekday ?? {}) },
+      businessHoursByDate: { ...(a.businessHoursByDate ?? {}) },
+      paymentMethods: [...(a.paymentMethods ?? [])],
+      regularHolidays: a.regularHolidays ?? [],
+      temporaryClosureDates: a.temporaryClosureDates ?? [],
+    };
+  }
+  return {
+    version: 2,
+    businessHours: a.businessHours ?? [],
+    businessHoursByWeekday: {},
+    businessHoursByDate: {},
+    paymentMethods: [],
+    regularHolidays: a.regularHolidays ?? [],
+    temporaryClosureDates: a.temporaryClosureDates ?? [],
+  };
 }
 
 function currentYearMonth(): string {
@@ -80,6 +116,61 @@ function formatRegularHoliday(r: RegularHolidayEntry): string {
   return `毎月 ${r.day}日`;
 }
 
+function HoursSlotList({
+  slots,
+  onChange,
+  emptyHint,
+}: {
+  slots: BusinessHoursSlot[];
+  onChange: (next: BusinessHoursSlot[]) => void;
+  emptyHint: string;
+}): JSX.Element {
+  return (
+    <>
+      {slots.length === 0 ? (
+        <p className="settings-hint">{emptyHint}</p>
+      ) : (
+        <ul className="settings-sf-list">
+          {slots.map((row, idx) => (
+            <li key={row.id} className="settings-sf-row settings-basic-hours-row">
+              <span className="settings-sf-name">枠 {idx + 1}</span>
+              <input
+                type="text"
+                className="attend-shift-time-field"
+                aria-label={`枠${idx + 1} 開始`}
+                value={row.open}
+                onChange={(e) =>
+                  onChange(slots.map((x) => (x.id === row.id ? { ...x, open: e.target.value } : x)))
+                }
+              />
+              <span className="settings-sf-meta">～</span>
+              <input
+                type="text"
+                className="attend-shift-time-field"
+                aria-label={`枠${idx + 1} 終了`}
+                value={row.close}
+                onChange={(e) =>
+                  onChange(slots.map((x) => (x.id === row.id ? { ...x, close: e.target.value } : x)))
+                }
+              />
+              <button type="button" className="settings-secondary" onClick={() => onChange(slots.filter((x) => x.id !== row.id))}>
+                削除
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        type="button"
+        className="settings-secondary"
+        onClick={() => onChange([...slots, { id: newId("bh"), open: "9:00", close: "18:00" }])}
+      >
+        営業時間を追加
+      </button>
+    </>
+  );
+}
+
 type Props = {
   setErr: (msg: string | null) => void;
   busy: boolean;
@@ -89,7 +180,12 @@ type Props = {
 export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JSX.Element {
   const { flashSaved } = useSavedToast();
   const [localErr, setLocalErr] = useState<string | null>(null);
-  const [draft, setDraft] = useState<BusinessBasicsV1 | null>(null);
+  const [draft, setDraft] = useState<BusinessBasicsV2 | null>(null);
+  const [hoursSubTab, setHoursSubTab] = useState<"default" | "weekday" | "special">("default");
+  const [hoursWeekday, setHoursWeekday] = useState(1);
+  const [specialDateDialogOpen, setSpecialDateDialogOpen] = useState(false);
+  const [newSpecialDate, setNewSpecialDate] = useState("");
+  const [paymentInput, setPaymentInput] = useState("");
 
   const [regularDialogOpen, setRegularDialogOpen] = useState(false);
   const [rhEdit, setRhEdit] = useState<RegularHolidayEntry[]>([]);
@@ -105,17 +201,12 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
 
   const load = useCallback(async () => {
     setLocalErr(null);
-    const r = await apiFetch<BusinessBasicsV1>("/settings/basics");
+    const r = await apiFetch<BasicsApi>("/settings/basics");
     if (!r.ok) {
       setErr(r.error);
       return;
     }
-    setDraft({
-      version: 1,
-      businessHours: r.data.businessHours ?? [],
-      regularHolidays: r.data.regularHolidays ?? [],
-      temporaryClosureDates: r.data.temporaryClosureDates ?? [],
-    });
+    setDraft(fromApiBasics(r.data));
   }, [setErr]);
 
   useEffect(() => {
@@ -131,6 +222,9 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
       method: "PUT",
       json: {
         businessHours: draft.businessHours,
+        businessHoursByWeekday: draft.businessHoursByWeekday,
+        businessHoursByDate: draft.businessHoursByDate,
+        paymentMethods: draft.paymentMethods,
         regularHolidays: draft.regularHolidays,
         temporaryClosureDates: draft.temporaryClosureDates,
       },
@@ -225,6 +319,65 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
     return draft.temporaryClosureDates.join("、");
   }, [draft]);
 
+  const specialDateKeys = useMemo(() => {
+    if (!draft) return [];
+    return Object.keys(draft.businessHoursByDate).sort((a, b) => a.localeCompare(b));
+  }, [draft]);
+
+  const weekdaySlots = draft ? draft.businessHoursByWeekday[String(hoursWeekday)] ?? [] : [];
+
+  function setWeekdaySlots(next: BusinessHoursSlot[]): void {
+    if (!draft) return;
+    const key = String(hoursWeekday);
+    const m = { ...draft.businessHoursByWeekday };
+    if (next.length === 0) delete m[key];
+    else m[key] = next;
+    setDraft({ ...draft, businessHoursByWeekday: m });
+  }
+
+  function setDateSlots(date: string, next: BusinessHoursSlot[]): void {
+    if (!draft) return;
+    const m = { ...draft.businessHoursByDate };
+    if (next.length === 0) delete m[date];
+    else m[date] = next;
+    setDraft({ ...draft, businessHoursByDate: m });
+  }
+
+  function confirmAddSpecialDate(): void {
+    if (!draft) return;
+    const d = newSpecialDate.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      setLocalErr("日付は yyyy-MM-dd で選んでください。");
+      return;
+    }
+    if (draft.businessHoursByDate[d]) {
+      setLocalErr("その日はすでに登録されています。");
+      return;
+    }
+    setLocalErr(null);
+    setDraft({
+      ...draft,
+      businessHoursByDate: {
+        ...draft.businessHoursByDate,
+        [d]: draft.businessHours.map((x) => ({ ...x, id: newId("bh") })),
+      },
+    });
+    setSpecialDateDialogOpen(false);
+    setNewSpecialDate("");
+  }
+
+  function addPaymentMethod(): void {
+    if (!draft) return;
+    const t = paymentInput.trim();
+    if (!t || t.length > 80) return;
+    if (draft.paymentMethods.includes(t)) {
+      setPaymentInput("");
+      return;
+    }
+    setDraft({ ...draft, paymentMethods: [...draft.paymentMethods, t] });
+    setPaymentInput("");
+  }
+
   if (!draft) {
     return <p className="settings-hint">読み込み中…</p>;
   }
@@ -232,62 +385,121 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
   return (
     <div className="settings-form settings-basic-root">
       <p className="settings-hint">
-        営業時間は翌未明まで「26:00」のように入力できます。複数枠（昼休みで分割など）は「営業時間を追加」で行を足してください。
+        営業時間は翌未明まで「26:00」のように入力できます。基本は全曜日共通です。曜日別・特定日で上書きすると、その優先順位で勤怠スケジュールの軸に使われます（特定日 → 曜日 → 基本）。
       </p>
 
       <h3 className="settings-subtitle">営業時間</h3>
-      {draft.businessHours.length === 0 ? (
-        <p className="settings-hint">まだ登録がありません。下のボタンで追加してください。</p>
+      <div className="settings-toolbar" style={{ flexWrap: "wrap", gap: "0.35rem" }}>
+        <button
+          type="button"
+          className={hoursSubTab === "default" ? "settings-primary" : "settings-secondary"}
+          onClick={() => setHoursSubTab("default")}
+        >
+          基本
+        </button>
+        <button
+          type="button"
+          className={hoursSubTab === "weekday" ? "settings-primary" : "settings-secondary"}
+          onClick={() => setHoursSubTab("weekday")}
+        >
+          曜日別
+        </button>
+        <button
+          type="button"
+          className={hoursSubTab === "special" ? "settings-primary" : "settings-secondary"}
+          onClick={() => setHoursSubTab("special")}
+        >
+          特定日
+        </button>
+      </div>
+
+      {hoursSubTab === "default" ? (
+        <HoursSlotList
+          slots={draft.businessHours}
+          onChange={(next) => setDraft({ ...draft, businessHours: next })}
+          emptyHint="まだ登録がありません。下のボタンで追加してください。"
+        />
+      ) : null}
+
+      {hoursSubTab === "weekday" ? (
+        <div style={{ marginTop: "0.75rem" }}>
+          <p className="settings-hint">上書きしたい曜日を選びます。枠を空にするとその曜日は「基本」に従います。</p>
+          <div className="settings-toolbar" style={{ flexWrap: "wrap", gap: "0.35rem" }}>
+            {WEEKDAY_LABELS.map((label, d) => (
+              <button
+                key={label}
+                type="button"
+                className={hoursWeekday === d ? "settings-primary" : "settings-secondary"}
+                onClick={() => setHoursWeekday(d)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <HoursSlotList
+            slots={weekdaySlots}
+            onChange={setWeekdaySlots}
+            emptyHint={`${WEEKDAY_LABELS[hoursWeekday]}曜は未設定（基本の営業時間に従います）。`}
+          />
+        </div>
+      ) : null}
+
+      {hoursSubTab === "special" ? (
+        <div style={{ marginTop: "0.75rem" }}>
+          <p className="settings-hint">祝日など、特定の日だけ営業時間を変える場合に使います。日付ごとに枠を設定します。</p>
+          <button type="button" className="settings-secondary" onClick={() => setSpecialDateDialogOpen(true)}>
+            日付を追加
+          </button>
+          {specialDateKeys.length === 0 ? (
+            <p className="settings-hint">まだ特定日の上書きはありません。</p>
+          ) : (
+            specialDateKeys.map((date) => (
+              <div key={date} style={{ marginTop: "1rem", paddingTop: "0.75rem", borderTop: "1px solid var(--color-border)" }}>
+                <div className="settings-toolbar" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                  <strong>{date}</strong>
+                  <button type="button" className="settings-secondary" onClick={() => setDateSlots(date, [])}>
+                    この日の上書きを削除
+                  </button>
+                </div>
+                <HoursSlotList
+                  slots={draft.businessHoursByDate[date] ?? []}
+                  onChange={(next) => setDateSlots(date, next)}
+                  emptyHint="枠がありません。追加してください。"
+                />
+              </div>
+            ))
+          )}
+        </div>
+      ) : null}
+
+      <h3 className="settings-subtitle" style={{ marginTop: "1.25rem" }}>
+        支払方法（候補）
+      </h3>
+      <p className="settings-hint">日報などで使う支払方法の名前を登録します。入力して追加できます。</p>
+      <div className="settings-toolbar" style={{ flexWrap: "wrap", gap: "0.35rem" }}>
+        <input
+          type="text"
+          style={{ minWidth: "14rem", maxWidth: "100%" }}
+          placeholder="例: QR決済"
+          value={paymentInput}
+          onChange={(e) => setPaymentInput(e.target.value)}
+          maxLength={80}
+        />
+        <button type="button" className="settings-secondary" onClick={() => addPaymentMethod()}>
+          追加
+        </button>
+      </div>
+      {draft.paymentMethods.length === 0 ? (
+        <p className="settings-hint">まだありません。</p>
       ) : (
         <ul className="settings-sf-list">
-          {draft.businessHours.map((row, idx) => (
-            <li key={row.id} className="settings-sf-row settings-basic-hours-row">
-              <span className="settings-sf-name">枠 {idx + 1}</span>
-              <input
-                type="text"
-                className="attend-shift-time-field"
-                aria-label={`枠${idx + 1} 開始`}
-                value={row.open}
-                onChange={(e) =>
-                  setDraft((d) =>
-                    d
-                      ? {
-                          ...d,
-                          businessHours: d.businessHours.map((x) =>
-                            x.id === row.id ? { ...x, open: e.target.value } : x,
-                          ),
-                        }
-                      : d,
-                  )
-                }
-              />
-              <span className="settings-sf-meta">～</span>
-              <input
-                type="text"
-                className="attend-shift-time-field"
-                aria-label={`枠${idx + 1} 終了`}
-                value={row.close}
-                onChange={(e) =>
-                  setDraft((d) =>
-                    d
-                      ? {
-                          ...d,
-                          businessHours: d.businessHours.map((x) =>
-                            x.id === row.id ? { ...x, close: e.target.value } : x,
-                          ),
-                        }
-                      : d,
-                  )
-                }
-              />
+          {draft.paymentMethods.map((pm) => (
+            <li key={pm} className="settings-sf-row attend-shift-list-row">
+              <span className="settings-sf-name">{pm}</span>
               <button
                 type="button"
                 className="settings-secondary"
-                onClick={() =>
-                  setDraft((d) =>
-                    d ? { ...d, businessHours: d.businessHours.filter((x) => x.id !== row.id) } : d,
-                  )
-                }
+                onClick={() => setDraft({ ...draft, paymentMethods: draft.paymentMethods.filter((x) => x !== pm) })}
               >
                 削除
               </button>
@@ -295,22 +507,6 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
           ))}
         </ul>
       )}
-      <button
-        type="button"
-        className="settings-secondary"
-        onClick={() =>
-          setDraft((d) =>
-            d
-              ? {
-                  ...d,
-                  businessHours: [...d.businessHours, { id: newId("bh"), open: "9:00", close: "18:00" }],
-                }
-              : d,
-          )
-        }
-      >
-        営業時間を追加
-      </button>
 
       <h3 className="settings-subtitle" style={{ marginTop: "1.25rem" }}>
         定休日
@@ -333,6 +529,48 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
           保存
         </button>
       </div>
+
+      {specialDateDialogOpen ? (
+        <div
+          className="pricing-modal-backdrop"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setSpecialDateDialogOpen(false);
+          }}
+        >
+          <div
+            className="pricing-modal attend-shift-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="basic-sp-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h2 id="basic-sp-title" className="pricing-modal-title">
+              特定日を追加
+            </h2>
+            <div className="attend-shift-dialog-scroll">
+              <Err msg={localErr} />
+              <label htmlFor="basic-sp-date">日付</label>
+              <input id="basic-sp-date" type="date" value={newSpecialDate} onChange={(e) => setNewSpecialDate(e.target.value)} />
+              <p className="settings-hint">追加後、基本と同じ枠がコピーされます。必要に応じて編集してください。</p>
+            </div>
+            <div className="pricing-modal-actions">
+              <button type="button" className="settings-primary" onClick={() => confirmAddSpecialDate()}>
+                追加
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSpecialDateDialogOpen(false);
+                  setLocalErr(null);
+                }}
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {regularDialogOpen ? (
         <div

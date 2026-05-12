@@ -1259,6 +1259,71 @@ td {
   min-width: 3px;
 }
 
+.attend-schedule-wrap--transpose {
+  overflow-x: auto;
+}
+
+.attend-schedule-transpose-inner {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
+
+.attend-schedule-time-rail {
+  border-right: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-border));
+}
+
+.attend-schedule-tick-slot--hour {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.attend-schedule-bar--transpose {
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  width: 0.65rem;
+  min-height: 4px;
+  height: auto;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-accent) 75%, #1e3a5f);
+}
+
+.dash-driver-table-wrap {
+  margin-top: 0.5rem;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.dash-driver-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.dash-driver-table th,
+.dash-driver-table td {
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: right;
+}
+
+.dash-driver-table th:first-child,
+.dash-driver-table td:first-child {
+  text-align: left;
+}
+
+.dash-driver-table th {
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-border));
+  font-weight: 600;
+}
+
+.dash-driver-table tr:last-child td {
+  border-bottom: none;
+}
+
 .trip-editor {
   margin-bottom: 1rem;
 }

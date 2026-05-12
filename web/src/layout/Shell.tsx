@@ -4,6 +4,7 @@ import { useDeviceKind } from "../hooks/useDeviceKind";
 import { SavedToastProvider } from "../saved-toast";
 
 const navItems: { to: string; label: string; match: "schedule" | "prefix" }[] = [
+  { to: "/dashboard", label: "ダッシュボード", match: "prefix" },
   { to: "/daily-reports", label: "日報", match: "prefix" },
   { to: "/schedule", label: "スケジュール", match: "schedule" },
   { to: "/attendance", label: "勤怠", match: "prefix" },
