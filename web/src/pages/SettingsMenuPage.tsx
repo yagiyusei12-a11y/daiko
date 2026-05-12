@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth";
 import { apiFetch } from "../api";
 import { Card, Err, Tabs, type TabDef } from "../ui";
@@ -54,8 +54,6 @@ const JP_PREFECTURES = [
 ];
 
 const PRICING_FEATURE_OPTS: { id: string; label: string }[] = [
-  { id: "distance", label: "距離制" },
-  { id: "time", label: "時間制" },
   { id: "pickup", label: "迎車料金" },
   { id: "waiting", label: "待機時間" },
   { id: "leftHand", label: "左ハンドル" },
@@ -72,7 +70,6 @@ type CompanyDto = {
   legalPostalCode: string | null;
   legalPrefecture: string | null;
   legalStreetAddress: string | null;
-  legalBusinessAddress: string | null;
   legalPhone: string | null;
   legalCertificationNumber: string | null;
   legalCertificationDate: string | null;
@@ -105,6 +102,14 @@ function extStr(ext: unknown, k: string): string {
   return typeof v === "string" ? v : "";
 }
 
+function extLicenseConditions(ext: unknown): string[] {
+  if (!ext || typeof ext !== "object") return [];
+  const v = (ext as Record<string, unknown>).licenseConditions;
+  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
+  if (typeof v === "string" && v.trim()) return [v.trim()];
+  return [];
+}
+
 function asDetail(v: unknown): Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
@@ -123,6 +128,8 @@ export default function SettingsMenuPage(): JSX.Element {
 
   const [licenseClasses, setLicenseClasses] = useState<string[]>([]);
   const [plateRegions, setPlateRegions] = useState<string[]>([]);
+  const [licenseConditionOptions, setLicenseConditionOptions] = useState<string[]>([]);
+  const lastFetchedZipRef = useRef("");
 
   const [company, setCompany] = useState<CompanyDto | null>(null);
 
@@ -145,8 +152,9 @@ export default function SettingsMenuPage(): JSX.Element {
     licenseKind: "",
     licenseNumber: "",
     licenseExpiresOn: "",
-    licenseConditions: "",
-    licensePhotoDataUrl: "",
+    licenseConditions: [] as string[],
+    licensePhotoFrontDataUrl: "",
+    licensePhotoBackDataUrl: "",
   });
 
   const [vehicles, setVehicles] = useState<VehicleRow[]>([]);
@@ -161,17 +169,21 @@ export default function SettingsMenuPage(): JSX.Element {
     insuranceCompany: "",
     insurancePeriodFrom: "",
     insurancePeriodTo: "",
-    active: true,
   });
 
   const [pricingRegime, setPricingRegime] = useState("");
   const [pricingFeatures, setPricingFeatures] = useState<string[]>([]);
 
   const loadMeta = useCallback(async () => {
-    const r = await apiFetch<{ licenseClasses: string[]; plateRegions: string[] }>("/settings/meta");
+    const r = await apiFetch<{
+      licenseClasses: string[];
+      plateRegions: string[];
+      licenseConditionOptions: string[];
+    }>("/settings/meta");
     if (r.ok) {
       setLicenseClasses(r.data.licenseClasses);
       setPlateRegions(r.data.plateRegions);
+      setLicenseConditionOptions(r.data.licenseConditionOptions ?? []);
     }
   }, []);
 
@@ -197,7 +209,7 @@ export default function SettingsMenuPage(): JSX.Element {
     const r = await apiFetch<{ regime: string; features: string[] }>("/settings/pricing");
     if (r.ok) {
       setPricingRegime(r.data.regime);
-      setPricingFeatures(r.data.features);
+      setPricingFeatures(r.data.features.filter((id) => id !== "distance" && id !== "time"));
     } else setErr(r.error);
   }, []);
 
@@ -208,6 +220,57 @@ export default function SettingsMenuPage(): JSX.Element {
     void loadVehicles();
     void loadPricing();
   }, [loadMeta, loadCompany, loadEmployees, loadVehicles, loadPricing]);
+
+  useEffect(() => {
+    if (!company) return;
+    const d = (company.legalPostalCode ?? "").replace(/\D/g, "");
+    if (d.length < 7) {
+      lastFetchedZipRef.current = "";
+      return;
+    }
+    if (lastFetchedZipRef.current === d) return;
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      void (async () => {
+        const r = await apiFetch<{
+          ok?: boolean;
+          prefecture?: string;
+          addressStart?: string;
+          message?: string;
+        }>(`/settings/zip-lookup?zip=${encodeURIComponent(d)}`);
+        if (cancelled) return;
+        if (!r.ok) {
+          setErr(r.error);
+          return;
+        }
+        const payload = r.data as {
+          ok?: boolean;
+          prefecture?: string;
+          addressStart?: string;
+          message?: string;
+        };
+        if (payload && payload.ok === false) {
+          setErr(payload.message || "郵便番号が見つかりません");
+          return;
+        }
+        lastFetchedZipRef.current = d;
+        setErr(null);
+        setCompany((c) =>
+          c
+            ? {
+                ...c,
+                legalPrefecture: payload.prefecture || c.legalPrefecture,
+                legalStreetAddress: payload.addressStart || c.legalStreetAddress,
+              }
+            : null,
+        );
+      })();
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [company?.legalPostalCode]);
 
   const fillEmpForm = (e: EmployeeRow | null): void => {
     if (!e) {
@@ -229,8 +292,9 @@ export default function SettingsMenuPage(): JSX.Element {
         licenseKind: "",
         licenseNumber: "",
         licenseExpiresOn: "",
-        licenseConditions: "",
-        licensePhotoDataUrl: "",
+        licenseConditions: [],
+        licensePhotoFrontDataUrl: "",
+        licensePhotoBackDataUrl: "",
       });
       return;
     }
@@ -253,8 +317,9 @@ export default function SettingsMenuPage(): JSX.Element {
       licenseKind: extStr(ex, "licenseKind"),
       licenseNumber: extStr(ex, "licenseNumber"),
       licenseExpiresOn: extStr(ex, "licenseExpiresOn"),
-      licenseConditions: extStr(ex, "licenseConditions"),
-      licensePhotoDataUrl: extStr(ex, "licensePhotoDataUrl"),
+      licenseConditions: extLicenseConditions(ex),
+      licensePhotoFrontDataUrl: extStr(ex, "licensePhotoFrontDataUrl") || extStr(ex, "licensePhotoDataUrl"),
+      licensePhotoBackDataUrl: extStr(ex, "licensePhotoBackDataUrl"),
     });
   };
 
@@ -271,7 +336,6 @@ export default function SettingsMenuPage(): JSX.Element {
         insuranceCompany: "",
         insurancePeriodFrom: "",
         insurancePeriodTo: "",
-        active: true,
       });
       return;
     }
@@ -288,7 +352,6 @@ export default function SettingsMenuPage(): JSX.Element {
       insuranceCompany: String(ins.companyName ?? ""),
       insurancePeriodFrom: String(ins.periodFrom ?? ""),
       insurancePeriodTo: String(ins.periodTo ?? ""),
-      active: v.active,
     });
   };
 
@@ -305,7 +368,6 @@ export default function SettingsMenuPage(): JSX.Element {
         legalPostalCode: company.legalPostalCode,
         legalPrefecture: company.legalPrefecture,
         legalStreetAddress: company.legalStreetAddress,
-        legalBusinessAddress: company.legalBusinessAddress,
         legalPhone: company.legalPhone,
         legalCertificationNumber: company.legalCertificationNumber,
         legalCertificationDate: company.legalCertificationDate || null,
@@ -416,7 +478,10 @@ export default function SettingsMenuPage(): JSX.Element {
     setMsg(null);
     const r = await apiFetch("/settings/pricing", {
       method: "PUT",
-      json: { regime: pricingRegime, features: pricingFeatures },
+      json: {
+        regime: pricingRegime,
+        features: pricingFeatures.filter((id) => id !== "distance" && id !== "time"),
+      },
     });
     setBusy(false);
     if (!r.ok) setErr(r.error);
@@ -427,7 +492,7 @@ export default function SettingsMenuPage(): JSX.Element {
     setPricingFeatures((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
-  function onLicensePhoto(f: File | null): void {
+  function onLicensePhotoSide(side: "front" | "back", f: File | null): void {
     if (!f) return;
     if (f.size > 900_000) {
       setErr("画像が大きすぎます（900KB 以下にしてください）");
@@ -436,12 +501,26 @@ export default function SettingsMenuPage(): JSX.Element {
     const reader = new FileReader();
     reader.onload = () => {
       const s = typeof reader.result === "string" ? reader.result : "";
-      setEmpForm((p) => ({ ...p, licensePhotoDataUrl: s }));
+      if (side === "front") setEmpForm((p) => ({ ...p, licensePhotoFrontDataUrl: s }));
+      else setEmpForm((p) => ({ ...p, licensePhotoBackDataUrl: s }));
     };
     reader.readAsDataURL(f);
   }
 
-  const companyPanel = company ? (
+  function toggleLicenseCondition(label: string): void {
+    setEmpForm((p) => ({
+      ...p,
+      licenseConditions: p.licenseConditions.includes(label)
+        ? p.licenseConditions.filter((x) => x !== label)
+        : [...p.licenseConditions, label],
+    }));
+  }
+
+  const companyPanel = company ? (() => {
+    const zipDigits = (company.legalPostalCode ?? "").replace(/\D/g, "").slice(0, 7);
+    const zip3 = zipDigits.slice(0, 3);
+    const zip4 = zipDigits.slice(3);
+    return (
     <div className="settings-form">
       <p className="settings-hint">
         テナント: {company.tenantName}（{company.tenantSlug}） / ログイン: {me?.email}
@@ -456,12 +535,40 @@ export default function SettingsMenuPage(): JSX.Element {
         value={company.legalRepresentativeName ?? ""}
         onChange={(e) => setCompany({ ...company, legalRepresentativeName: e.target.value })}
       />
-      <label>郵便番号</label>
-      <input
-        value={company.legalPostalCode ?? ""}
-        onChange={(e) => setCompany({ ...company, legalPostalCode: e.target.value })}
-        placeholder="例: 1234567"
-      />
+      <label>郵便番号（例: 526-0842）</label>
+      <div className="settings-postal-row">
+        <input
+          className="settings-postal-part"
+          inputMode="numeric"
+          maxLength={3}
+          autoComplete="postal-code"
+          value={zip3}
+          onChange={(e) => {
+            const n = e.target.value.replace(/\D/g, "").slice(0, 3);
+            const rest = zipDigits.slice(3);
+            setCompany({ ...company, legalPostalCode: (n + rest).slice(0, 7) || null });
+          }}
+          placeholder="526"
+          aria-label="郵便番号 前3桁"
+        />
+        <span className="settings-postal-sep" aria-hidden>
+          ー
+        </span>
+        <input
+          className="settings-postal-part settings-postal-part--wide"
+          inputMode="numeric"
+          maxLength={4}
+          value={zip4}
+          onChange={(e) => {
+            const n = e.target.value.replace(/\D/g, "").slice(0, 4);
+            const head = zipDigits.slice(0, 3);
+            setCompany({ ...company, legalPostalCode: (head + n).slice(0, 7) || null });
+          }}
+          placeholder="0842"
+          aria-label="郵便番号 後4桁"
+        />
+      </div>
+      <p className="settings-hint">7桁そろうと、都道府県と市区町村・町域まで自動入力します。</p>
       <label>都道府県</label>
       <select
         value={company.legalPrefecture ?? ""}
@@ -501,17 +608,12 @@ export default function SettingsMenuPage(): JSX.Element {
         value={company.legalCertificationDate ?? ""}
         onChange={(e) => setCompany({ ...company, legalCertificationDate: e.target.value || null })}
       />
-      <label>一括住所（帳票用・任意）</label>
-      <input
-        value={company.legalBusinessAddress ?? ""}
-        onChange={(e) => setCompany({ ...company, legalBusinessAddress: e.target.value })}
-        placeholder="上記と別に全文を残す場合"
-      />
       <button type="button" className="settings-primary" disabled={busy} onClick={() => void saveCompany()}>
         保存
       </button>
     </div>
-  ) : (
+    );
+  })() : (
     <p className="settings-hint">読み込み中…</p>
   );
 
@@ -583,7 +685,7 @@ export default function SettingsMenuPage(): JSX.Element {
             <input value={empForm.emergencyName} onChange={(e) => setEmpForm({ ...empForm, emergencyName: e.target.value })} />
             <label>緊急連絡先 TEL</label>
             <input value={empForm.emergencyTel} onChange={(e) => setEmpForm({ ...empForm, emergencyTel: e.target.value })} />
-            <label>免許種別</label>
+            <label>免許種別（一番上位の種別を選択）</label>
             <select value={empForm.licenseKind} onChange={(e) => setEmpForm({ ...empForm, licenseKind: e.target.value })}>
               <option value="">選択</option>
               {licenseClasses.map((c) => (
@@ -593,23 +695,44 @@ export default function SettingsMenuPage(): JSX.Element {
               ))}
             </select>
             <label>免許番号</label>
-            <input value={empForm.licenseNumber} onChange={(e) => setEmpForm({ ...empForm, licenseNumber: e.target.value })} />
-            <label>免許期限</label>
+            <div className="settings-inline-cert">
+              <span aria-hidden>第</span>
+              <input
+                className="settings-cert-core"
+                value={empForm.licenseNumber}
+                onChange={(e) => setEmpForm({ ...empForm, licenseNumber: e.target.value })}
+                placeholder="番号"
+              />
+              <span aria-hidden>号</span>
+            </div>
+            <label>有効期限</label>
             <input
               type="date"
               value={empForm.licenseExpiresOn}
               onChange={(e) => setEmpForm({ ...empForm, licenseExpiresOn: e.target.value })}
             />
-            <label>免許の条件・限定等</label>
-            <textarea
-              rows={2}
-              value={empForm.licenseConditions}
-              onChange={(e) => setEmpForm({ ...empForm, licenseConditions: e.target.value })}
-            />
-            <label>免許証の写真</label>
-            <input type="file" accept="image/*" onChange={(e) => onLicensePhoto(e.target.files?.[0] ?? null)} />
-            {empForm.licensePhotoDataUrl ? (
-              <img className="settings-photo-preview" src={empForm.licensePhotoDataUrl} alt="免許証プレビュー" />
+            <label>免許の条件・限定等（複数選択）</label>
+            <div className="settings-license-conditions">
+              {licenseConditionOptions.map((opt) => (
+                <label key={opt} className="settings-check settings-check--block">
+                  <input
+                    type="checkbox"
+                    checked={empForm.licenseConditions.includes(opt)}
+                    onChange={() => toggleLicenseCondition(opt)}
+                  />{" "}
+                  {opt}
+                </label>
+              ))}
+            </div>
+            <label>免許証の写真（表面）</label>
+            <input type="file" accept="image/*" onChange={(e) => onLicensePhotoSide("front", e.target.files?.[0] ?? null)} />
+            {empForm.licensePhotoFrontDataUrl ? (
+              <img className="settings-photo-preview" src={empForm.licensePhotoFrontDataUrl} alt="免許証表面" />
+            ) : null}
+            <label>免許証の写真（裏面）</label>
+            <input type="file" accept="image/*" onChange={(e) => onLicensePhotoSide("back", e.target.files?.[0] ?? null)} />
+            {empForm.licensePhotoBackDataUrl ? (
+              <img className="settings-photo-preview" src={empForm.licensePhotoBackDataUrl} alt="免許証裏面" />
             ) : null}
             <div className="settings-actions">
               <button type="button" className="settings-primary" disabled={busy} onClick={() => void saveEmployee()}>
@@ -694,14 +817,6 @@ export default function SettingsMenuPage(): JSX.Element {
               value={vehForm.insurancePeriodTo}
               onChange={(e) => setVehForm({ ...vehForm, insurancePeriodTo: e.target.value })}
             />
-            <label>
-              <input
-                type="checkbox"
-                checked={vehForm.active}
-                onChange={(e) => setVehForm({ ...vehForm, active: e.target.checked })}
-              />{" "}
-              有効
-            </label>
             <div className="settings-actions">
               <button type="button" className="settings-primary" disabled={busy} onClick={() => void saveVehicle()}>
                 保存

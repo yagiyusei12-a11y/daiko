@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { authenticate, jwtUser } from "../auth/pre.js";
 import { JP_DRIVER_LICENSE_CLASSES, JP_PLATE_REGION_NAMES } from "../lib/jp-constants.js";
+import { JP_LICENSE_CONDITION_OPTIONS } from "../lib/jp-license-conditions.js";
 import { prisma } from "../db.js";
 
 type JsonObj = Record<string, unknown>;
@@ -36,6 +37,13 @@ function mergeVehicleDetail(existing: unknown, patch: JsonObj): JsonObj {
   return next;
 }
 
+const PRICING_STRIP = new Set(["distance", "time"]);
+
+function sanitizePricingFeatures(raw: unknown): string[] {
+  const arr = Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : [];
+  return arr.filter((id) => !PRICING_STRIP.has(id));
+}
+
 function buildRegisterExtension(
   base: unknown,
   body: {
@@ -50,8 +58,10 @@ function buildRegisterExtension(
     licenseKind?: string;
     licenseNumber?: string;
     licenseExpiresOn?: string;
-    licenseConditions?: string;
-    licensePhotoDataUrl?: string;
+    /** 複数選択（文字列配列） */
+    licenseConditions?: string[] | string;
+    licensePhotoFrontDataUrl?: string;
+    licensePhotoBackDataUrl?: string;
   },
 ): JsonObj {
   const cur = asObj(base);
@@ -68,17 +78,59 @@ function buildRegisterExtension(
     "licenseKind",
     "licenseNumber",
     "licenseExpiresOn",
-    "licenseConditions",
-    "licensePhotoDataUrl",
+    "licensePhotoFrontDataUrl",
+    "licensePhotoBackDataUrl",
   ] as const;
   for (const k of keys) {
     if (body[k] !== undefined) ext[k] = body[k] as string;
   }
+  if (body.licenseConditions !== undefined) {
+    if (Array.isArray(body.licenseConditions)) {
+      ext.licenseConditions = body.licenseConditions.filter((x): x is string => typeof x === "string");
+    } else if (typeof body.licenseConditions === "string") {
+      const t = body.licenseConditions.trim();
+      ext.licenseConditions = t ? [t] : [];
+    }
+  }
+  if (body.licensePhotoFrontDataUrl !== undefined || body.licensePhotoBackDataUrl !== undefined) {
+    delete ext.licensePhotoDataUrl;
+  }
   return ext;
 }
 
+type ZipCloudResponse = {
+  status: number;
+  message: string | null;
+  results: { address1: string; address2: string; address3: string }[] | null;
+};
+
 export async function registerSettingsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
+
+  app.get<{ Querystring: { zip?: string } }>("/zip-lookup", async (req, reply) => {
+    const zip = String(req.query?.zip ?? "").replace(/\D/g, "");
+    if (zip.length !== 7) return reply.code(400).send({ error: "郵便番号は7桁で指定してください" });
+    let res: Response;
+    try {
+      res = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${encodeURIComponent(zip)}`, {
+        headers: { Accept: "application/json" },
+      });
+    } catch {
+      return reply.code(502).send({ error: "郵便番号検索サービスに接続できませんでした" });
+    }
+    if (!res.ok) return reply.code(502).send({ error: "郵便番号検索に失敗しました" });
+    const j = (await res.json()) as ZipCloudResponse;
+    if (j.status !== 200 || !j.results?.length) {
+      return { ok: false as const, message: j.message || "該当する住所がありません" };
+    }
+    const r = j.results[0];
+    const addressStart = `${r.address2 ?? ""}${r.address3 ?? ""}`.trim();
+    return {
+      ok: true as const,
+      prefecture: r.address1 ?? "",
+      addressStart,
+    };
+  });
 
   app.get("/company", async (req) => {
     const { tenantId } = jwtUser(req);
@@ -95,7 +147,6 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
       legalPostalCode: s?.legalPostalCode ?? null,
       legalPrefecture: s?.legalPrefecture ?? null,
       legalStreetAddress: s?.legalStreetAddress ?? null,
-      legalBusinessAddress: s?.legalBusinessAddress ?? null,
       legalPhone: s?.legalPhone ?? null,
       legalCertificationNumber: s?.legalCertificationNumber ?? null,
       legalCertificationDate: s?.legalCertificationDate ? ymd(s.legalCertificationDate) : null,
@@ -116,7 +167,6 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     assign("legalPostalCode", str("legalPostalCode"));
     assign("legalPrefecture", str("legalPrefecture"));
     assign("legalStreetAddress", str("legalStreetAddress"));
-    assign("legalBusinessAddress", str("legalBusinessAddress"));
     assign("legalPhone", str("legalPhone"));
     assign("legalCertificationNumber", str("legalCertificationNumber"));
     if (b.legalCertificationDate !== undefined) {
@@ -130,6 +180,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const clean = Object.fromEntries(
       Object.entries(data).filter(([, v]) => v !== undefined),
     ) as Record<string, string | Date | null>;
+    clean.legalBusinessAddress = null;
     await prisma.tenantSettings.upsert({
       where: { tenantId },
       create: {
@@ -421,7 +472,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const pp = asObj(cj.pricingPrefs);
     return {
       regime: typeof pp.regime === "string" ? pp.regime : "",
-      features: Array.isArray(pp.features) ? pp.features.filter((x): x is string => typeof x === "string") : [],
+      features: sanitizePricingFeatures(pp.features),
     };
   });
 
@@ -429,7 +480,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const { tenantId } = jwtUser(req);
     const b = req.body || {};
     const regime = b.regime !== undefined ? String(b.regime) : "";
-    const features = Array.isArray(b.features) ? b.features.map((x) => String(x)) : [];
+    const features = sanitizePricingFeatures(b.features);
 
     const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
     const prev = asObj(s?.customJson);
@@ -449,6 +500,10 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
   });
 
   app.get("/meta", async () => {
-    return { licenseClasses: JP_DRIVER_LICENSE_CLASSES, plateRegions: JP_PLATE_REGION_NAMES };
+    return {
+      licenseClasses: JP_DRIVER_LICENSE_CLASSES,
+      plateRegions: JP_PLATE_REGION_NAMES,
+      licenseConditionOptions: JP_LICENSE_CONDITION_OPTIONS,
+    };
   });
 }

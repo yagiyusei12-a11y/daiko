@@ -800,6 +800,45 @@ td {
   margin-top: 0;
 }
 
+.settings-check--block {
+  display: flex;
+  align-items: flex-start;
+  line-height: 1.35;
+}
+
+.settings-postal-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.settings-postal-part {
+  width: 4.25rem;
+  max-width: 100%;
+}
+
+.settings-postal-part--wide {
+  width: 5.25rem;
+}
+
+.settings-postal-sep {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  user-select: none;
+}
+
+.settings-license-conditions {
+  max-height: 14rem;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
 .form-actions {
   margin-top: 1rem;
   padding-top: 0.85rem;
