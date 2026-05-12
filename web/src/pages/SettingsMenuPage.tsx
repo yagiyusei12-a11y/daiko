@@ -78,6 +78,8 @@ type EmployeeRow = {
   registerExtension: unknown;
   loginEmail: string | null;
   userId: string | null;
+  adminMaster: boolean;
+  safetyDrivingManager: boolean;
 };
 
 type VehicleRow = {
@@ -149,6 +151,8 @@ export default function SettingsMenuPage(): JSX.Element {
     licenseConditions: [] as string[],
     licensePhotoFrontDataUrl: "",
     licensePhotoBackDataUrl: "",
+    adminMaster: false,
+    safetyDrivingManager: false,
   });
 
   const [vehicles, setVehicles] = useState<VehicleRow[]>([]);
@@ -277,6 +281,8 @@ export default function SettingsMenuPage(): JSX.Element {
         licenseConditions: [],
         licensePhotoFrontDataUrl: "",
         licensePhotoBackDataUrl: "",
+        adminMaster: false,
+        safetyDrivingManager: false,
       });
       return;
     }
@@ -302,6 +308,8 @@ export default function SettingsMenuPage(): JSX.Element {
       licenseConditions: extLicenseConditions(ex),
       licensePhotoFrontDataUrl: extStr(ex, "licensePhotoFrontDataUrl") || extStr(ex, "licensePhotoDataUrl"),
       licensePhotoBackDataUrl: extStr(ex, "licensePhotoBackDataUrl"),
+      adminMaster: Boolean(e.adminMaster),
+      safetyDrivingManager: Boolean(e.safetyDrivingManager),
     });
   };
 
@@ -629,6 +637,24 @@ export default function SettingsMenuPage(): JSX.Element {
             <input type="date" value={empForm.birthDate} onChange={(e) => setEmpForm({ ...empForm, birthDate: e.target.value })} />
             <label>住所</label>
             <input value={empForm.address} onChange={(e) => setEmpForm({ ...empForm, address: e.target.value })} />
+            <div className="settings-checkbox-row">
+              <label className="settings-inline-check">
+                <input
+                  type="checkbox"
+                  checked={empForm.adminMaster}
+                  onChange={(e) => setEmpForm({ ...empForm, adminMaster: e.target.checked })}
+                />
+                管理者
+              </label>
+              <label className="settings-inline-check">
+                <input
+                  type="checkbox"
+                  checked={empForm.safetyDrivingManager}
+                  onChange={(e) => setEmpForm({ ...empForm, safetyDrivingManager: e.target.checked })}
+                />
+                安全運転管理者
+              </label>
+            </div>
             <label>電話番号</label>
             <input value={empForm.phone} onChange={(e) => setEmpForm({ ...empForm, phone: e.target.value })} />
             <label>携帯電話</label>

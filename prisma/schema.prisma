@@ -76,6 +76,7 @@ model Tenant {
   accountsReceivableEntries AccountsReceivableEntry[]
   demoSeedBatches     DemoSeedBatch[]
   shiftApplications   ShiftApplication[]
+  confirmedShiftDays  ConfirmedShiftDay[]
 }
 
 /// デモ用サンプル投入のバッチ（payload に作成した主キー一覧を保持し、削除時に利用）
@@ -216,6 +217,10 @@ model Employee {
   address     String?
   /// 従事者名簿用（性別・生年月日・連絡先・免許・緊急連絡先など）JSON
   registerExtension Json @default("{}")
+  /// 従業員マスタ: 管理者
+  adminMaster          Boolean @default(false)
+  /// 従業員マスタ: 安全運転管理者
+  safetyDrivingManager Boolean @default(false)
   status      EmployeeStatus @default(ACTIVE)
   retiredAt   DateTime?
   createdAt   DateTime       @default(now())
@@ -231,8 +236,28 @@ model Employee {
   guidanceAttendances      GuidanceAttendee[]
   linkedUsers              User[]
   shiftApplications        ShiftApplication[]
+  confirmedShiftDays       ConfirmedShiftDay[]
 
   @@index([tenantId, status])
+}
+
+/// シフト調整で確定した日単位の勤務（担当業務は JSON 文字列配列）
+model ConfirmedShiftDay {
+  id           String   @id @default(cuid())
+  tenantId     String
+  employeeId   String
+  businessDate String
+  startTime    String
+  endTime      String
+  dutiesJson   Json     @default("[]")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, employeeId, businessDate])
+  @@index([tenantId, businessDate])
 }
 
 model EmployeeCompensationPeriod {

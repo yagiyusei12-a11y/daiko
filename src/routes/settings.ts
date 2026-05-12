@@ -207,6 +207,8 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
         registerExtension: e.registerExtension,
         loginEmail: e.linkedUsers[0]?.email ?? null,
         userId: e.linkedUsers[0]?.id ?? null,
+        adminMaster: e.adminMaster,
+        safetyDrivingManager: e.safetyDrivingManager,
       })),
     };
   });
@@ -221,6 +223,8 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const loginEmail = String(b.loginEmail || "").trim().toLowerCase();
     const password = String(b.password || "");
     const address = b.address !== undefined ? String(b.address).trim() || null : null;
+    const adminMaster = Boolean(b.adminMaster);
+    const safetyDrivingManager = Boolean(b.safetyDrivingManager);
 
     const ext = buildRegisterExtension({}, b as Parameters<typeof buildRegisterExtension>[1]);
 
@@ -247,6 +251,8 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
             familyName,
             givenName,
             address,
+            adminMaster,
+            safetyDrivingManager,
             registerExtension: ext as Prisma.InputJsonValue,
             status,
             retiredAt: retiredAt ?? undefined,
@@ -267,6 +273,8 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
         familyName,
         givenName,
         address,
+        adminMaster,
+        safetyDrivingManager,
         registerExtension: ext as Prisma.InputJsonValue,
         status,
         retiredAt: retiredAt ?? undefined,
@@ -309,6 +317,8 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
         ...(familyName !== undefined ? { familyName } : {}),
         ...(givenName !== undefined ? { givenName } : {}),
         ...(address !== undefined ? { address } : {}),
+        ...(b.adminMaster !== undefined ? { adminMaster: Boolean(b.adminMaster) } : {}),
+        ...(b.safetyDrivingManager !== undefined ? { safetyDrivingManager: Boolean(b.safetyDrivingManager) } : {}),
         registerExtension: ext as Prisma.InputJsonValue,
         status,
         retiredAt: retiredAt === undefined ? undefined : retiredAt,

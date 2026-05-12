@@ -641,6 +641,21 @@ td {
   margin-top: 0.45rem;
 }
 
+.settings-checkbox-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0.15rem 0 0.35rem;
+}
+
+.settings-inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  font-weight: 500;
+}
+
 .settings-hint {
   margin: 0 0 0.5rem;
   font-size: 0.82rem;
@@ -1115,6 +1130,11 @@ td {
 
 .attend-cal-cell--has:not(.attend-cal-cell--active) {
   border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
+}
+
+.attend-cal-cell--confirmed:not(.attend-cal-cell--active) {
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+  font-weight: 600;
 }
 
 .trip-editor {
