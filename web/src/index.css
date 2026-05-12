@@ -1290,6 +1290,17 @@ td {
   background: color-mix(in srgb, var(--color-accent) 75%, #1e3a5f);
 }
 
+.attend-schedule-bar--shift {
+  z-index: 1;
+  background: color-mix(in srgb, var(--color-muted) 45%, var(--color-border)) !important;
+}
+
+.attend-schedule-bar--reservation {
+  z-index: 2;
+  opacity: 0.95;
+  background: color-mix(in srgb, var(--color-accent) 75%, #1e3a5f) !important;
+}
+
 .dash-driver-table-wrap {
   margin-top: 0.5rem;
   overflow-x: auto;

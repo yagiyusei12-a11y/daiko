@@ -246,6 +246,7 @@ model Employee {
   shiftApplications        ShiftApplication[]
   confirmedShiftDays       ConfirmedShiftDay[]
   timeCardPunches          TimeCardPunch[]
+  dispatchReservationsAsDriver DispatchReservation[] @relation("DispatchReservationDriver")
 
   @@index([tenantId, status])
 }
@@ -538,8 +539,13 @@ model DispatchReservation {
   tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicleId String?
   vehicle   Vehicle?  @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  /// 運行予定の客車担当（確定シフトの客車と整合させる）
+  driverEmployeeId String?
+  driverEmployee     Employee? @relation("DispatchReservationDriver", fields: [driverEmployeeId], references: [id], onDelete: SetNull)
   title     String
   note      String?
+  /// 客名・経路・車番など（運行予定フォーム）
+  detailJson Json @default("{}")
   startsAt  DateTime
   endsAt    DateTime
   status    String    @default("CONFIRMED")
@@ -547,6 +553,7 @@ model DispatchReservation {
   updatedAt DateTime  @updatedAt
 
   @@index([tenantId, startsAt])
+  @@index([tenantId, driverEmployeeId])
 }
 
 /// 売掛（未回収金）メモ。回収で status を更新

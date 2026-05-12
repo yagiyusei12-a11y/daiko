@@ -13,6 +13,7 @@ import { registerDailyReportRoutes } from "./routes/daily-reports.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 import { registerAttendanceRoutes } from "./routes/attendance.js";
 import { registerDashboardRoutes } from "./routes/dashboard.js";
+import { registerDispatchRoutes } from "./routes/dispatch.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -82,6 +83,7 @@ await app.register(registerSettingsRoutes, { prefix: `${v1}/settings` });
 await app.register(registerAttendanceRoutes, { prefix: `${v1}/attendance` });
 await app.register(registerDailyReportRoutes, { prefix: v1 });
 await app.register(registerDashboardRoutes, { prefix: `${v1}/dashboard` });
+await app.register(registerDispatchRoutes, { prefix: `${v1}/dispatch` });
 
 app.get("/api/v1/openapi.json", async () => app.swagger());
 
