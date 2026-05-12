@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
+import { fareYenForTrip } from "../lib/tariffPricing";
 import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
+
+const TARIFF_PLANS_QUERY = "?versionsLimit=30";
 
 type Seg = { id: string; fromM: number; toM: number; fareYen: number };
 type Ver = {
@@ -25,6 +28,16 @@ function findVerLabel(plans: Plan[], verId: string | null): string {
   return verId;
 }
 
+function findVersion(plans: Plan[], verId: string | null): Ver | null {
+  if (!verId) return null;
+  for (const p of plans) {
+    for (const v of p.versions) {
+      if (v.id === verId) return v;
+    }
+  }
+  return null;
+}
+
 export default function Tariffs(): JSX.Element {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -33,13 +46,45 @@ export default function Tariffs(): JSX.Element {
   const [planSubmitting, setPlanSubmitting] = useState(false);
   const [segWizardOpen, setSegWizardOpen] = useState(false);
   const [segSubmitting, setSegSubmitting] = useState(false);
+  const [verSaveSubmitting, setVerSaveSubmitting] = useState(false);
   const [selVer, setSelVer] = useState<string | null>(null);
   const [fromM, setFromM] = useState("");
   const [toM, setToM] = useState("");
   const [fareYen, setFareYen] = useState("");
 
+  const [editInitialDistanceM, setEditInitialDistanceM] = useState("");
+  const [editInitialFareYen, setEditInitialFareYen] = useState("");
+  const [editAddUnitDistanceM, setEditAddUnitDistanceM] = useState("");
+  const [editAddFareYen, setEditAddFareYen] = useState("");
+  const [editWaitingFareYenPerMin, setEditWaitingFareYenPerMin] = useState("");
+
+  const [simDistanceKm, setSimDistanceKm] = useState("");
+  const [simWaitMin, setSimWaitMin] = useState("0");
+
+  const selectedVersion = useMemo(() => findVersion(plans, selVer), [plans, selVer]);
+
+  const simResultYen = useMemo(() => {
+    if (!selectedVersion) return null;
+    const km = Number(simDistanceKm);
+    const wait = Number(simWaitMin);
+    if (!Number.isFinite(km) || km < 0 || !Number.isFinite(wait) || wait < 0) return null;
+    const distanceM = Math.round(km * 1000);
+    return fareYenForTrip(
+      {
+        initialDistanceM: selectedVersion.initialDistanceM,
+        initialFareYen: selectedVersion.initialFareYen,
+        addUnitDistanceM: selectedVersion.addUnitDistanceM,
+        addFareYen: selectedVersion.addFareYen,
+        waitingFareYenPerMin: selectedVersion.waitingFareYenPerMin,
+      },
+      distanceM,
+      wait,
+      selectedVersion.segments,
+    );
+  }, [selectedVersion, simDistanceKm, simWaitMin]);
+
   async function load(): Promise<void> {
-    const r = await apiFetch<{ plans: Plan[] }>("/tariff-plans");
+    const r = await apiFetch<{ plans: Plan[] }>(`/tariff-plans${TARIFF_PLANS_QUERY}`);
     if (r.ok) {
       setPlans(r.data.plans);
       if (!selVer && r.data.plans[0]?.versions[0]) setSelVer(r.data.plans[0].versions[0].id);
@@ -49,6 +94,16 @@ export default function Tariffs(): JSX.Element {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    const v = findVersion(plans, selVer);
+    if (!v) return;
+    setEditInitialDistanceM(String(v.initialDistanceM));
+    setEditInitialFareYen(String(v.initialFareYen));
+    setEditAddUnitDistanceM(String(v.addUnitDistanceM));
+    setEditAddFareYen(String(v.addFareYen));
+    setEditWaitingFareYenPerMin(String(v.waitingFareYenPerMin));
+  }, [selVer, plans]);
 
   async function submitPlan(): Promise<void> {
     setErr(null);
@@ -75,6 +130,50 @@ export default function Tariffs(): JSX.Element {
     else {
       setSelVer(r.data.id);
       await load();
+    }
+  }
+
+  async function saveVersionParams(): Promise<void> {
+    if (!selVer) return;
+    setErr(null);
+    const initialDistanceM = Math.floor(Number(editInitialDistanceM));
+    const initialFareYen = Math.floor(Number(editInitialFareYen));
+    const addUnitDistanceM = Math.floor(Number(editAddUnitDistanceM));
+    const addFareYen = Math.floor(Number(editAddFareYen));
+    const waitingFareYenPerMin = Math.floor(Number(editWaitingFareYenPerMin));
+    if (
+      !Number.isFinite(initialDistanceM) ||
+      !Number.isFinite(initialFareYen) ||
+      !Number.isFinite(addUnitDistanceM) ||
+      !Number.isFinite(addFareYen) ||
+      !Number.isFinite(waitingFareYenPerMin)
+    ) {
+      setErr("料金版の数値はすべて整数で入力してください。");
+      return;
+    }
+    if (initialDistanceM < 0 || initialFareYen < 0 || addUnitDistanceM < 1 || addFareYen < 0 || waitingFareYenPerMin < 0) {
+      setErr("初乗り距離・運賃は0以上、加算距離単位は1以上にしてください。");
+      return;
+    }
+    setVerSaveSubmitting(true);
+    try {
+      const r = await apiFetch<Ver>(`/tariff-versions/${selVer}`, {
+        method: "PATCH",
+        json: {
+          initialDistanceM,
+          initialFareYen,
+          addUnitDistanceM,
+          addFareYen,
+          waitingFareYenPerMin,
+        },
+      });
+      if (!r.ok) {
+        setErr(r.error);
+        return;
+      }
+      await load();
+    } finally {
+      setVerSaveSubmitting(false);
     }
   }
 
@@ -152,7 +251,7 @@ export default function Tariffs(): JSX.Element {
       canProceed: fromOk,
       children: (
         <>
-          <label>fromM (m)</label>
+          <label>開始距離（m）</label>
           <input value={fromM} onChange={(e) => setFromM(e.target.value)} inputMode="numeric" autoFocus />
         </>
       ),
@@ -164,7 +263,7 @@ export default function Tariffs(): JSX.Element {
       canProceed: toOk && fromOk && Number(toM) > Number(fromM),
       children: (
         <>
-          <label>toM (m)</label>
+          <label>終了距離（m）</label>
           <input value={toM} onChange={(e) => setToM(e.target.value)} inputMode="numeric" />
         </>
       ),
@@ -176,7 +275,7 @@ export default function Tariffs(): JSX.Element {
       canProceed: fareOk,
       children: (
         <>
-          <label>fareYen</label>
+          <label>運賃（円）</label>
           <input value={fareYen} onChange={(e) => setFareYen(e.target.value)} inputMode="numeric" />
         </>
       ),
@@ -203,6 +302,9 @@ export default function Tariffs(): JSX.Element {
   return (
     <Card title="料金プラン">
       <Err msg={err} />
+      <p style={{ fontSize: "0.82rem", marginTop: 0 }}>
+        料金版一覧は直近30版まで表示します（URL <code>?versionsLimit=1〜100</code> で API から変更可能）。「新版追加」は直前の版の数値と距離帯セグメントをコピーします。
+      </p>
       <p style={{ marginTop: 0 }}>
         <button type="button" onClick={() => setPlanWizardOpen(true)}>
           新規プランを作成
@@ -232,11 +334,49 @@ export default function Tariffs(): JSX.Element {
         onFinish={submitSegment}
         isSubmitting={segSubmitting}
       />
+
+      {selVer && selectedVersion ? (
+        <section style={{ marginTop: "1rem", padding: "0.75rem", border: "1px solid #ccc", borderRadius: 4, maxWidth: 520 }}>
+          <h3 style={{ marginTop: 0, fontSize: "1rem" }}>運賃シミュレータ（{findVerLabel(plans, selVer)}）</h3>
+          <p style={{ fontSize: "0.8rem", marginTop: 0 }}>
+            走行距離に該当するセグメントがあればその運賃を優先し、なければ初乗り＋加算で計算します。待機分は距離運賃に加算されます。
+          </p>
+          <label>走行距離（km）</label>
+          <input value={simDistanceKm} onChange={(e) => setSimDistanceKm(e.target.value)} inputMode="decimal" placeholder="例: 5.2" />
+          <label>待機（分）</label>
+          <input value={simWaitMin} onChange={(e) => setSimWaitMin(e.target.value)} inputMode="numeric" />
+          <p style={{ marginTop: "0.5rem", fontWeight: 600 }}>
+            試算運賃: {simResultYen === null ? "—" : `${simResultYen.toLocaleString("ja-JP")} 円`}
+          </p>
+        </section>
+      ) : null}
+
+      {selVer && selectedVersion ? (
+        <section style={{ marginTop: "1rem", padding: "0.75rem", border: "1px solid #ccc", borderRadius: 4, maxWidth: 520 }}>
+          <h3 style={{ marginTop: 0, fontSize: "1rem" }}>選択中の料金版を編集</h3>
+          <label>初乗り距離（m）</label>
+          <input value={editInitialDistanceM} onChange={(e) => setEditInitialDistanceM(e.target.value)} inputMode="numeric" />
+          <label>初乗り運賃（円）</label>
+          <input value={editInitialFareYen} onChange={(e) => setEditInitialFareYen(e.target.value)} inputMode="numeric" />
+          <label>加算距離単位（m）</label>
+          <input value={editAddUnitDistanceM} onChange={(e) => setEditAddUnitDistanceM(e.target.value)} inputMode="numeric" />
+          <label>加算運賃（円／単位）</label>
+          <input value={editAddFareYen} onChange={(e) => setEditAddFareYen(e.target.value)} inputMode="numeric" />
+          <label>待機運賃（円／分）</label>
+          <input value={editWaitingFareYenPerMin} onChange={(e) => setEditWaitingFareYenPerMin(e.target.value)} inputMode="numeric" />
+          <p style={{ marginTop: "0.75rem" }}>
+            <button type="button" disabled={verSaveSubmitting} onClick={() => void saveVersionParams()}>
+              {verSaveSubmitting ? "保存中…" : "料金版を保存"}
+            </button>
+          </p>
+        </section>
+      ) : null}
+
       {plans.map((p) => (
         <div key={p.id} style={{ marginTop: "1rem" }}>
           <strong>{p.name}</strong>{" "}
           <button type="button" onClick={() => void addVersion(p.id)}>
-            新版追加
+            新版追加（前版からコピー）
           </button>
           <ul>
             {p.versions.map((v) => (
@@ -246,14 +386,16 @@ export default function Tariffs(): JSX.Element {
                   初乗り{v.initialDistanceM}m/{v.initialFareYen}円 加算{v.addUnitDistanceM}m/{v.addFareYen}円 待機{v.waitingFareYenPerMin}円/分
                 </label>
                 <ul>
-                  {v.segments.map((s) => (
-                    <li key={s.id}>
-                      {s.fromM}–{s.toM}m → {s.fareYen}円{" "}
-                      <button type="button" onClick={() => void delSegment(s.id)}>
-                        削除
-                      </button>
-                    </li>
-                  ))}
+                  {[...v.segments]
+                    .sort((a, b) => a.fromM - b.fromM)
+                    .map((s) => (
+                      <li key={s.id}>
+                        {s.fromM}–{s.toM}m → {s.fareYen}円{" "}
+                        <button type="button" onClick={() => void delSegment(s.id)}>
+                          削除
+                        </button>
+                      </li>
+                    ))}
                 </ul>
               </li>
             ))}

@@ -46,7 +46,7 @@ export default function DailyReportDetail(): JSX.Element {
     }
     const found = r.data.dailyReports.find((d) => d.id === id) ?? null;
     setRep(found);
-    const rp = await apiFetch<PlansRes>("/tariff-plans");
+    const rp = await apiFetch<PlansRes>("/tariff-plans?versionsLimit=50");
     if (rp.ok) {
       const vers = rp.data.plans.flatMap((p) => p.versions);
       setVersions(vers);
