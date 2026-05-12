@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { REGISTER_EXTENSION_UI_FIELDS } from "../lib/registerExtensionFields";
+import { ReqLabel, ReqMark } from "../lib/reqLabel";
 import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 type RegisterExt = Record<string, string>;
@@ -35,23 +36,6 @@ function asExt(raw: unknown): RegisterExt {
 
 function ext(e: Emp, key: string): string {
   return asExt(e.registerExtension)[key] ?? "";
-}
-
-function ReqMark(): JSX.Element {
-  return (
-    <span style={{ color: "#c62828", fontWeight: 700, marginRight: "0.25em" }} aria-hidden>
-      ※
-    </span>
-  );
-}
-
-function ReqLabel({ children }: { children: React.ReactNode }): JSX.Element {
-  return (
-    <label>
-      <ReqMark />
-      {children}
-    </label>
-  );
 }
 
 function emptyCreateExt(): RegisterExt {

@@ -14,19 +14,23 @@ function parseDateOrNull(v: string | null | undefined): Date | null | undefined 
   return d;
 }
 
-const vehiclePostSchema = z.object({
-  label: z.string().optional(),
-  plate: z.string().nullable().optional(),
-  active: z.boolean().optional(),
-  legalCoverageStartOn: z.string().max(50).nullable().optional(),
-});
+const vehiclePostSchema = z
+  .object({
+    label: z.string().max(200),
+    plate: z.string().min(1).max(50),
+    legalCoverageStartOn: z.string().min(1).max(50),
+    active: z.boolean().optional(),
+  })
+  .strict();
 
-const vehiclePatchSchema = z.object({
-  label: z.string().optional(),
-  plate: z.string().nullable().optional(),
-  active: z.boolean().optional(),
-  legalCoverageStartOn: z.string().max(50).nullable().optional(),
-});
+const vehiclePatchSchema = z
+  .object({
+    label: z.string().optional(),
+    plate: z.string().nullable().optional(),
+    active: z.boolean().optional(),
+    legalCoverageStartOn: z.string().max(50).nullable().optional(),
+  })
+  .strict();
 
 export async function registerVehicleRoutes(app: FastifyInstance): Promise<void> {
   app.get("/vehicles", { preHandler: [authenticate] }, async (req) => {
@@ -46,17 +50,19 @@ export async function registerVehicleRoutes(app: FastifyInstance): Promise<void>
     const b = parsed.data;
     const label = String(b.label || "").trim();
     if (!label) return reply.code(400).send({ error: "label required" });
+    const plate = String(b.plate).trim();
+    if (!plate) return reply.code(400).send({ error: "plate required" });
     const legalCoverageStartOn = parseDateOrNull(b.legalCoverageStartOn);
-    if (b.legalCoverageStartOn !== undefined && legalCoverageStartOn === undefined) {
-      return reply.code(400).send({ error: "invalid legalCoverageStartOn" });
+    if (!legalCoverageStartOn) {
+      return reply.code(400).send({ error: "legalCoverageStartOn required (valid date)" });
     }
     return prisma.vehicle.create({
       data: {
         tenantId: tid,
         label,
-        plate: b.plate !== undefined ? (b.plate ? String(b.plate).trim() : null) : null,
+        plate,
         active: b.active === false ? false : true,
-        ...(b.legalCoverageStartOn !== undefined ? { legalCoverageStartOn: legalCoverageStartOn ?? null } : {}),
+        legalCoverageStartOn,
       },
     });
   });
@@ -87,6 +93,24 @@ export async function registerVehicleRoutes(app: FastifyInstance): Promise<void>
         }
         data.legalCoverageStartOn = d;
       }
+
+      const escortFieldsInRequest = typeof b.plate === "string" || b.legalCoverageStartOn !== undefined;
+      if (escortFieldsInRequest) {
+        const mergedPlate = typeof b.plate === "string" ? b.plate.trim() || null : v.plate;
+        const mergedLegal =
+          b.legalCoverageStartOn !== undefined ? parseDateOrNull(b.legalCoverageStartOn) : v.legalCoverageStartOn;
+        if (!mergedPlate || !mergedPlate.trim()) {
+          return reply.code(400).send({ error: "plate required (登録番号等・随伴車ナンバー)" });
+        }
+        if (mergedLegal === null || mergedLegal === undefined) {
+          return reply.code(400).send({ error: "legalCoverageStartOn required (補償開始日)" });
+        }
+      }
+
+      if (Object.keys(data).length === 0) {
+        return reply.code(400).send({ error: "no valid fields to update" });
+      }
+
       return prisma.vehicle.update({ where: { id: v.id }, data });
     },
   );

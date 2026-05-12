@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
+import { ReqLabel, ReqMark } from "../lib/reqLabel";
 import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 type V = {
@@ -13,6 +14,10 @@ type V = {
 function toYmd(iso: string | null | undefined): string {
   if (!iso) return "";
   return iso.slice(0, 10);
+}
+
+function ymdOk(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s.trim());
 }
 
 export default function Vehicles(): JSX.Element {
@@ -49,9 +54,11 @@ export default function Vehicles(): JSX.Element {
     setErr(null);
     setSubmitting(true);
     try {
-      const json: Record<string, unknown> = { label: label.trim() };
-      if (newPlate.trim()) json.plate = newPlate.trim();
-      if (newLegalStart.trim()) json.legalCoverageStartOn = `${newLegalStart.trim()}T00:00:00.000Z`;
+      const json = {
+        label: label.trim(),
+        plate: newPlate.trim(),
+        legalCoverageStartOn: `${newLegalStart.trim()}T00:00:00.000Z`,
+      };
       const r = await apiFetch<V>("/vehicles", { method: "POST", json });
       if (!r.ok) {
         setErr(r.error);
@@ -66,45 +73,55 @@ export default function Vehicles(): JSX.Element {
   }
 
   const labelOk = label.trim().length > 0;
+  const plateAndLegalOk = newPlate.trim().length > 0 && ymdOk(newLegalStart);
+  const allOk = labelOk && plateAndLegalOk;
 
   const steps: StepWizardStep[] = [
     {
       id: "label",
-      title: "表示名を入力してください",
-      description: "一覧や日報で表示される車両名です（必須）。",
+      title: "表示名",
+      description: "一覧や日報で表示される車両名です。損害賠償措置・変更届では「随伴用自動車」と紐づく社内名称として使います。",
       canProceed: labelOk,
       children: (
         <>
-          <label>表示名</label>
-          <input value={label} onChange={(e) => setLabel(e.target.value)} autoFocus />
+          <ReqLabel>表示名</ReqLabel>
+          <input value={label} onChange={(e) => setLabel(e.target.value)} autoFocus required aria-required />
         </>
       ),
     },
     {
-      id: "extra",
-      title: "ナンバーと補償開始日（任意）",
-      description: "わかる範囲で入力してください。後から編集できます。",
+      id: "plate_legal",
+      title: "登録番号と補償開始日",
+      description:
+        "乗務記録簿の「随伴車 登録番号」、損害賠償措置の「登録番号等」「補償開始日」、変更届の随伴車ナンバー記載に対応します。",
+      canProceed: plateAndLegalOk,
       children: (
         <>
-          <label>ナンバー（任意）</label>
-          <input value={newPlate} onChange={(e) => setNewPlate(e.target.value)} />
-          <label>補償開始日（任意・YYYY-MM-DD）</label>
-          <input type="date" value={newLegalStart} onChange={(e) => setNewLegalStart(e.target.value)} />
+          <ReqLabel>ナンバー（登録番号等）</ReqLabel>
+          <input
+            value={newPlate}
+            onChange={(e) => setNewPlate(e.target.value)}
+            placeholder="例: 品川300あ1234"
+            required
+            aria-required
+          />
+          <ReqLabel>補償開始日</ReqLabel>
+          <input type="date" value={newLegalStart} onChange={(e) => setNewLegalStart(e.target.value)} required aria-required />
         </>
       ),
     },
     {
       id: "confirm",
       title: "内容を確認してください",
-      canProceed: labelOk,
+      canProceed: allOk,
       children: (
         <dl className="step-wizard-summary">
           <dt>表示名</dt>
           <dd>{label.trim()}</dd>
-          <dt>ナンバー</dt>
-          <dd>{newPlate.trim() || "—"}</dd>
+          <dt>ナンバー（登録番号等）</dt>
+          <dd>{newPlate.trim()}</dd>
           <dt>補償開始日</dt>
-          <dd>{newLegalStart.trim() || "—"}</dd>
+          <dd>{newLegalStart.trim()}</dd>
         </dl>
       ),
     },
@@ -119,9 +136,17 @@ export default function Vehicles(): JSX.Element {
 
   async function saveVehicle(v: V, plate: string, legalYmd: string): Promise<void> {
     setErr(null);
+    if (!plate.trim()) {
+      setErr("ナンバー（登録番号等）を入力してください。");
+      return;
+    }
+    if (!legalYmd.trim() || !ymdOk(legalYmd)) {
+      setErr("補償開始日を正しく入力してください。");
+      return;
+    }
     const json: Record<string, unknown> = {
-      plate: plate.trim() || null,
-      legalCoverageStartOn: legalYmd.trim() ? `${legalYmd.trim()}T00:00:00.000Z` : null,
+      plate: plate.trim(),
+      legalCoverageStartOn: `${legalYmd.trim()}T00:00:00.000Z`,
     };
     const r = await apiFetch(`/vehicles/${v.id}`, { method: "PATCH", json });
     if (!r.ok) setErr((r as { ok: false; error: string }).error);
@@ -131,7 +156,10 @@ export default function Vehicles(): JSX.Element {
   return (
     <Card title="車両">
       <Err msg={err} />
-      <p style={{ marginTop: 0 }}>
+      <p style={{ fontSize: "0.82rem", marginTop: 0 }}>
+        新規登録時は表示名・ナンバー・補償開始日が必須です（乗務記録簿・損害賠償措置・変更届で使う随伴車情報）。既存で未入力の車両は、次に「保存」するときに埋めてください。
+      </p>
+      <p style={{ marginTop: "0.5rem" }}>
         <button type="button" onClick={() => setWizardOpen(true)}>
           車両を追加
         </button>
@@ -150,8 +178,14 @@ export default function Vehicles(): JSX.Element {
           <thead>
             <tr>
               <th style={{ border: "1px solid #ccc", padding: 6, textAlign: "left" }}>名称</th>
-              <th style={{ border: "1px solid #ccc", padding: 6, textAlign: "left" }}>ナンバー</th>
-              <th style={{ border: "1px solid #ccc", padding: 6 }}>補償開始日</th>
+              <th style={{ border: "1px solid #ccc", padding: 6, textAlign: "left" }}>
+                <ReqMark />
+                ナンバー（登録番号等）
+              </th>
+              <th style={{ border: "1px solid #ccc", padding: 6 }}>
+                <ReqMark />
+                補償開始日
+              </th>
               <th style={{ border: "1px solid #ccc", padding: 6 }}>有効</th>
               <th style={{ border: "1px solid #ccc", padding: 6 }} />
             </tr>
