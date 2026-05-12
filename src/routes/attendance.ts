@@ -5,9 +5,18 @@ import { prisma } from "../db.js";
 
 const YM_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
-const HM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+/** 0:00〜48:59（例: 翌4時 = 28:00） */
+const FLEX_HM = /^(\d{1,2}):(\d{2})$/;
 
 type DaySlot = { start: string; end: string };
+
+function isValidFlexHm(s: string): boolean {
+  const m = FLEX_HM.exec(s.trim());
+  if (!m) return false;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  return h >= 0 && h <= 48 && min >= 0 && min <= 59;
+}
 
 function coerceDays(raw: unknown): Record<string, DaySlot> {
   const out: Record<string, DaySlot> = {};
@@ -18,7 +27,7 @@ function coerceDays(raw: unknown): Record<string, DaySlot> {
     const o = v as Record<string, unknown>;
     const start = typeof o.start === "string" ? o.start.trim() : "";
     const end = typeof o.end === "string" ? o.end.trim() : "";
-    if (!HM_RE.test(start) || !HM_RE.test(end)) continue;
+    if (!isValidFlexHm(start) || !isValidFlexHm(end)) continue;
     out[k] = { start, end };
   }
   return out;

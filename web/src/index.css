@@ -1022,6 +1022,40 @@ td {
   align-items: center;
 }
 
+.attend-shift-month-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.35rem 0 0.5rem;
+}
+
+.attend-shift-month-nav strong {
+  font-size: 0.95rem;
+  margin: 0 0.25rem;
+}
+
+.attend-shift-list-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  width: 100%;
+}
+
+.attend-shift-list-row .settings-sf-name {
+  flex: 0 0 7.5rem;
+  min-width: 6.5rem;
+}
+
+.attend-shift-time-field {
+  width: 5.5rem;
+  padding: 0.3rem 0.4rem;
+  font: inherit;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
 .attend-cal {
   margin: 0.75rem 0;
 }
@@ -1073,7 +1107,9 @@ td {
 }
 
 .attend-cal-cell--copy {
-  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface));
+  background: #fecaca;
+  color: #7f1d1d;
+  border-color: #dc2626;
   font-weight: 600;
 }
 
