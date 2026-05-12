@@ -1,10 +1,28 @@
-import { NavLink, Outlet, Navigate } from "react-router-dom";
+import { NavLink, Outlet, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth";
+import { useDeviceKind } from "../hooks/useDeviceKind";
 
-const navLinks: { to: string; label: string }[] = [{ to: "/", label: "ホーム" }];
+const navItems: { to: string; label: string; match: "schedule" | "prefix" }[] = [
+  { to: "/daily-reports", label: "日報", match: "prefix" },
+  { to: "/schedule", label: "スケジュール", match: "schedule" },
+  { to: "/attendance", label: "勤怠", match: "prefix" },
+  { to: "/settings", label: "設定", match: "prefix" },
+];
+
+function navClass(pathname: string, item: (typeof navItems)[0]): string {
+  if (item.match === "schedule") {
+    return pathname === "/" || pathname.startsWith("/schedule") ? "active" : "";
+  }
+  return pathname === item.to || pathname.startsWith(`${item.to}/`) ? "active" : "";
+}
 
 export default function Shell(): JSX.Element {
   const { me, loading, logout } = useAuth();
+  const device = useDeviceKind();
+  const location = useLocation();
+  const pathname = location.pathname;
+  const touchNav = device === "phone" || device === "tablet";
+
   if (loading) {
     return (
       <div className="app-loading">
@@ -15,8 +33,22 @@ export default function Shell(): JSX.Element {
   }
   if (!me) return <Navigate to="/login" replace />;
 
+  const nav = (
+    <>
+      {navItems.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          className={() => navClass(pathname, item)}
+        >
+          {item.label}
+        </NavLink>
+      ))}
+    </>
+  );
+
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-device={device}>
       <header className="app-header">
         <div className="app-header-bar">
           <span className="app-header-brand">Daiko</span>
@@ -27,17 +59,20 @@ export default function Shell(): JSX.Element {
             ログアウト
           </button>
         </div>
-        <nav className="app-nav-tabs" aria-label="メインメニュー">
-          {navLinks.map((l) => (
-            <NavLink key={l.to} to={l.to} end={l.to === "/"} className={({ isActive }) => (isActive ? "active" : "")}>
-              {l.label}
-            </NavLink>
-          ))}
-        </nav>
+        {!touchNav ? (
+          <nav className="app-nav-tabs app-nav-tabs--header" aria-label="メインメニュー">
+            {nav}
+          </nav>
+        ) : null}
       </header>
-      <main className="app-main">
+      <main className={`app-main${touchNav ? " app-main--bottom-nav" : ""}`}>
         <Outlet />
       </main>
+      {touchNav ? (
+        <nav className="app-bottom-nav" aria-label="メインメニュー">
+          {nav}
+        </nav>
+      ) : null}
     </div>
   );
 }
