@@ -116,6 +116,16 @@ function insOf(detail: unknown): Record<string, unknown> {
   return asDetail(d);
 }
 
+/** 郵便番号APIの市区町村・町域で既存入力を上書きしない（番地以降を消さない） */
+function mergeStreetFromZipLookup(current: string | null | undefined, zipTownBlock: string | null | undefined): string {
+  const base = (zipTownBlock ?? "").trim();
+  const cur = (current ?? "").trim();
+  if (!base) return cur;
+  if (!cur) return base;
+  if (cur.startsWith(base)) return cur;
+  return cur;
+}
+
 export default function SettingsMenuPage(): JSX.Element {
   const { me } = useAuth();
   const { flashSaved } = useSavedToast();
@@ -248,7 +258,7 @@ export default function SettingsMenuPage(): JSX.Element {
             ? {
                 ...c,
                 legalPrefecture: payload.prefecture || c.legalPrefecture,
-                legalStreetAddress: payload.addressStart || c.legalStreetAddress,
+                legalStreetAddress: mergeStreetFromZipLookup(c.legalStreetAddress, payload.addressStart),
               }
             : null,
         );
