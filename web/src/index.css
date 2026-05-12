@@ -980,6 +980,15 @@ td {
   max-width: 36rem;
 }
 
+/* シフト申請: カレンダー〜時刻入力を1つのスクロール領域に。親の .pricing-modal > .settings-form { flex:1 } が直子に二重で当たり高さ0になるのを避ける */
+.attend-shift-dialog-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 1.1rem 0.75rem;
+}
+
 .attend-shift-ym-row {
   display: flex;
   flex-wrap: wrap;
@@ -992,6 +1001,12 @@ td {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   font: inherit;
+}
+
+.attend-shift-time-block {
+  margin-top: 0.35rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-border);
 }
 
 .attend-shift-copy-banner {

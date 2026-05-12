@@ -214,88 +214,90 @@ function ShiftApplyDialog({
         <h2 id="attend-shift-title" className="pricing-modal-title">
           シフト申請
         </h2>
-        <p className="settings-hint">
-          {employeeLabel} — 日付をタップして勤務時間を入力します。
-        </p>
-        <Err msg={err} />
-
-        {copyMode && copyTemplate ? (
-          <p className="settings-hint attend-shift-copy-banner">
-            コピー元: <strong>{copyTemplate.start}</strong> ～ <strong>{copyTemplate.end}</strong>
-            。カレンダーで適用する日をタップして複数選択し、「コピーを確定」を押してください。
-          </p>
-        ) : null}
-
-        <div className="settings-form attend-shift-ym-row">
-          <label htmlFor="shift-ym">年月</label>
-          <input
-            id="shift-ym"
-            type="month"
-            value={ym}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (/^\d{4}-\d{2}$/.test(v)) setYm(v);
-            }}
-          />
-        </div>
-
-        <div className="attend-cal">
-          <div className="attend-cal-weekdays">
-            {WEEK_LABELS.map((w) => (
-              <span key={w} className="attend-cal-wd">
-                {w}
-              </span>
-            ))}
-          </div>
-          <div className="attend-cal-grid">
-            {cells.map((c) => {
-              const isSel = c.date && activeDay === c.date && !copyMode;
-              const isCopySel = c.date && copyMode && copyTargets.has(c.date);
-              const hasTime = Boolean(c.date && days[c.date]?.start && days[c.date]?.end);
-              return (
-                <button
-                  key={c.key}
-                  type="button"
-                  className={`attend-cal-cell${!c.date ? " attend-cal-cell--empty" : ""}${isSel ? " attend-cal-cell--active" : ""}${isCopySel ? " attend-cal-cell--copy" : ""}${hasTime ? " attend-cal-cell--has" : ""}`}
-                  disabled={!c.date}
-                  onClick={() => onCellClick(c.date)}
-                >
-                  {c.dayNum != null ? c.dayNum : ""}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {!copyMode ? (
-          <div className="settings-form">
-            <p className="settings-hint" style={{ marginTop: 0 }}>
-              {activeDay ? `選択中: ${activeDay}` : "日付をタップしてください。"}
-            </p>
-            <label>開始</label>
-            <input type="time" value={slot.start} onChange={(e) => updateActiveSlot({ start: e.target.value })} disabled={!activeDay} />
-            <label>終了</label>
-            <input type="time" value={slot.end} onChange={(e) => updateActiveSlot({ end: e.target.value })} disabled={!activeDay} />
-            <button type="button" className="settings-secondary" disabled={!activeDay} onClick={beginCopyDay}>
-              この日をコピーする
-            </button>
-          </div>
-        ) : (
-          <div className="settings-form attend-shift-copy-actions">
-            <button type="button" className="settings-primary" onClick={confirmCopy}>
-              コピーを確定（{copyTargets.size} 日）
-            </button>
-            <button type="button" onClick={cancelCopyMode}>
-              コピーキャンセル
-            </button>
-          </div>
-        )}
-
-        {ymParts ? (
+        <div className="attend-shift-dialog-scroll">
           <p className="settings-hint">
-            {ymParts.y}年{ymParts.m}月の申請内容を保存します（確定シフトは今後のシフト調整機能で別管理予定）。
+            {employeeLabel} — 日付をタップして勤務時間を入力します。
           </p>
-        ) : null}
+          <Err msg={err} />
+
+          {copyMode && copyTemplate ? (
+            <p className="settings-hint attend-shift-copy-banner">
+              コピー元: <strong>{copyTemplate.start}</strong> ～ <strong>{copyTemplate.end}</strong>
+              。カレンダーで適用する日をタップして複数選択し、「コピーを確定」を押してください。
+            </p>
+          ) : null}
+
+          <div className="settings-form attend-shift-ym-row">
+            <label htmlFor="shift-ym">年月</label>
+            <input
+              id="shift-ym"
+              type="month"
+              value={ym}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (/^\d{4}-\d{2}$/.test(v)) setYm(v);
+              }}
+            />
+          </div>
+
+          <div className="attend-cal">
+            <div className="attend-cal-weekdays">
+              {WEEK_LABELS.map((w) => (
+                <span key={w} className="attend-cal-wd">
+                  {w}
+                </span>
+              ))}
+            </div>
+            <div className="attend-cal-grid">
+              {cells.map((c) => {
+                const isSel = c.date && activeDay === c.date && !copyMode;
+                const isCopySel = c.date && copyMode && copyTargets.has(c.date);
+                const hasTime = Boolean(c.date && days[c.date]?.start && days[c.date]?.end);
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    className={`attend-cal-cell${!c.date ? " attend-cal-cell--empty" : ""}${isSel ? " attend-cal-cell--active" : ""}${isCopySel ? " attend-cal-cell--copy" : ""}${hasTime ? " attend-cal-cell--has" : ""}`}
+                    disabled={!c.date}
+                    onClick={() => onCellClick(c.date)}
+                  >
+                    {c.dayNum != null ? c.dayNum : ""}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {!copyMode ? (
+            <div className="settings-form attend-shift-time-block">
+              <p className="settings-hint" style={{ marginTop: 0 }}>
+                {activeDay ? `選択中: ${activeDay}` : "日付をタップしてください。"}
+              </p>
+              <label>開始</label>
+              <input type="time" value={slot.start} onChange={(e) => updateActiveSlot({ start: e.target.value })} disabled={!activeDay} />
+              <label>終了</label>
+              <input type="time" value={slot.end} onChange={(e) => updateActiveSlot({ end: e.target.value })} disabled={!activeDay} />
+              <button type="button" className="settings-secondary" disabled={!activeDay} onClick={beginCopyDay}>
+                この日をコピーする
+              </button>
+            </div>
+          ) : (
+            <div className="settings-form attend-shift-copy-actions">
+              <button type="button" className="settings-primary" onClick={confirmCopy}>
+                コピーを確定（{copyTargets.size} 日）
+              </button>
+              <button type="button" onClick={cancelCopyMode}>
+                コピーキャンセル
+              </button>
+            </div>
+          )}
+
+          {ymParts ? (
+            <p className="settings-hint">
+              {ymParts.y}年{ymParts.m}月の申請内容を保存します（確定シフトは今後のシフト調整機能で別管理予定）。
+            </p>
+          ) : null}
+        </div>
 
         <div className="pricing-modal-actions">
           <button type="button" className="settings-primary" disabled={busy} onClick={() => void saveApplication()}>
