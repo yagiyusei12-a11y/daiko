@@ -289,7 +289,6 @@ export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: 
     if (!draft) return;
     setDraft({
       ...draft,
-      regime: prefs.regime === "distance" || prefs.regime === "time" || prefs.regime === "both" ? prefs.regime : draft.regime,
       distance: { ...prefs.mainDistance },
       time: { ...prefs.mainTime },
     });
@@ -300,9 +299,9 @@ export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: 
       setErr("特別料金名称を入力してください。");
       return;
     }
-    const r = prefs.regime === "distance" || prefs.regime === "time" || prefs.regime === "both" ? prefs.regime : null;
-    if (!r) {
-      setErr("料金体制が未選択のため保存できません。");
+    const r = draft.regime;
+    if (r !== "distance" && r !== "time" && r !== "both") {
+      setErr("料金体制が不正なため保存できません。");
       return;
     }
     setErr(null);
@@ -471,8 +470,8 @@ export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: 
               追加料金を設定する
             </h2>
             <p className="settings-hint">
-              画面上部の「料金体制をお選びください」で選んだ <strong>{regimeLabel(prefs.regime)}</strong>{" "}
-              に合わせて入力します（ここでは体制を変えられません）。
+              ダイアログを開いたときの料金体制 <strong>{regimeLabel(draft.regime)}</strong>{" "}
+              に合わせた入力欄です（開いたあと画面上部の体制を変えても、この画面の項目は変わりません）。
             </p>
             <div className="settings-form">
               <label>特別料金名称</label>
@@ -485,14 +484,14 @@ export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: 
                 メインの距離・時間の数値をこの特別料金欄にコピーします。追加分だけ変える場合の出発点に使えます。
               </p>
 
-              {(prefs.regime === "distance" || prefs.regime === "both") && (
+              {(draft.regime === "distance" || draft.regime === "both") && (
                 <DistanceBlockFields
                   title="距離制（追加料金）"
                   v={draft.distance}
                   onChange={(distance) => setDraft({ ...draft, distance })}
                 />
               )}
-              {(prefs.regime === "time" || prefs.regime === "both") && (
+              {(draft.regime === "time" || draft.regime === "both") && (
                 <TimeBlockFields title="時間制（追加料金）" v={draft.time} onChange={(time) => setDraft({ ...draft, time })} />
               )}
 
