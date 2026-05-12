@@ -57,6 +57,35 @@ npm run dev
 - 初回のみ VPS 上で `git clone <daiko-remote> ~/daiko` のあと、order の clone から `bash ~/order/deploy/vps/install-daiko-systemd.sh ~/daiko`（VPS で order が `~/order` の場合）
 - 既存で `~/order/daiko` にあった場合: **pull でサブフォルダが消える前に** `.env` のバックアップ、`mv ~/order/daiko ~/daiko` などで専用 clone に移し、systemd の `WorkingDirectory` / `EnvironmentFile` を合わせる
 - デプロイ: `scripts/deploy-vps.ps1`（`.env.deploy` に `DAIKO_VPS_*`）。リモートでは `migrate deploy` のあと **`npm run db:seed`** で帳票テンプレ（9 種＋酒気スタブ）を投入する。
+
+### 本番 DB を白紙にする（テナント・業務データをすべて消す）
+
+**同じ VPS・同じドメイン・同じ `.env`（`DATABASE_URL`）・同じデプロイ手順のまま**、アプリの DB だけを初期状態に戻す手順です。`.env.deploy` を作り直す必要はありません（ローカルからの `npm run deploy:vps` も従来どおり）。
+
+1. **（推奨）バックアップ**  
+   例: `pg_dump` で `daiko` DBのダンプを取得する（戻したくなったとき用）。
+
+2. **VPS に SSH** し、Daiko の clone ルート（`WorkingDirectory` と同じ、例: `/home/ubuntu/daiko`）へ移動する。
+
+3. **リセットスクリプトを実行**（clone 内の **既存 `.env`** から `DATABASE_URL` を読みます）:
+
+   ```bash
+   cd ~/daiko   # 実際のパスに合わせる
+   chmod +x scripts/reset-production-database.sh   # 初回のみ可
+   DAIKO_CONFIRM_RESET_DB=yes ./scripts/reset-production-database.sh
+   ```
+
+   内容: `daiko-app` を停止 → `npm ci` → `public` スキーマを DROP/CREATE → `prisma migrate deploy` → `db:seed` → `npm run build` → サービス再起動相当（`systemctl start`）まで実行します。
+
+4. **初回テナントの再登録**  
+   すべてのテナント・ユーザーが消えているため、[`POST /api/v1/auth/register`](README.md)（またはアプリの登録画面）で **slug / メール / パスワードから作り直す**。
+
+**注意**
+
+- **取り消し不可**です。`_prisma_migrations` も消えるため、スクリプト内で `migrate deploy` が全マイグレーションを最初から適用し直します。
+- `DATABASE_URL` の DB ユーザーに **`public` の DROP/CREATE 権限**が必要です。権限不足のときは DB 管理者（例: `postgres`）で同等の SQL を実行してください。
+- systemd を触りたくない場合（検証のみなど）は `DAIKO_SKIP_SYSTEMCTL=1 DAIKO_CONFIRM_RESET_DB=yes ./scripts/reset-production-database.sh` とし、その後手動で `sudo systemctl restart daiko-app` してください。
+
 - **GitHub Actions（`main` マージ後の自動デプロイ）**: リポジトリに `.github/workflows/deploy-main.yml` がある。`main` への `push` のたびに VPS へ SSH し、上記と同じリモート手順（`git pull` → `npm ci` → migrate → seed → build → `systemctl restart`）を実行する。利用するには GitHub の **Repository secrets** を設定する（下記）。
 
 ### GitHub Actions での自動デプロイ

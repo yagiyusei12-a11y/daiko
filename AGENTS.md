@@ -12,6 +12,7 @@
   - 変更は **`main` にコミット済み**、`deploy-vps.ps1` は **`git push origin main`** を行う。
   - **`.env.deploy`** に `DAIKO_VPS_HOST` / `DAIKO_VPS_KEY`（および必要なら `DAIKO_VPS_USER`, `DAIKO_VPS_PATH`, `DAIKO_VPS_SERVICE`）。ベースは [`.env.deploy.example`](./.env.deploy.example)（存在すれば）。
   - リモートでは `git pull` → `npm ci` → `prisma migrate deploy` → `db:seed` → `build` → **`systemctl restart daiko-app`** まで一続き。
+- **本番 DB を白紙にする**（テナント・業務データを消し、`.env` / `.env.deploy` は触らない）手順は [README.md](./README.md) の「本番 DB を白紙にする」と [`scripts/reset-production-database.sh`](./scripts/reset-production-database.sh)。
 
 ## 実行時の判断
 
