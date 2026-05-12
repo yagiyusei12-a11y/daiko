@@ -22,6 +22,10 @@ import { registerRoleRoutes } from "./routes/roles.js";
 import { registerDashboardRoutes } from "./routes/dashboard.js";
 import { registerLegalRoutes } from "./routes/legal.js";
 import { registerUserRoutes } from "./routes/users.js";
+import { registerCustomerRoutes } from "./routes/customers.js";
+import { registerReferralSourceRoutes } from "./routes/referralSources.js";
+import { registerAccountsReceivableRoutes } from "./routes/accountsReceivable.js";
+import { registerDispatchReservationRoutes } from "./routes/dispatchReservations.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -100,6 +104,10 @@ await app.register(registerTenantSettingsRoutes, { prefix: v1 });
 await app.register(registerRoleRoutes, { prefix: v1 });
 await app.register(registerDashboardRoutes, { prefix: v1 });
 await app.register(registerLegalRoutes, { prefix: v1 });
+await app.register(registerCustomerRoutes, { prefix: v1 });
+await app.register(registerReferralSourceRoutes, { prefix: v1 });
+await app.register(registerAccountsReceivableRoutes, { prefix: v1 });
+await app.register(registerDispatchReservationRoutes, { prefix: v1 });
 
 app.get("/api/v1/openapi.json", async () => app.swagger());
 

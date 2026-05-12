@@ -57,6 +57,26 @@ npm run dev
 - 初回のみ VPS 上で `git clone <daiko-remote> ~/daiko` のあと、order の clone から `bash ~/order/deploy/vps/install-daiko-systemd.sh ~/daiko`（VPS で order が `~/order` の場合）
 - 既存で `~/order/daiko` にあった場合: **pull でサブフォルダが消える前に** `.env` のバックアップ、`mv ~/order/daiko ~/daiko` などで専用 clone に移し、systemd の `WorkingDirectory` / `EnvironmentFile` を合わせる
 - デプロイ: `scripts/deploy-vps.ps1`（`.env.deploy` に `DAIKO_VPS_*`）。リモートでは `migrate deploy` のあと **`npm run db:seed`** で帳票テンプレ（9 種＋酒気スタブ）を投入する。
+- **GitHub Actions（`main` マージ後の自動デプロイ）**: リポジトリに `.github/workflows/deploy-main.yml` がある。`main` への `push` のたびに VPS へ SSH し、上記と同じリモート手順（`git pull` → `npm ci` → migrate → seed → build → `systemctl restart`）を実行する。利用するには GitHub の **Repository secrets** を設定する（下記）。
+
+### GitHub Actions での自動デプロイ
+
+1. GitHub → リポジトリ → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+2. 次を設定する（必須はホストと鍵）。
+
+| Secret 名 | 内容 |
+|-----------|------|
+| `DAIKO_VPS_HOST` | VPS のホスト名または IP（例: `133.18.141.239`） |
+| `DAIKO_VPS_SSH_KEY` | デプロイ用 **秘密鍵の全文**（PEM。ローカルの `DAIKO_VPS_KEY` が指すファイルの中身と同じもの） |
+| `DAIKO_VPS_USER` | （任意）SSH ユーザー。未設定時は `ubuntu` |
+| `DAIKO_VPS_PATH` | （任意）VPS 上の clone ルート。**絶対パス推奨**（例: `/home/ubuntu/daiko`）。未設定時はリモートの `$HOME/daiko` |
+| `DAIKO_VPS_SERVICE` | （任意）systemd ユニット名。未設定時は `daiko-app` |
+
+3. VPS 側で、その鍵の **公開鍵** が `authorized_keys` に入っていること、`git pull` できる deploy ユーザーであること、`sudo systemctl restart daiko-app` が **パスワードなし**で通ること（既存の手動デプロイと同じ前提）。
+
+**ローカルの `npm run deploy:vps` との違い**: CI は GitHub 上の `main` が既に進んだあとで動くため **`git push` は行わない**（マージが push を済ませている想定）。リモートの pull / migrate / build / restart のみ行う。
+
+シークレットを置かない場合、ワークフローはエラーで終了する（手動デプロイのみの運用にしてよい）。
 
 ## 事業日
 

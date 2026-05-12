@@ -16,6 +16,10 @@ import Documents from "./pages/Documents";
 import TenantSettings from "./pages/TenantSettings";
 import Rbac from "./pages/Rbac";
 import Legal from "./pages/Legal";
+import Customers from "./pages/Customers";
+import ReferralSources from "./pages/ReferralSources";
+import Receivables from "./pages/Receivables";
+import Dispatch from "./pages/Dispatch";
 
 export default function App(): JSX.Element {
   return (
@@ -37,6 +41,10 @@ export default function App(): JSX.Element {
         <Route path="settings" element={<TenantSettings />} />
         <Route path="rbac" element={<Rbac />} />
         <Route path="legal" element={<Legal />} />
+        <Route path="customers" element={<Customers />} />
+        <Route path="referral-sources" element={<ReferralSources />} />
+        <Route path="receivables" element={<Receivables />} />
+        <Route path="dispatch" element={<Dispatch />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

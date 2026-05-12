@@ -10,6 +10,31 @@ function passengerKindFromBody(raw: unknown): TripPassengerKind {
   return raw === "MEMBER" ? "MEMBER" : "GENERAL";
 }
 
+function esc(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function officialOnlyFromQuery(v: string | undefined): boolean {
+  return v === "1" || v === "true" || v === "yes";
+}
+
+function employeeLabel(e: { familyName: string; givenName: string }): string {
+  return `${e.familyName} ${e.givenName}`.trim();
+}
+
+function csvCell(s: string): string {
+  return `"${String(s).replace(/"/g, '""')}"`;
+}
+
+const tripRel = {
+  customer: { select: { id: true, displayName: true } },
+  referralSource: { select: { id: true, name: true } },
+} as const;
+
 export async function registerDailyReportRoutes(app: FastifyInstance): Promise<void> {
   app.get("/daily-reports", { preHandler: [authenticate] }, async (req) => {
     const tid = tenantIdFromReq(req);
@@ -19,10 +44,242 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     const rows = await prisma.dailyReport.findMany({
       where,
       orderBy: { businessDate: "desc" },
-      include: { vehicle: true, mainEmployee: true, partnerEmployee: true, trips: true },
+      include: {
+        vehicle: true,
+        mainEmployee: true,
+        partnerEmployee: true,
+        trips: { include: tripRel },
+      },
       take: 100,
     });
     return { dailyReports: rows };
+  });
+
+  app.get("/daily-reports/export-range.csv", { preHandler: [authenticate] }, async (req, reply) => {
+    const tid = tenantIdFromReq(req);
+    const { from, to, officialOnly } = req.query as { from?: string; to?: string; officialOnly?: string };
+    if (!from || !to) return reply.code(400).send({ error: "from and to (YYYY-MM-DD) required" });
+    const only = officialOnlyFromQuery(officialOnly);
+    const rows = await prisma.dailyReport.findMany({
+      where: { tenantId: tid, businessDate: { gte: from, lte: to } },
+      orderBy: { businessDate: "asc" },
+      include: {
+        vehicle: true,
+        mainEmployee: true,
+        partnerEmployee: true,
+        trips: { include: tripRel, orderBy: { departedAt: "asc" } },
+      },
+      take: 400,
+    });
+    const lines: string[] = ["\uFEFFbusinessDate,vehicle,mainDriver,partnerDriver,tripClient,origin,destination,fareYen,distanceM,waitingMinutes,officialExclude,customerId,referral"];
+    for (const r of rows) {
+      const trips = only ? r.trips.filter((t) => !t.excludeFromOfficialPrint) : r.trips;
+      for (const t of trips) {
+        lines.push(
+          [
+            csvCell(r.businessDate),
+            csvCell(r.vehicle.label),
+            csvCell(employeeLabel(r.mainEmployee)),
+            csvCell(r.partnerEmployee ? employeeLabel(r.partnerEmployee) : ""),
+            csvCell(t.clientName),
+            csvCell(t.origin),
+            csvCell(t.destination),
+            csvCell(String(t.fareYen)),
+            csvCell(String(t.distanceM)),
+            csvCell(String(t.waitingMinutes)),
+            csvCell(t.excludeFromOfficialPrint ? "1" : "0"),
+            csvCell(t.customerId ?? ""),
+            csvCell(t.referralSource?.name ?? ""),
+          ].join(","),
+        );
+      }
+    }
+    const body = lines.join("\n");
+    return reply
+      .header("Content-Type", "text/csv; charset=utf-8")
+      .header("Content-Disposition", `attachment; filename="daily-reports-${from}_${to}.csv"`)
+      .send(body);
+  });
+
+  app.get("/daily-reports/export-range.html", { preHandler: [authenticate] }, async (req, reply) => {
+    const tid = tenantIdFromReq(req);
+    const { from, to, officialOnly } = req.query as { from?: string; to?: string; officialOnly?: string };
+    if (!from || !to) return reply.code(400).send({ error: "from and to (YYYY-MM-DD) required" });
+    const only = officialOnlyFromQuery(officialOnly);
+    const rows = await prisma.dailyReport.findMany({
+      where: { tenantId: tid, businessDate: { gte: from, lte: to } },
+      orderBy: { businessDate: "asc" },
+      include: {
+        vehicle: true,
+        mainEmployee: true,
+        partnerEmployee: true,
+        trips: { include: tripRel, orderBy: { departedAt: "asc" } },
+      },
+      take: 400,
+    });
+    const blocks = rows.map((r) => {
+      const trips = only ? r.trips.filter((t) => !t.excludeFromOfficialPrint) : r.trips;
+      const tr = trips
+        .map(
+          (t) =>
+            `<tr><td>${esc(t.clientName)}</td><td>${esc(t.origin)}→${esc(t.destination)}</td><td>${t.fareYen}</td><td>${
+              t.excludeFromOfficialPrint ? "内部" : "公式"
+            }</td></tr>`,
+        )
+        .join("");
+      return `<section class="day"><h2>${esc(r.businessDate)} / ${esc(r.vehicle.label)} / 主:${esc(
+        employeeLabel(r.mainEmployee),
+      )}${r.partnerEmployee ? ` 随:${esc(employeeLabel(r.partnerEmployee))}` : ""}</h2>
+<table><thead><tr><th>顧客</th><th>区間</th><th>運賃</th><th>区分</th></tr></thead><tbody>${tr}</tbody></table>
+<p>決済: 現金${r.paymentCashYen}（領収書なし現金 ${r.paymentCashNoReceiptYen}） カード${r.paymentCardYen} PayPay${r.paymentPayPayYen} 売掛${r.paymentReceivableYen}</p></section>`;
+    });
+    const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>日報一括印刷</title>
+<style>body{font-family:system-ui;margin:16px;}section.day{page-break-after:always;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ccc;padding:4px;font-size:12px;}</style></head><body>
+<h1>日報一括（${only ? "公式のみ" : "全件"}）</h1>${blocks.join("\n")}</body></html>`;
+    return reply.type("text/html; charset=utf-8").send(html);
+  });
+
+  app.get<{ Params: { id: string } }>("/daily-reports/:id", { preHandler: [authenticate] }, async (req, reply) => {
+    const tid = tenantIdFromReq(req);
+    const row = await prisma.dailyReport.findFirst({
+      where: { id: req.params.id, tenantId: tid },
+      include: {
+        vehicle: true,
+        mainEmployee: true,
+        partnerEmployee: true,
+        trips: { include: tripRel, orderBy: { departedAt: "asc" } },
+      },
+    });
+    if (!row) return reply.code(404).send({ error: "not found" });
+    return row;
+  });
+
+  app.get<{ Params: { id: string } }>("/daily-reports/:id/print", { preHandler: [authenticate] }, async (req, reply) => {
+    const tid = tenantIdFromReq(req);
+    const { officialOnly } = req.query as { officialOnly?: string };
+    const only = officialOnlyFromQuery(officialOnly);
+    const r = await prisma.dailyReport.findFirst({
+      where: { id: req.params.id, tenantId: tid },
+      include: {
+        vehicle: true,
+        mainEmployee: true,
+        partnerEmployee: true,
+        trips: { include: tripRel, orderBy: { departedAt: "asc" } },
+      },
+    });
+    if (!r) return reply.code(404).send({ error: "not found" });
+    const trips = only ? r.trips.filter((t) => !t.excludeFromOfficialPrint) : r.trips;
+    const tripRows = trips
+      .map(
+        (t) =>
+          `<tr><td>${esc(t.clientName)}</td><td>${esc(t.origin)} → ${esc(t.destination)}</td><td>${t.fareYen}</td><td>${
+            t.distanceM
+          }</td><td>${t.waitingMinutes}</td><td>${t.excludeFromOfficialPrint ? "内部" : "公式"}</td><td>${esc(
+            t.referralSource?.name ?? "",
+          )}</td></tr>`,
+      )
+      .join("");
+    const sumAll = r.trips.reduce((a, t) => a + t.fareYen, 0);
+    const sumOfficial = r.trips.filter((t) => !t.excludeFromOfficialPrint).reduce((a, t) => a + t.fareYen, 0);
+    const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>日報 ${esc(r.businessDate)}</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:20px;color:#111;}
+h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} th,td{border:1px solid #bbb;padding:6px;font-size:13px;} th{background:#eee;}
+.meta{margin:8px 0;font-size:14px;} .pay{margin-top:16px;font-size:14px;}
+</style></head><body>
+<h1>運転日報 ${esc(r.businessDate)}</h1>
+<div class="meta">車両: ${esc(r.vehicle.label)} / メーター: ${r.meterStart} → ${r.meterEnd}</div>
+<div class="meta">主運転: ${esc(employeeLabel(r.mainEmployee))}${
+      r.partnerEmployee ? ` / 随伴: ${esc(employeeLabel(r.partnerEmployee))}` : ""
+    }</div>
+<p>表示: <strong>${only ? "公式帳票対象のみ" : "全運行（内部含む）"}</strong> — 運賃合計（表示中）: ${trips.reduce(
+      (a, t) => a + t.fareYen,
+      0,
+    )} 円 / 全件合計: ${sumAll} 円 / 公式のみ合計: ${sumOfficial} 円</p>
+<table><thead><tr><th>顧客</th><th>区間</th><th>運賃</th><th>距離m</th><th>待機分</th><th>区分</th><th>紹介元</th></tr></thead><tbody>${tripRows}</tbody></table>
+<div class="pay">
+  <strong>決済内訳</strong><br/>
+  現金: ${r.paymentCashYen} 円（うち領収書なし現金: ${r.paymentCashNoReceiptYen} 円）<br/>
+  カード: ${r.paymentCardYen} 円 / PayPay: ${r.paymentPayPayYen} 円 / 売掛: ${r.paymentReceivableYen} 円
+</div>
+<script>window.onload=()=>{window.focus();};</script>
+</body></html>`;
+    return reply.type("text/html; charset=utf-8").send(html);
+  });
+
+  app.get<{ Params: { id: string } }>("/daily-reports/:id/export.csv", { preHandler: [authenticate] }, async (req, reply) => {
+    const tid = tenantIdFromReq(req);
+    const { officialOnly } = req.query as { officialOnly?: string };
+    const only = officialOnlyFromQuery(officialOnly);
+    const r = await prisma.dailyReport.findFirst({
+      where: { id: req.params.id, tenantId: tid },
+      include: { vehicle: true, mainEmployee: true, partnerEmployee: true, trips: { include: tripRel, orderBy: { departedAt: "asc" } } },
+    });
+    if (!r) return reply.code(404).send({ error: "not found" });
+    const trips = only ? r.trips.filter((t) => !t.excludeFromOfficialPrint) : r.trips;
+    const lines: string[] = [
+      "\uFEFFbusinessDate,vehicle,mainDriver,partnerDriver,tripClient,origin,destination,fareYen,distanceM,waitingMinutes,officialExclude,referral",
+    ];
+    for (const t of trips) {
+      lines.push(
+        [
+          csvCell(r.businessDate),
+          csvCell(r.vehicle.label),
+          csvCell(employeeLabel(r.mainEmployee)),
+          csvCell(r.partnerEmployee ? employeeLabel(r.partnerEmployee) : ""),
+          csvCell(t.clientName),
+          csvCell(t.origin),
+          csvCell(t.destination),
+          csvCell(String(t.fareYen)),
+          csvCell(String(t.distanceM)),
+          csvCell(String(t.waitingMinutes)),
+          csvCell(t.excludeFromOfficialPrint ? "1" : "0"),
+          csvCell(t.referralSource?.name ?? ""),
+        ].join(","),
+      );
+    }
+    return reply
+      .header("Content-Type", "text/csv; charset=utf-8")
+      .header("Content-Disposition", `attachment; filename="daily-report-${r.businessDate}.csv"`)
+      .send(lines.join("\n"));
+  });
+
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      paymentCashYen?: number;
+      paymentCashNoReceiptYen?: number;
+      paymentCardYen?: number;
+      paymentPayPayYen?: number;
+      paymentReceivableYen?: number;
+    };
+  }>("/daily-reports/:id", { preHandler: [authenticate] }, async (req, reply) => {
+    const tid = tenantIdFromReq(req);
+    const row = await prisma.dailyReport.findFirst({ where: { id: req.params.id, tenantId: tid } });
+    if (!row) return reply.code(404).send({ error: "not found" });
+    const b = req.body ?? {};
+    const nums = {
+      paymentCashYen: b.paymentCashYen !== undefined ? Math.max(0, Math.floor(Number(b.paymentCashYen))) : row.paymentCashYen,
+      paymentCashNoReceiptYen:
+        b.paymentCashNoReceiptYen !== undefined ? Math.max(0, Math.floor(Number(b.paymentCashNoReceiptYen))) : row.paymentCashNoReceiptYen,
+      paymentCardYen: b.paymentCardYen !== undefined ? Math.max(0, Math.floor(Number(b.paymentCardYen))) : row.paymentCardYen,
+      paymentPayPayYen: b.paymentPayPayYen !== undefined ? Math.max(0, Math.floor(Number(b.paymentPayPayYen))) : row.paymentPayPayYen,
+      paymentReceivableYen:
+        b.paymentReceivableYen !== undefined ? Math.max(0, Math.floor(Number(b.paymentReceivableYen))) : row.paymentReceivableYen,
+    };
+    if (![nums.paymentCashYen, nums.paymentCashNoReceiptYen, nums.paymentCardYen, nums.paymentPayPayYen, nums.paymentReceivableYen].every(
+      (n) => Number.isFinite(n),
+    )) {
+      return reply.code(400).send({ error: "invalid payment numbers" });
+    }
+    if (nums.paymentCashNoReceiptYen > nums.paymentCashYen) {
+      return reply.code(400).send({ error: "paymentCashNoReceiptYen cannot exceed paymentCashYen" });
+    }
+    return prisma.dailyReport.update({
+      where: { id: row.id },
+      data: nums,
+      include: { vehicle: true, mainEmployee: true, partnerEmployee: true, trips: { include: tripRel } },
+    });
   });
 
   app.post<{
@@ -126,14 +383,49 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       applyEarlyMorningFlatYen?: boolean;
       applyEarlyRushFlatYen?: boolean;
       applyLeftHandSurchargeFlat?: boolean;
+      customerId?: string | null;
+      referralSourceId?: string | null;
+      fareOverrideYen?: number | null;
+      excludeFromOfficialPrint?: boolean;
     };
   }>("/daily-reports/:id/trips", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
     const rep = await prisma.dailyReport.findFirst({ where: { id: req.params.id, tenantId: tid } });
     if (!rep) return reply.code(404).send({ error: "not found" });
-    const clientName = String(req.body?.clientName || "").trim();
-    const origin = String(req.body?.origin || "").trim();
-    const destination = String(req.body?.destination || "").trim();
+
+    let customerId: string | null = req.body?.customerId ? String(req.body.customerId) : null;
+    let referralSourceId: string | null = req.body?.referralSourceId ? String(req.body.referralSourceId) : null;
+    if (referralSourceId) {
+      const ref = await prisma.referralSource.findFirst({ where: { id: referralSourceId, tenantId: tid } });
+      if (!ref) return reply.code(400).send({ error: "invalid referralSourceId" });
+    }
+    let customer: {
+      displayName: string;
+      defaultOrigin: string;
+      defaultDestination: string;
+      defaultTariffVersionId: string | null;
+      specialFareYen: number | null;
+    } | null = null;
+    if (customerId) {
+      const c = await prisma.customer.findFirst({ where: { id: customerId, tenantId: tid, archivedAt: null } });
+      if (!c) return reply.code(400).send({ error: "invalid customerId" });
+      customer = {
+        displayName: c.displayName,
+        defaultOrigin: c.defaultOrigin,
+        defaultDestination: c.defaultDestination,
+        defaultTariffVersionId: c.defaultTariffVersionId,
+        specialFareYen: c.specialFareYen,
+      };
+    }
+
+    let clientName = String(req.body?.clientName || "").trim();
+    let origin = String(req.body?.origin || "").trim();
+    let destination = String(req.body?.destination || "").trim();
+    if (customer) {
+      if (!clientName) clientName = customer.displayName;
+      if (!origin) origin = customer.defaultOrigin.trim();
+      if (!destination) destination = customer.defaultDestination.trim();
+    }
     const departedAt = req.body?.departedAt ? new Date(req.body.departedAt) : null;
     const arrivedAt = req.body?.arrivedAt ? new Date(req.body.arrivedAt) : null;
     const distanceM = Math.floor(Number(req.body?.distanceM ?? NaN));
@@ -141,8 +433,13 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     if (!clientName || !origin || !destination || !departedAt || !arrivedAt || !Number.isFinite(distanceM)) {
       return reply.code(400).send({ error: "clientName, origin, destination, departedAt, arrivedAt, distanceM required" });
     }
-    let fareYen = 0;
-    let tariffVersionId: string | null = req.body?.tariffVersionId ? String(req.body.tariffVersionId) : null;
+
+    let tariffVersionId: string | null =
+      req.body?.tariffVersionId !== undefined && req.body.tariffVersionId !== null
+        ? String(req.body.tariffVersionId)
+        : customer?.defaultTariffVersionId ?? null;
+    if (req.body?.tariffVersionId === null) tariffVersionId = null;
+
     const passengerKind = passengerKindFromBody(req.body?.passengerKind);
     const viaStopCount = Math.max(0, Math.floor(Number(req.body?.viaStopCount ?? 0)));
     const applyNightSurcharge = Boolean(req.body?.applyNightSurcharge);
@@ -162,7 +459,21 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     const applyEarlyMorningFlatYen = Boolean(req.body?.applyEarlyMorningFlatYen);
     const applyEarlyRushFlatYen = Boolean(req.body?.applyEarlyRushFlatYen);
     const applyLeftHandSurchargeFlat = Boolean(req.body?.applyLeftHandSurchargeFlat);
-    if (tariffVersionId) {
+    const excludeFromOfficialPrint = Boolean(req.body?.excludeFromOfficialPrint);
+
+    let fareOverrideYen: number | null = null;
+    if (req.body?.fareOverrideYen !== undefined && req.body.fareOverrideYen !== null) {
+      const o = Math.floor(Number(req.body.fareOverrideYen));
+      if (!Number.isFinite(o) || o < 0) return reply.code(400).send({ error: "invalid fareOverrideYen" });
+      fareOverrideYen = o;
+    } else if (customer?.specialFareYen != null) {
+      fareOverrideYen = customer.specialFareYen;
+    }
+
+    let fareYen = 0;
+    if (fareOverrideYen !== null) {
+      fareYen = fareOverrideYen;
+    } else if (tariffVersionId) {
       const ver = await prisma.tariffPlanVersion.findFirst({
         where: { id: tariffVersionId, plan: { tenantId: tid } },
         include: { segments: true, distanceTiers: { orderBy: { sortOrder: "asc" } } },
@@ -181,6 +492,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         applyLeftHandSurchargeFlat,
       });
     }
+
     const role = req.body?.role === "PARTNER_DRIVER" ? "PARTNER_DRIVER" : "MAIN_DRIVER";
     const trip = await prisma.tripLeg.create({
       data: {
@@ -207,7 +519,12 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         applyEarlyMorningFlatYen,
         applyEarlyRushFlatYen,
         applyLeftHandSurchargeFlat,
+        customerId,
+        referralSourceId,
+        fareOverrideYen,
+        excludeFromOfficialPrint,
       },
+      include: tripRel,
     });
     return trip;
   });
@@ -231,6 +548,10 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       applyEarlyMorningFlatYen?: boolean;
       applyEarlyRushFlatYen?: boolean;
       applyLeftHandSurchargeFlat?: boolean;
+      customerId?: string | null;
+      referralSourceId?: string | null;
+      fareOverrideYen?: number | null;
+      excludeFromOfficialPrint?: boolean;
     };
   }>("/daily-reports/:id/trips/:tripId", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
@@ -240,6 +561,18 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       where: { id: req.params.tripId, dailyReportId: rep.id },
     });
     if (!trip) return reply.code(404).send({ error: "trip not found" });
+
+    let customerId = req.body?.customerId !== undefined ? (req.body.customerId ? String(req.body.customerId) : null) : trip.customerId;
+    let referralSourceId =
+      req.body?.referralSourceId !== undefined ? (req.body.referralSourceId ? String(req.body.referralSourceId) : null) : trip.referralSourceId;
+    if (referralSourceId) {
+      const ref = await prisma.referralSource.findFirst({ where: { id: referralSourceId, tenantId: tid } });
+      if (!ref) return reply.code(400).send({ error: "invalid referralSourceId" });
+    }
+    if (customerId) {
+      const c = await prisma.customer.findFirst({ where: { id: customerId, tenantId: tid, archivedAt: null } });
+      if (!c) return reply.code(400).send({ error: "invalid customerId" });
+    }
 
     const distanceM =
       req.body?.distanceM !== undefined ? Math.floor(Number(req.body.distanceM)) : trip.distanceM;
@@ -301,8 +634,24 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         ? Boolean(req.body.applyLeftHandSurchargeFlat)
         : trip.applyLeftHandSurchargeFlat;
 
+    let fareOverrideYen: number | null | undefined = undefined;
+    if (req.body?.fareOverrideYen !== undefined) {
+      if (req.body.fareOverrideYen === null) fareOverrideYen = null;
+      else {
+        const o = Math.floor(Number(req.body.fareOverrideYen));
+        if (!Number.isFinite(o) || o < 0) return reply.code(400).send({ error: "invalid fareOverrideYen" });
+        fareOverrideYen = o;
+      }
+    }
+    const effectiveOverride = fareOverrideYen !== undefined ? fareOverrideYen : trip.fareOverrideYen;
+
     let fareYen = trip.fareYen;
-    if (tariffVersionId) {
+    if (effectiveOverride !== null) {
+      fareYen = effectiveOverride;
+      if (req.body?.tariffVersionId !== undefined) {
+        /* keep explicit tariff change while override: still honor tariff id for record */
+      }
+    } else if (tariffVersionId) {
       const ver = await prisma.tariffPlanVersion.findFirst({
         where: { id: tariffVersionId, plan: { tenantId: tid } },
         include: { segments: true, distanceTiers: { orderBy: { sortOrder: "asc" } } },
@@ -325,6 +674,9 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       tariffVersionId = null;
     }
 
+    const excludeFromOfficialPrint =
+      req.body?.excludeFromOfficialPrint !== undefined ? Boolean(req.body.excludeFromOfficialPrint) : trip.excludeFromOfficialPrint;
+
     const updated = await prisma.tripLeg.update({
       where: { id: trip.id },
       data: {
@@ -345,7 +697,12 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         applyEarlyMorningFlatYen,
         applyEarlyRushFlatYen,
         applyLeftHandSurchargeFlat,
+        customerId,
+        referralSourceId,
+        fareOverrideYen: fareOverrideYen !== undefined ? fareOverrideYen : trip.fareOverrideYen,
+        excludeFromOfficialPrint,
       },
+      include: tripRel,
     });
     return updated;
   });

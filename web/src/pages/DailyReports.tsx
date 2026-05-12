@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiFetch } from "../api";
+import { apiFetch, apiFetchBlob, getAccessToken } from "../api";
 import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 type Emp = { id: string; familyName: string; givenName: string };
@@ -34,14 +34,24 @@ export default function DailyReports(): JSX.Element {
   const [meterStart, setMeterStart] = useState("");
   const [meterEnd, setMeterEnd] = useState("");
 
+  const [exportFrom, setExportFrom] = useState("");
+  const [exportTo, setExportTo] = useState("");
+  const [exportOfficialOnly, setExportOfficialOnly] = useState(false);
+
   async function load(): Promise<void> {
     const [r1, r2, r3] = await Promise.all([
       apiFetch<{ dailyReports: DR[] }>("/daily-reports"),
       apiFetch<{ employees: Emp[] }>("/employees"),
       apiFetch<{ vehicles: Veh[] }>("/vehicles"),
     ]);
-    if (r1.ok) setRows(r1.data.dailyReports);
-    else setErr(r1.error);
+    if (r1.ok) {
+      setRows(r1.data.dailyReports);
+      const dates = r1.data.dailyReports.map((x) => x.businessDate).sort();
+      if (dates.length) {
+        setExportFrom((f) => (f.trim() ? f : dates[0] ?? ""));
+        setExportTo((t) => (t.trim() ? t : dates[dates.length - 1] ?? ""));
+      }
+    } else setErr(r1.error);
     if (r2.ok) setEmps(r2.data.employees);
     if (r3.ok) setVehs(r3.data.vehicles);
   }
@@ -162,6 +172,49 @@ export default function DailyReports(): JSX.Element {
     },
   ];
 
+  async function downloadBulkCsv(): Promise<void> {
+    if (!exportFrom.trim() || !exportTo.trim()) {
+      setErr("一括CSV: 開始日・終了日を入力してください");
+      return;
+    }
+    setErr(null);
+    const q = `?from=${encodeURIComponent(exportFrom.trim())}&to=${encodeURIComponent(exportTo.trim())}&officialOnly=${
+      exportOfficialOnly ? "1" : "0"
+    }`;
+    const r = await apiFetchBlob(`/daily-reports/export-range.csv${q}`);
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(r.blob);
+    a.download = r.filename || `daily-reports-${exportFrom}_${exportTo}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  async function openBulkPrint(): Promise<void> {
+    if (!exportFrom.trim() || !exportTo.trim()) {
+      setErr("一括印刷: 開始日・終了日を入力してください");
+      return;
+    }
+    setErr(null);
+    const token = getAccessToken();
+    const q = `?from=${encodeURIComponent(exportFrom.trim())}&to=${encodeURIComponent(exportTo.trim())}&officialOnly=${
+      exportOfficialOnly ? "1" : "0"
+    }`;
+    const res = await fetch(`/api/v1/daily-reports/export-range.html${q}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const html = await res.text();
+    const w = window.open("");
+    if (w) {
+      w.document.write(html);
+      w.document.close();
+      w.focus();
+    }
+  }
+
   return (
     <Card title="日報">
       <Err msg={err} />
@@ -201,6 +254,28 @@ export default function DailyReports(): JSX.Element {
           </tbody>
         </table>
       </div>
+      <h2 style={{ marginTop: "1.25rem", fontSize: "1.1rem" }}>期間一括（CSV / 印刷HTML）</h2>
+      <p style={{ fontSize: "0.9rem", opacity: 0.9 }}>事業日 YYYY-MM-DD で期間を指定し、公式のみまたは全件で書き出します。</p>
+      <label>
+        開始日
+        <input value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} placeholder="2026-05-01" />
+      </label>
+      <label>
+        終了日
+        <input value={exportTo} onChange={(e) => setExportTo(e.target.value)} placeholder="2026-05-31" />
+      </label>
+      <label>
+        <input type="checkbox" checked={exportOfficialOnly} onChange={(e) => setExportOfficialOnly(e.target.checked)} />{" "}
+        公式対象のみ
+      </label>
+      <p>
+        <button type="button" onClick={() => void downloadBulkCsv()}>
+          一括CSV
+        </button>{" "}
+        <button type="button" onClick={() => void openBulkPrint()}>
+          一括印刷HTML
+        </button>
+      </p>
     </Card>
   );
 }

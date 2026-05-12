@@ -7,7 +7,7 @@
 ## 本番デプロイ（VPS）
 
 - 手順の詳細は [README.md](./README.md) の「本番（VPS）」。
-- ローカル（開発機）から実行するスクリプト: **`npm run deploy:vps`**（[`scripts/deploy-vps.ps1`](./scripts/deploy-vps.ps1)）。
+- ローカル（開発機）から実行するスクリプト: **`npm run deploy:vps`**（[`scripts/deploy-vps.ps1`](./scripts/deploy-vps.ps1)）。**GitHub** では `main` への push 時に [`.github/workflows/deploy-main.yml`](./.github/workflows/deploy-main.yml) が同様のリモート作業を行える（Repository secrets の設定が必要。詳細は [README.md](./README.md) の「GitHub Actions での自動デプロイ」）。
 - 事前条件（不足していればデプロイは実行できない）:
   - 変更は **`main` にコミット済み**、`deploy-vps.ps1` は **`git push origin main`** を行う。
   - **`.env.deploy`** に `DAIKO_VPS_HOST` / `DAIKO_VPS_KEY`（および必要なら `DAIKO_VPS_USER`, `DAIKO_VPS_PATH`, `DAIKO_VPS_SERVICE`）。ベースは [`.env.deploy.example`](./.env.deploy.example)（存在すれば）。

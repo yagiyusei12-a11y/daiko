@@ -70,6 +70,10 @@ model Tenant {
   complaintLedgers    ComplaintLedger[]
   guidanceSessions    GuidanceSession[]
   legalChangeNotices  LegalChangeNotice[]
+  customers           Customer[]
+  referralSources     ReferralSource[]
+  dispatchReservations DispatchReservation[]
+  accountsReceivableEntries AccountsReceivableEntry[]
 }
 
 model TenantSettings {
@@ -218,6 +222,7 @@ model Vehicle {
   updatedAt DateTime @updatedAt
 
   dailyReports DailyReport[]
+  dispatchReservations DispatchReservation[]
 
   @@index([tenantId, active])
 }
@@ -280,7 +285,8 @@ model TariffPlanVersion {
 
   segments       TariffSegment[]
   distanceTiers  TariffDistanceTier[]
-  tripLegs TripLeg[]
+  tripLegs       TripLeg[]
+  defaultForCustomers Customer[] @relation("CustomerDefaultTariff")
 
   @@unique([planId, version])
 }
@@ -311,6 +317,42 @@ model TariffSegment {
   fareMemberYen Int?
 }
 
+/// 顧客名簿（運行で選択して出発地・目的地・特別料金に利用）
+model Customer {
+  id                     String             @id @default(cuid())
+  tenantId               String
+  tenant                 Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  displayName            String
+  phone                  String?
+  defaultOrigin          String             @default("")
+  defaultDestination     String             @default("")
+  defaultTariffVersionId String?
+  defaultTariffVersion   TariffPlanVersion? @relation("CustomerDefaultTariff", fields: [defaultTariffVersionId], references: [id], onDelete: SetNull)
+  specialFareYen         Int?
+  notes                  String?
+  archivedAt             DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  trips                  TripLeg[]
+
+  @@index([tenantId, displayName])
+}
+
+/// 飲食店など紹介元
+model ReferralSource {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  memo        String?
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  trips       TripLeg[]
+
+  @@index([tenantId, name])
+}
+
 model DailyReport {
   id                String    @id @default(cuid())
   tenantId          String
@@ -332,6 +374,14 @@ model DailyReport {
   breakLocation     String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+
+  /// 日報単位の決済内訳（円）
+  paymentCashYen       Int @default(0)
+  /// 現金のうち領収書を発行しなかった金額（0〜paymentCashYen）
+  paymentCashNoReceiptYen Int @default(0)
+  paymentCardYen       Int @default(0)
+  paymentPayPayYen     Int @default(0)
+  paymentReceivableYen Int @default(0)
 
   trips TripLeg[]
 
@@ -369,7 +419,50 @@ model TripLeg {
   applyEarlyRushFlatYen          Boolean @default(false)
   createdAt        DateTime @default(now())
 
+  customerId       String?
+  customer         Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  referralSourceId String?
+  referralSource   ReferralSource? @relation(fields: [referralSourceId], references: [id], onDelete: SetNull)
+  /// 手動で上書きする運賃（円）。null のときは料金版から計算した fareYen を使用。
+  fareOverrideYen  Int?
+  /// 公式帳票・税理士提出用 CSV から除外（データは保持。集計は用途に応じて全件／公式のみを API で切替）
+  excludeFromOfficialPrint Boolean @default(false)
+
   @@index([dailyReportId])
+}
+
+/// 配車・予約（ガント前段：一覧と CRUD）
+model DispatchReservation {
+  id        String    @id @default(cuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicleId String?
+  vehicle   Vehicle?  @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  title     String
+  note      String?
+  startsAt  DateTime
+  endsAt    DateTime
+  status    String    @default("CONFIRMED")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([tenantId, startsAt])
+}
+
+/// 売掛（未回収金）メモ。回収で status を更新
+model AccountsReceivableEntry {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  partyName   String
+  amountYen   Int
+  status      String   @default("OPEN")
+  collectedAt DateTime?
+  referenceNote String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, status])
 }
 
 model TimePunch {

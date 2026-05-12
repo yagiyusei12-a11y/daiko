@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { apiFetch } from "../api";
+import { apiFetch, apiFetchBlob, getAccessToken } from "../api";
 import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 type Trip = {
@@ -22,24 +22,50 @@ type Trip = {
   applyEarlyMorningFlatYen: boolean;
   applyEarlyRushFlatYen: boolean;
   applyLeftHandSurchargeFlat: boolean;
+  customerId: string | null;
+  referralSourceId: string | null;
+  customer: { id: string; displayName: string } | null;
+  referralSource: { id: string; name: string } | null;
+  fareOverrideYen: number | null;
+  excludeFromOfficialPrint: boolean;
 };
 type DR = {
   id: string;
   businessDate: string;
   trips: Trip[];
+  paymentCashYen: number;
+  paymentCashNoReceiptYen: number;
+  paymentCardYen: number;
+  paymentPayPayYen: number;
+  paymentReceivableYen: number;
 };
-type DRRes = { dailyReports: DR[] };
 type Ver = { id: string; version: number; planId: string };
 type PlansRes = { plans: { id: string; versions: Ver[] }[] };
+type CustomerRow = {
+  id: string;
+  displayName: string;
+  defaultOrigin: string;
+  defaultDestination: string;
+  defaultTariffVersionId: string | null;
+  specialFareYen: number | null;
+};
+type ReferralRow = { id: string; name: string };
 
 export default function DailyReportDetail(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [rep, setRep] = useState<DR | null>(null);
   const [versions, setVersions] = useState<Ver[]>([]);
+  const [customers, setCustomers] = useState<CustomerRow[]>([]);
+  const [referrals, setReferrals] = useState<ReferralRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [tripWizardOpen, setTripWizardOpen] = useState(false);
   const [tripSubmitting, setTripSubmitting] = useState(false);
+  const [officialExportOnly, setOfficialExportOnly] = useState(false);
+  const [customerId, setCustomerId] = useState("");
+  const [referralSourceId, setReferralSourceId] = useState("");
+  const [fareOverrideYen, setFareOverrideYen] = useState("");
+  const [excludeFromOfficialPrint, setExcludeFromOfficialPrint] = useState(false);
   const [clientName, setClientName] = useState("顧客");
   const [origin, setOrigin] = useState("A");
   const [destination, setDestination] = useState("B");
@@ -56,30 +82,61 @@ export default function DailyReportDetail(): JSX.Element {
   const [applyEarlyMorningFlatYen, setApplyEarlyMorningFlatYen] = useState(false);
   const [applyEarlyRushFlatYen, setApplyEarlyRushFlatYen] = useState(false);
   const [applyLeftHandSurchargeFlat, setApplyLeftHandSurchargeFlat] = useState(false);
+  const [payCash, setPayCash] = useState("0");
+  const [payCashNoRcpt, setPayCashNoRcpt] = useState("0");
+  const [payCard, setPayCard] = useState("0");
+  const [payPayPay, setPayPayPay] = useState("0");
+  const [payRecv, setPayRecv] = useState("0");
+  const [paySaving, setPaySaving] = useState(false);
 
   async function load(): Promise<void> {
     if (!id) return;
-    const r = await apiFetch<DRRes>("/daily-reports");
+    const r = await apiFetch<DR>(`/daily-reports/${id}`);
     if (!r.ok) {
       setErr(r.error);
+      setRep(null);
       return;
     }
-    const found = r.data.dailyReports.find((d) => d.id === id) ?? null;
-    setRep(found);
+    setRep(r.data);
+    setPayCash(String(r.data.paymentCashYen));
+    setPayCashNoRcpt(String(r.data.paymentCashNoReceiptYen));
+    setPayCard(String(r.data.paymentCardYen));
+    setPayPayPay(String(r.data.paymentPayPayYen));
+    setPayRecv(String(r.data.paymentReceivableYen));
     const rp = await apiFetch<PlansRes>("/tariff-plans?versionsLimit=50");
     if (rp.ok) {
       const vers = rp.data.plans.flatMap((p) => p.versions);
       setVersions(vers);
       setTariffVersionId((tid) => tid || (vers[0]?.id ?? ""));
     }
+    const cr = await apiFetch<{ customers: CustomerRow[] }>("/customers");
+    if (cr.ok) setCustomers(cr.data.customers);
+    const rr = await apiFetch<{ referralSources: ReferralRow[] }>("/referral-sources");
+    if (rr.ok) setReferrals(rr.data.referralSources);
   }
 
   useEffect(() => {
     void load();
   }, [id]);
 
+  function onPickCustomer(cid: string): void {
+    setCustomerId(cid);
+    if (!cid) return;
+    const c = customers.find((x) => x.id === cid);
+    if (!c) return;
+    setClientName(c.displayName);
+    setOrigin((o) => (c.defaultOrigin.trim() ? c.defaultOrigin : o));
+    setDestination((d) => (c.defaultDestination.trim() ? c.defaultDestination : d));
+    if (c.defaultTariffVersionId) setTariffVersionId(c.defaultTariffVersionId);
+    if (c.specialFareYen != null) setFareOverrideYen(String(c.specialFareYen));
+  }
+
   function closeTripWizard(): void {
     setTripWizardOpen(false);
+    setCustomerId("");
+    setReferralSourceId("");
+    setFareOverrideYen("");
+    setExcludeFromOfficialPrint(false);
     setClientName("顧客");
     setOrigin("A");
     setDestination("B");
@@ -120,9 +177,16 @@ export default function DailyReportDetail(): JSX.Element {
         applyEarlyMorningFlatYen,
         applyEarlyRushFlatYen,
         applyLeftHandSurchargeFlat,
+        excludeFromOfficialPrint,
       };
       if (pickupFromBaseM.trim() !== "") {
         json.pickupFromBaseM = Math.max(0, Math.floor(Number(pickupFromBaseM)));
+      }
+      if (customerId) json.customerId = customerId;
+      if (referralSourceId) json.referralSourceId = referralSourceId;
+      if (fareOverrideYen.trim() !== "") {
+        const fo = Math.floor(Number(fareOverrideYen));
+        if (Number.isFinite(fo) && fo >= 0) json.fareOverrideYen = fo;
       }
       const r = await apiFetch<Trip>(`/daily-reports/${id}/trips`, {
         method: "POST",
@@ -139,36 +203,132 @@ export default function DailyReportDetail(): JSX.Element {
     }
   }
 
+  async function savePayments(): Promise<void> {
+    if (!id) return;
+    setErr(null);
+    setPaySaving(true);
+    try {
+      const r = await apiFetch<DR>(`/daily-reports/${id}`, {
+        method: "PATCH",
+        json: {
+          paymentCashYen: Number(payCash),
+          paymentCashNoReceiptYen: Number(payCashNoRcpt),
+          paymentCardYen: Number(payCard),
+          paymentPayPayYen: Number(payPayPay),
+          paymentReceivableYen: Number(payRecv),
+        },
+      });
+      if (!r.ok) setErr(r.error);
+      else setRep(r.data);
+    } finally {
+      setPaySaving(false);
+    }
+  }
+
+  async function openPrint(): Promise<void> {
+    if (!id) return;
+    const token = getAccessToken();
+    const q = officialExportOnly ? "?officialOnly=1" : "?officialOnly=0";
+    const res = await fetch(`/api/v1/daily-reports/${id}/print${q}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const html = await res.text();
+    const w = window.open("");
+    if (w) {
+      w.document.write(html);
+      w.document.close();
+      w.focus();
+    }
+  }
+
+  async function downloadCsv(): Promise<void> {
+    if (!id) return;
+    const q = officialExportOnly ? "?officialOnly=1" : "?officialOnly=0";
+    const r = await apiFetchBlob(`/daily-reports/${id}/export.csv${q}`);
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(r.blob);
+    a.download = r.filename || `daily-report-${id}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  async function toggleTripOfficial(trip: Trip, checked: boolean): Promise<void> {
+    if (!id) return;
+    setErr(null);
+    const r = await apiFetch<Trip>(`/daily-reports/${id}/trips/${trip.id}`, {
+      method: "PATCH",
+      json: { excludeFromOfficialPrint: !checked },
+    });
+    if (!r.ok) setErr(r.error);
+    else await load();
+  }
+
   const routeOk = clientName.trim().length > 0 && origin.trim().length > 0 && destination.trim().length > 0;
   const distOk = distanceM.trim() !== "" && !Number.isNaN(Number(distanceM));
   const waitOk = waitingMinutes.trim() === "" || !Number.isNaN(Number(waitingMinutes));
   const viaOk = viaStopCount.trim() === "" || (!Number.isNaN(Number(viaStopCount)) && Number(viaStopCount) >= 0);
   const pickupOk = pickupFromBaseM.trim() === "" || (!Number.isNaN(Number(pickupFromBaseM)) && Number(pickupFromBaseM) >= 0);
+  const fareOvOk = fareOverrideYen.trim() === "" || (!Number.isNaN(Number(fareOverrideYen)) && Number(fareOverrideYen) >= 0);
 
   const steps: StepWizardStep[] = [
     {
       id: "route",
-      title: "顧客と区間を入力してください",
-      description: "運行の基本情報です。",
+      title: "顧客と区間",
+      description: "名簿から選択すると出発地・到着地・料金版を埋められます。",
       canProceed: routeOk,
       children: (
         <>
+          <label>名簿から（任意）</label>
+          <select
+            value={customerId}
+            onChange={(e) => {
+              const v = e.target.value;
+              setCustomerId(v);
+              onPickCustomer(v);
+            }}
+          >
+            <option value="">なし</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.displayName}
+              </option>
+            ))}
+          </select>
+          <label>紹介元（任意）</label>
+          <select value={referralSourceId} onChange={(e) => setReferralSourceId(e.target.value)}>
+            <option value="">なし</option>
+            {referrals.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
           <label>顧客名</label>
           <input value={clientName} onChange={(e) => setClientName(e.target.value)} autoFocus />
           <label>出発地</label>
           <input value={origin} onChange={(e) => setOrigin(e.target.value)} />
           <label>到着地</label>
           <input value={destination} onChange={(e) => setDestination(e.target.value)} />
+          <label>
+            <input type="checkbox" checked={excludeFromOfficialPrint} onChange={(e) => setExcludeFromOfficialPrint(e.target.checked)} />{" "}
+            公式帳票・提出用CSVから除外（裏帳簿扱い・データは保持）
+          </label>
         </>
       ),
     },
     {
       id: "metrics",
-      title: "距離・待機・料金版",
-      description: "距離はメートル単位です。料金版は任意です。",
-      canProceed: distOk && waitOk && viaOk && pickupOk,
+      title: "距離・待機・料金",
+      description: "手動運賃を入れると料金版より優先されます（空で料金版計算）。",
+      canProceed: distOk && waitOk && viaOk && pickupOk && fareOvOk,
       children: (
         <>
+          <label>手動運賃（円・空で料金版）</label>
+          <input value={fareOverrideYen} onChange={(e) => setFareOverrideYen(e.target.value)} inputMode="numeric" />
           <label>距離 (m)</label>
           <input value={distanceM} onChange={(e) => setDistanceM(e.target.value)} inputMode="numeric" />
           <label>待機 (分)</label>
@@ -218,7 +378,7 @@ export default function DailyReportDetail(): JSX.Element {
     {
       id: "confirm",
       title: "運行追加の確認",
-      canProceed: routeOk && distOk && waitOk && viaOk && pickupOk,
+      canProceed: routeOk && distOk && waitOk && viaOk && pickupOk && fareOvOk,
       children: (
         <dl className="step-wizard-summary">
           <dt>顧客</dt>
@@ -227,6 +387,10 @@ export default function DailyReportDetail(): JSX.Element {
           <dd>
             {origin} → {destination}
           </dd>
+          <dt>手動運賃</dt>
+          <dd>{fareOverrideYen.trim() ? `${fareOverrideYen} 円` : "（料金版）"}</dd>
+          <dt>公式帳票</dt>
+          <dd>{excludeFromOfficialPrint ? "除外" : "含める"}</dd>
           <dt>距離 / 待機</dt>
           <dd>
             {distanceM} m / {waitingMinutes || "0"} 分
@@ -265,9 +429,50 @@ export default function DailyReportDetail(): JSX.Element {
     <>
       <Card title={`日報 ${rep.businessDate}`}>
         <Err msg={err} />
-        <button type="button" onClick={() => void delRep()}>
-          日報削除
-        </button>
+        <p style={{ marginTop: 0 }}>
+          <button type="button" onClick={() => void delRep()}>
+            日報削除
+          </button>
+        </p>
+        <label>
+          <input type="checkbox" checked={officialExportOnly} onChange={(e) => setOfficialExportOnly(e.target.checked)} />{" "}
+          印刷・CSVは公式対象のみ（チェック時は内部運行を除く）
+        </label>
+        <p>
+          <button type="button" onClick={() => void openPrint()}>
+            日報を印刷（HTML）
+          </button>{" "}
+          <button type="button" onClick={() => void downloadCsv()}>
+            CSVダウンロード
+          </button>
+        </p>
+      </Card>
+      <Card title="決済内訳・領収書なし現金">
+        <div className="stack-form">
+          <label>
+            現金（円）
+            <input value={payCash} onChange={(e) => setPayCash(e.target.value)} inputMode="numeric" />
+          </label>
+          <label>
+            うち領収書なし現金（円）
+            <input value={payCashNoRcpt} onChange={(e) => setPayCashNoRcpt(e.target.value)} inputMode="numeric" />
+          </label>
+          <label>
+            カード（円）
+            <input value={payCard} onChange={(e) => setPayCard(e.target.value)} inputMode="numeric" />
+          </label>
+          <label>
+            PayPay（円）
+            <input value={payPayPay} onChange={(e) => setPayPayPay(e.target.value)} inputMode="numeric" />
+          </label>
+          <label>
+            売掛（円）
+            <input value={payRecv} onChange={(e) => setPayRecv(e.target.value)} inputMode="numeric" />
+          </label>
+          <button type="button" disabled={paySaving} onClick={() => void savePayments()}>
+            決済を保存
+          </button>
+        </div>
       </Card>
       <Card title="運行追加">
         <p style={{ marginTop: 0 }}>
@@ -293,6 +498,8 @@ export default function DailyReportDetail(): JSX.Element {
                 <th>顧客</th>
                 <th>区間</th>
                 <th>運賃</th>
+                <th>名簿/紹介</th>
+                <th>公式</th>
                 <th>距離</th>
                 <th>待機</th>
                 <th>会員</th>
@@ -310,6 +517,19 @@ export default function DailyReportDetail(): JSX.Element {
                     {t.origin}→{t.destination}
                   </td>
                   <td>{t.fareYen}</td>
+                  <td>
+                    {[t.customer?.displayName, t.referralSource?.name].filter(Boolean).join(" / ") || "—"}
+                  </td>
+                  <td>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={!t.excludeFromOfficialPrint}
+                        onChange={(e) => void toggleTripOfficial(t, e.target.checked)}
+                      />{" "}
+                      公式に含める
+                    </label>
+                  </td>
                   <td>{t.distanceM}</td>
                   <td>{t.waitingMinutes}</td>
                   <td>{t.passengerKind === "MEMBER" ? "会員" : "一般"}</td>

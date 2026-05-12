@@ -1,0 +1,40 @@
+# main への push（PR マージ含む）で VPS に SSH し、ローカル deploy-vps.ps1 のリモート部と同等の手順を実行する。
+# 必要なシークレット: README「GitHub Actions での自動デプロイ」を参照。
+
+name: Deploy main to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        env:
+          VPS_HOST: ${{ secrets.DAIKO_VPS_HOST }}
+          VPS_USER: ${{ secrets.DAIKO_VPS_USER }}
+          VPS_PATH: ${{ secrets.DAIKO_VPS_PATH }}
+          VPS_SERVICE: ${{ secrets.DAIKO_VPS_SERVICE }}
+          SSH_KEY: ${{ secrets.DAIKO_VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VPS_HOST:-}" ] || [ -z "${SSH_KEY:-}" ]; then
+            echo "::error::Repository secrets DAIKO_VPS_HOST and DAIKO_VPS_SSH_KEY are required for deploy."
+            exit 1
+          fi
+          u="${VPS_USER:-ubuntu}"
+          esc_cd="$(printf '%q' "${VPS_PATH:-}")"
+          esc_svc="$(printf '%q' "${VPS_SERVICE:-daiko-app}")"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/daiko_deploy_ci
+          chmod 600 ~/.ssh/daiko_deploy_ci
+          ssh -i ~/.ssh/daiko_deploy_ci -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            "${u}@${VPS_HOST}" \
+            "set -euo pipefail; export DAIKO_CD=${esc_cd}; cd \"\${DAIKO_CD:-\$HOME/daiko}\"; git pull; if [ -f package-lock.json ]; then npm ci; else npm install; fi; npx prisma migrate deploy; npx prisma generate; npm run db:seed; npm run build; sudo systemctl restart ${esc_svc}; sleep 2; curl -sS http://127.0.0.1:3001/health"
