@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../api";
 import { REGISTER_EXTENSION_UI_FIELDS, SAFE_DRIVING_MANAGER_KEY } from "../lib/registerExtensionFields";
 import { ReqLabel, ReqMark } from "../lib/reqLabel";
@@ -78,6 +78,21 @@ export default function Employees(): JSX.Element {
   const [editFurigana, setEditFurigana] = useState("");
   const [editAddress, setEditAddress] = useState("");
   const [editExt, setEditExt] = useState<RegisterExt>({});
+  const editPanelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    const r1 = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) editPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(r1);
+    };
+  }, [editId]);
 
   async function load(): Promise<void> {
     const r = await apiFetch<{ employees: Emp[] }>("/employees?status=all");
@@ -522,9 +537,22 @@ export default function Employees(): JSX.Element {
       </div>
 
       {editId ? (
-        <details open style={{ marginTop: "1rem" }}>
-          <summary style={{ cursor: "pointer", fontWeight: 600 }}>従事者名簿用・基本情報（編集中）</summary>
-          <div style={{ marginTop: "0.5rem", padding: "0.75rem", border: "1px solid #ccc", borderRadius: 4 }}>
+        <div ref={editPanelRef} className="employee-edit-panel-anchor">
+          <div
+            key={editId}
+            className="employee-edit-panel-reveal"
+            style={{
+              marginTop: "1rem",
+              padding: "0.75rem 0.9rem",
+              border: "1px solid var(--color-border, #ccc)",
+              borderRadius: "var(--radius-md, 6px)",
+              background: "var(--color-surface, #fff)",
+              boxShadow: "var(--shadow-card, 0 4px 20px rgba(15,23,42,0.08))",
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: "0.65rem", fontSize: "0.95rem" }}>
+              従事者名簿用・基本情報（編集中）
+            </div>
             <form onSubmit={(e) => void saveEdit(e)}>
               <label>姓</label>
               <input value={editFamily} onChange={(e) => setEditFamily(e.target.value)} required />
@@ -574,7 +602,7 @@ export default function Employees(): JSX.Element {
               </div>
             </form>
           </div>
-        </details>
+        </div>
       ) : null}
     </Card>
   );

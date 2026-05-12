@@ -199,6 +199,32 @@ textarea {
   width: 100%;
 }
 
+/* 従業員: 名簿・基本情報パネルをビューポ内へスムーズに表示 */
+.employee-edit-panel-anchor {
+  scroll-margin-top: 6.5rem;
+}
+
+@keyframes employee-edit-panel-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.employee-edit-panel-reveal {
+  animation: employee-edit-panel-reveal 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .employee-edit-panel-reveal {
+    animation: none;
+  }
+}
+
 /* Loading (Shell) */
 .app-loading {
   display: flex;
