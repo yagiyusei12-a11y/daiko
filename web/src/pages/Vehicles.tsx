@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { ReqMark } from "../lib/reqLabel";
-import { Card, Err, FieldWithHint, StepWizard, type StepWizardStep } from "../ui";
+import { ReqLabel, ReqMark } from "../lib/reqLabel";
+import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 type V = {
   id: string;
@@ -79,43 +79,40 @@ export default function Vehicles(): JSX.Element {
   const steps: StepWizardStep[] = [
     {
       id: "label",
-      title: "車の呼び名",
-      description: "一覧や業務の記録に出る名前です。同乗の車（随伴車）として法令の届出にも使う社内の呼び方で構いません。",
+      title: "表示名",
+      description: "一覧や日報で表示される車両名です。損害賠償措置・変更届では「随伴用自動車」と紐づく社内名称として使います。",
       canProceed: labelOk,
       children: (
         <>
-          <FieldWithHint label={<><ReqMark />表示名</>} hint="例: ハイエース1号。現場で通じる名前を付けてください。">
-            <input value={label} onChange={(e) => setLabel(e.target.value)} autoFocus required aria-required />
-          </FieldWithHint>
+          <ReqLabel>表示名</ReqLabel>
+          <input value={label} onChange={(e) => setLabel(e.target.value)} autoFocus required aria-required />
         </>
       ),
     },
     {
       id: "plate_legal",
-      title: "ナンバーと保険の始まり",
+      title: "登録番号と補償開始日",
       description:
-        "ナンバープレートの表記と、保険（自賠責など）がいつから有効かを記録します。乗務記録や届出書類の「同乗の車」欄に対応します。",
+        "乗務記録簿の「随伴車 登録番号」、損害賠償措置の「登録番号等」「補償開始日」、変更届の随伴車ナンバー記載に対応します。",
       canProceed: plateAndLegalOk,
       children: (
         <>
-          <FieldWithHint label={<><ReqMark />ナンバー（登録番号）</>} hint="例: 品川300あ1234。届出や記録簿にそのまま使います。">
-            <input
-              value={newPlate}
-              onChange={(e) => setNewPlate(e.target.value)}
-              placeholder="例: 品川300あ1234"
-              required
-              aria-required
-            />
-          </FieldWithHint>
-          <FieldWithHint label={<><ReqMark />補償が始まった日</>} hint="自賠責など、裏面や証券で確認できる「始まりの日」を選びます。">
-            <input type="date" value={newLegalStart} onChange={(e) => setNewLegalStart(e.target.value)} required aria-required />
-          </FieldWithHint>
+          <ReqLabel>ナンバー（登録番号等）</ReqLabel>
+          <input
+            value={newPlate}
+            onChange={(e) => setNewPlate(e.target.value)}
+            placeholder="例: 品川300あ1234"
+            required
+            aria-required
+          />
+          <ReqLabel>補償開始日</ReqLabel>
+          <input type="date" value={newLegalStart} onChange={(e) => setNewLegalStart(e.target.value)} required aria-required />
         </>
       ),
     },
     {
       id: "confirm",
-      title: "入力内容の確認",
+      title: "内容を確認してください",
       canProceed: allOk,
       children: (
         <dl className="step-wizard-summary">
@@ -123,7 +120,7 @@ export default function Vehicles(): JSX.Element {
           <dd>{label.trim()}</dd>
           <dt>ナンバー（登録番号等）</dt>
           <dd>{newPlate.trim()}</dd>
-          <dt>補償が始まった日</dt>
+          <dt>補償開始日</dt>
           <dd>{newLegalStart.trim()}</dd>
         </dl>
       ),
@@ -168,20 +165,20 @@ export default function Vehicles(): JSX.Element {
   }
 
   return (
-    <Card title="送迎で使う車">
+    <Card title="車両">
       <Err msg={err} />
       <p style={{ fontSize: "0.82rem", marginTop: 0 }}>
-        お客様の送迎に使う車を登録します。新規では「呼び名・ナンバー・保険の始まりの日」が必要です。お客様の送迎の記録に載せた車は削除できません。同乗の車として届出に使う情報とそろえてください。
+        新規登録時は表示名・ナンバー・補償開始日が必須です（乗務記録簿・損害賠償措置・変更届で使う随伴車情報）。既存で未入力の車両は、次に「保存」するときに埋めてください。削除は運行日報に登録されていない車両のみ可能です。
       </p>
       <p style={{ marginTop: "0.5rem" }}>
         <button type="button" onClick={() => setWizardOpen(true)}>
-          車を追加（ガイド付き）
+          車両を追加
         </button>
       </p>
       <StepWizard
         open={wizardOpen}
         onClose={closeWizard}
-        title="車を登録する"
+        title="車両を追加"
         steps={steps}
         finishLabel="登録する"
         onFinish={submitVehicle}

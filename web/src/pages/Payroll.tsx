@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../api";
-import { Card, Err, FieldWithHint, StepWizard, Tabs, type StepWizardStep } from "../ui";
+import { Card, Err, StepWizard, Tabs, type StepWizardStep } from "../ui";
 
 type Line = {
   id: string;
@@ -68,27 +68,25 @@ export default function Payroll(): JSX.Element {
   const previewSteps: StepWizardStep[] = [
     {
       id: "pym",
-      title: "対象にする月",
-      description: "この月の売上や勤怠から、給与のたたき台をもう一度計算します。",
+      title: "対象月を選んでください",
+      description: "プレビュー再計算する給与月です。",
       canProceed: ymOk,
       children: (
         <>
-          <FieldWithHint label="対象月" hint="カレンダーから選ぶと間違いが減ります（YYYY-MM で保存されます）。">
-            <input type="month" value={previewYm} onChange={(e) => setPreviewYm(e.target.value)} required />
-          </FieldWithHint>
+          <label>対象月（YYYY-MM）</label>
+          <input type="month" value={previewYm} onChange={(e) => setPreviewYm(e.target.value)} required />
         </>
       ),
     },
     {
       id: "pool",
-      title: "みんなで分ける割合（プール）",
-      description: "0〜10000 の整数（1万＝100%）。よく分からない場合は 0 のままで構いません。",
+      title: "プール率（bps）",
+      description: "0〜10000 の整数。不明な場合は 0。",
       canProceed: poolOk,
       children: (
         <>
-          <FieldWithHint label="プール率（bps）" hint="100 bps＝1%。全員で分け合う歩合の割合を決めるときに使います。">
-            <input value={poolBps} onChange={(e) => setPoolBps(e.target.value)} inputMode="numeric" />
-          </FieldWithHint>
+          <label>プール率（bps）</label>
+          <input value={poolBps} onChange={(e) => setPoolBps(e.target.value)} inputMode="numeric" />
         </>
       ),
     },
@@ -100,7 +98,7 @@ export default function Payroll(): JSX.Element {
         <dl className="step-wizard-summary">
           <dt>対象月</dt>
           <dd>{previewYm}</dd>
-          <dt>みんなで分ける割合（bps）</dt>
+          <dt>プール率</dt>
           <dd>{poolBps || "0"} bps</dd>
         </dl>
       ),
@@ -122,10 +120,10 @@ export default function Payroll(): JSX.Element {
   }
 
   return (
-    <Card title="給与のまとめ（月ごと）">
+    <Card title="給与（月次）">
       <Err msg={err} />
       <p style={{ fontSize: "0.85rem", marginTop: 0 }}>
-        月ごとの「いくら払うか」のたたき台を作ります。ロックするとその月の記録を変えにくくします（安全のため）。もう一度数字を出し直すときは「試しに計算し直す」から進んでください。
+        プレビューでドラフト行を再計算します。ロック後はその月の日報削除などが 403 になります。
       </p>
       <Tabs
         aria-label="給与セクション"
@@ -134,16 +132,20 @@ export default function Payroll(): JSX.Element {
         items={[
           {
             id: "list",
-            label: "月ごとの一覧",
+            label: "一覧",
             children: (
               <>
-                <FieldWithHint label="一覧を絞る月" optional hint="空欄のままなら直近のデータを読み込みます。">
-                  <input type="month" value={filterYm} onChange={(e) => setFilterYm(e.target.value)} placeholder="2026-05" />
-                </FieldWithHint>
+                <label>一覧フィルタ（YYYY-MM、空なら直近）</label>
+                <input
+                  type="month"
+                  value={filterYm}
+                  onChange={(e) => setFilterYm(e.target.value)}
+                  placeholder="2026-05"
+                />
                 <button type="button" onClick={() => void load()}>
-                  もう一度読み込む
+                  再読込
                 </button>
-                <h3 style={{ fontSize: "1rem", margin: "1rem 0 0.5rem" }}>計算の一覧</h3>
+                <h3 style={{ fontSize: "1rem", margin: "1rem 0 0.5rem" }}>給与ラン一覧</h3>
                 <div className="table-wrap">
                   <table>
                     <thead>
@@ -161,7 +163,7 @@ export default function Payroll(): JSX.Element {
                           <td>{x.status}</td>
                           <td>{x.lines?.length ?? 0}</td>
                           <td>
-                            <Link to={`/payroll/${x.id}`}>人ごとの内訳</Link>{" "}
+                            <Link to={`/payroll/${x.id}`}>明細</Link>{" "}
                             {x.status !== "LOCKED" ? (
                               <button type="button" onClick={() => void lock(x.id)}>
                                 ロック
@@ -182,20 +184,20 @@ export default function Payroll(): JSX.Element {
           },
           {
             id: "preview",
-            label: "試しに計算し直す",
+            label: "プレビュー・再計算",
             children: (
               <>
                 <p style={{ marginTop: 0 }}>
                   <button type="button" onClick={() => setPreviewWizardOpen(true)}>
-                    ウィザードで試算する
+                    プレビュー再計算を実行
                   </button>
                 </p>
                 <StepWizard
                   open={previewWizardOpen}
                   onClose={() => setPreviewWizardOpen(false)}
-                  title="給与を試しに計算し直す"
+                  title="給与プレビュー再計算"
                   steps={previewSteps}
-                  finishLabel="試算結果を保存"
+                  finishLabel="プレビュー保存"
                   onFinish={submitPreview}
                   isSubmitting={previewSubmitting}
                 />

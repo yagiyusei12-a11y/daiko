@@ -33,11 +33,9 @@ export default function PayrollRunDetail(): JSX.Element {
   if (!run) return <p>読み込み中…</p>;
 
   return (
-    <Card title={`${run.periodYm} の給与の内訳（状態: ${run.status}）`}>
-      <p style={{ fontSize: "0.88rem" }}>
-        <Link to="/payroll">← 月ごとの一覧へ</Link>
-        {" · "}
-        みんなで分ける割合（プール）: {run.poolRateBps} bps（100 bps ＝ 1%）
+    <Card title={`給与明細 ${run.periodYm}（${run.status}）`}>
+      <p style={{ fontSize: "0.9rem" }}>
+        <Link to="/payroll">← 一覧</Link> ・ pool {run.poolRateBps} bps
       </p>
       <table style={{ marginTop: "0.5rem" }}>
         <thead>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { Card, Err, FieldWithHint, StepWizard, type StepWizardStep } from "../ui";
+import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 type Emp = { id: string; familyName: string; givenName: string };
 type Punch = {
@@ -68,20 +68,19 @@ export default function TimePunches(): JSX.Element {
   const steps: StepWizardStep[] = [
     {
       id: "emp",
-      title: "出勤するスタッフ",
-      description: "このあと「打刻する」で、いまの時刻が出勤として記録されます。",
+      title: "出勤する従業員を選んでください",
+      description: "この操作で出勤打刻が記録されます。",
       canProceed: empOk,
       children: (
         <>
-          <FieldWithHint label="スタッフ" hint="本人の名前を選んでください。代わりに打刻しないでください。">
-            <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} autoFocus>
-              {emps.map((x) => (
-                <option key={x.id} value={x.id}>
-                  {x.familyName} {x.givenName}
-                </option>
-              ))}
-            </select>
-          </FieldWithHint>
+          <label>従業員</label>
+          <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} autoFocus>
+            {emps.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.familyName} {x.givenName}
+              </option>
+            ))}
+          </select>
         </>
       ),
     },
@@ -91,10 +90,10 @@ export default function TimePunches(): JSX.Element {
       canProceed: empOk,
       children: (
         <dl className="step-wizard-summary">
-          <dt>スタッフ</dt>
+          <dt>従業員</dt>
           <dd>{empLabel ? `${empLabel.familyName} ${empLabel.givenName}` : "—"}</dd>
           <dt>操作</dt>
-          <dd>出勤として記録（いまの時刻）</dd>
+          <dd>出勤打刻（現在時刻）</dd>
         </dl>
       ),
     },
@@ -108,25 +107,22 @@ export default function TimePunches(): JSX.Element {
   }
 
   return (
-    <Card title="出退勤の記録（打刻）">
+    <Card title="勤怠打刻">
       <Err msg={err} />
-      <div className="stack-form" style={{ marginTop: "0.25rem" }}>
-        <FieldWithHint label="事業日で絞り込む" optional hint="特定の日の一覧だけ見たいときに使います。">
-          <input type="date" value={businessDate} onChange={(e) => setBusinessDate(e.target.value)} />
-        </FieldWithHint>
-      </div>
+      <label>事業日で絞り込み（任意）</label>
+      <input type="date" value={businessDate} onChange={(e) => setBusinessDate(e.target.value)} />
       <button type="button" onClick={() => setBusinessDate("")}>
-        絞り込みをクリア
+        クリア
       </button>
       <p style={{ marginTop: "0.75rem" }}>
         <button type="button" onClick={() => setWizardOpen(true)}>
-          出勤を記録する
+          出勤打刻
         </button>
       </p>
       <StepWizard
         open={wizardOpen}
         onClose={closeWizard}
-        title="出勤を記録する"
+        title="出勤打刻"
         steps={steps}
         finishLabel="打刻する"
         onFinish={submitClockIn}
@@ -155,7 +151,7 @@ export default function TimePunches(): JSX.Element {
                 <td>
                   {!p.clockOutAt ? (
                     <button type="button" onClick={() => void clockOut(p.id)}>
-                      退勤を記録
+                      退勤
                     </button>
                   ) : null}
                 </td>

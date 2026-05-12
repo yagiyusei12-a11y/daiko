@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { Card, Err, FieldWithHint, StepWizard, type StepWizardStep } from "../ui";
+import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 type Emp = { id: string; familyName: string; givenName: string };
 type Check = {
@@ -76,33 +76,31 @@ export default function Alcohol(): JSX.Element {
   const steps: StepWizardStep[] = [
     {
       id: "emp",
-      title: "スタッフを選ぶ",
-      description: "アルコール検査の記録を残す人を選びます。",
+      title: "従業員を選んでください",
+      description: "酒気確認を記録する対象者です。",
       canProceed: empOk,
       children: (
         <>
-          <FieldWithHint label="スタッフ" hint="名簿に登録されている人から選びます。">
-            <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} autoFocus>
-              {emps.map((x) => (
-                <option key={x.id} value={x.id}>
-                  {x.familyName} {x.givenName}
-                </option>
-              ))}
-            </select>
-          </FieldWithHint>
+          <label>従業員</label>
+          <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} autoFocus>
+            {emps.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.familyName} {x.givenName}
+              </option>
+            ))}
+          </select>
         </>
       ),
     },
     {
       id: "phase",
-      title: "いつの検査か（出勤前など）",
-      description: "例: 出勤前・中間・帰庫前。現場のルールに合わせて短く書きます。",
+      title: "段階を入力してください",
+      description: "例: 出勤前 / 中間 / 帰庫前",
       canProceed: phaseOk,
       children: (
         <>
-          <FieldWithHint label="タイミング（段階）" hint="法令で求められる「いつ検査したか」があとから分かるように書きます。">
-            <input value={phase} onChange={(e) => setPhase(e.target.value)} />
-          </FieldWithHint>
+          <label>段階</label>
+          <input value={phase} onChange={(e) => setPhase(e.target.value)} />
         </>
       ),
     },
@@ -112,13 +110,13 @@ export default function Alcohol(): JSX.Element {
       canProceed: empOk && phaseOk,
       children: (
         <dl className="step-wizard-summary">
-          <dt>スタッフ</dt>
+          <dt>従業員</dt>
           <dd>{empLabel ? `${empLabel.familyName} ${empLabel.givenName}` : "—"}</dd>
-          <dt>検査のタイミング</dt>
+          <dt>段階</dt>
           <dd>{phase}</dd>
-          <dt>アルコール検査器を使った</dt>
+          <dt>検知器使用</dt>
           <dd>はい（固定）</dd>
-          <dt>検査でひっかかった（陽性）</dt>
+          <dt>陽性</dt>
           <dd>いいえ（固定）</dd>
         </dl>
       ),
@@ -126,25 +124,22 @@ export default function Alcohol(): JSX.Element {
   ];
 
   return (
-    <Card title="アルコール検査の記録">
+    <Card title="酒気確認">
       <Err msg={err} />
-      <div className="stack-form" style={{ marginTop: "0.25rem" }}>
-        <FieldWithHint label="事業日で絞り込む" optional hint="空欄ならすべての期間を対象に読み込みます。">
-          <input type="date" value={businessDate} onChange={(e) => setBusinessDate(e.target.value)} />
-        </FieldWithHint>
-      </div>
+      <label>事業日で絞り込み（任意）</label>
+      <input type="date" value={businessDate} onChange={(e) => setBusinessDate(e.target.value)} />
       <button type="button" onClick={() => setBusinessDate("")}>
-        日付の絞り込みをクリア
+        クリア
       </button>
       <p style={{ marginTop: "0.75rem" }}>
         <button type="button" onClick={() => setWizardOpen(true)}>
-          検査結果を記録する
+          記録を追加
         </button>
       </p>
       <StepWizard
         open={wizardOpen}
         onClose={closeWizard}
-        title="アルコール検査を記録する"
+        title="酒気確認を記録"
         steps={steps}
         finishLabel="記録する"
         onFinish={submitCheck}
@@ -157,8 +152,8 @@ export default function Alcohol(): JSX.Element {
               <th>日付</th>
               <th>氏名</th>
               <th>段階</th>
-              <th>アルコール検査器</th>
-              <th>陽性（違反）</th>
+              <th>検知器</th>
+              <th>陽性</th>
               <th>日時</th>
             </tr>
           </thead>

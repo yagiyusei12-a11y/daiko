@@ -281,11 +281,8 @@ export default function Rbac(): JSX.Element {
   ];
 
   return (
-    <Card title="だれが何をできるか（権限）">
+    <Card title="権限（RBAC）">
       <Err msg={err} />
-      <p style={{ fontSize: "0.85rem", marginTop: 0 }}>
-        「ロール」にチェックできる操作をまとめ、ユーザーに割り当てます。設定を変えるとすぐに次の画面から反映されます。誤って自分を締め出さないよう、変更は慎重に行ってください。
-      </p>
       <Tabs aria-label="権限セクション" activeId={rbacTab} onActiveChange={setRbacTab} items={tabItems} />
     </Card>
   );

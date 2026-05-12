@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { Card, Err, FieldWithHint } from "../ui";
+import { Card, Err } from "../ui";
 import { ReqMark } from "../lib/reqLabel";
 
 type Row = { id: string; name: string; memo: string | null };
@@ -45,18 +45,19 @@ export default function ReferralSources(): JSX.Element {
 
   return (
     <>
-      <Card title="紹介してくれたお店">
+      <Card title="紹介元（飲食店など）">
         <Err msg={err} />
-        <p style={{ fontSize: "0.82rem", marginTop: 0 }}>飲食店など、お客様を紹介してくれる相手を登録しておきます。分析やお礼の記録に使えます。</p>
         <form onSubmit={add} className="stack-form">
-          <FieldWithHint label={<><ReqMark />店名・呼び名</>} hint="一覧で迷わない名前を入れてください。">
+          <label>
+            店名 <ReqMark />
             <input value={name} onChange={(e) => setName(e.target.value)} required />
-          </FieldWithHint>
-          <FieldWithHint label="メモ" optional hint="担当者名や住所のメモなど、社内用です。">
+          </label>
+          <label>
+            メモ
             <input value={memo} onChange={(e) => setMemo(e.target.value)} />
-          </FieldWithHint>
+          </label>
           <button type="submit" disabled={submitting || !name.trim()}>
-            追加する
+            追加
           </button>
         </form>
       </Card>
