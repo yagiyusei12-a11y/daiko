@@ -104,6 +104,7 @@ export type VersionPricingInput = {
   distanceDiscountFromM?: number | null;
   distanceDiscountBps?: number | null;
   nightSurchargeFlatYen?: number | null;
+  leftHandSurchargeFlatYen?: number | null;
   lateNightFlatYen?: number | null;
   earlyMorningFlatYen?: number | null;
   earlyRushFlatYen?: number | null;
@@ -119,6 +120,7 @@ export type TripPricingOpts = {
   applyLateNightFlatYen?: boolean;
   applyEarlyMorningFlatYen?: boolean;
   applyEarlyRushFlatYen?: boolean;
+  applyLeftHandSurchargeFlat?: boolean;
 };
 
 function modeOf(v: VersionPricingInput): string {
@@ -274,6 +276,7 @@ export function fareYenForTrip(
   if (opts.applyLateNightFlatYen) total += Math.max(0, version.lateNightFlatYen ?? 0);
   if (opts.applyEarlyMorningFlatYen) total += Math.max(0, version.earlyMorningFlatYen ?? 0);
   if (opts.applyEarlyRushFlatYen) total += Math.max(0, version.earlyRushFlatYen ?? 0);
+  if (opts.applyLeftHandSurchargeFlat) total += Math.max(0, version.leftHandSurchargeFlatYen ?? 0);
 
   const rule = parseWaitingRule(version.waitingRuleJson, version.waitingFareYenPerMin);
   const wait = waitingFareYen(rule, waitingMinutes);

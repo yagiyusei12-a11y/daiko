@@ -83,4 +83,8 @@ const baseDist = fareYenForDistance(ver2, 3000, [], [], false)!;
 const discounted = Math.round((baseDist * 9000) / 10000);
 assert.equal(trip2, discounted + 500 + pickupFareYen(pickupJson, 6000));
 
+const verLeftFlat = { ...ver, leftHandSurchargeFlatYen: 400 };
+const baseTrip = fareYenForTrip(ver, 2500, 0, [], [], {});
+assert.equal(fareYenForTrip(verLeftFlat, 2500, 0, [], [], { applyLeftHandSurchargeFlat: true }), baseTrip + 400);
+
 console.log("pricing.selftest ok");

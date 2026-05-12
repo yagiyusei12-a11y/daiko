@@ -259,6 +259,8 @@ model TariffPlanVersion {
   cancellationFeeYen     Int @default(0)
   nightSurchargeBps        Int @default(0)
   leftHandSurchargeBps     Int @default(0)
+  /// 左ハンドル車の定額（便フラグ applyLeftHandSurchargeFlat）。％は leftHandSurchargeBps。
+  leftHandSurchargeFlatYen Int @default(0)
   /// 深夜等の定額（便フラグ applyNightSurchargeFlat で加算）。距離運賃への％は nightSurchargeBps。
   nightSurchargeFlatYen    Int @default(0)
   /// さらに遅い時間帯の定額（便 applyLateNightFlatYen）
@@ -358,6 +360,7 @@ model TripLeg {
   viaStopCount            Int               @default(0)
   applyNightSurcharge     Boolean           @default(false)
   applyLeftHandSurcharge  Boolean           @default(false)
+  applyLeftHandSurchargeFlat Boolean        @default(false)
   /// 基準地点からの迎車距離（m）。版の pickupRuleJson で円に換算。
   pickupFromBaseM                Int?
   applyNightSurchargeFlat        Boolean @default(false)

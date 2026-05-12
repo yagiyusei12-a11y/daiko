@@ -125,6 +125,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       applyLateNightFlatYen?: boolean;
       applyEarlyMorningFlatYen?: boolean;
       applyEarlyRushFlatYen?: boolean;
+      applyLeftHandSurchargeFlat?: boolean;
     };
   }>("/daily-reports/:id/trips", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
@@ -160,6 +161,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     const applyLateNightFlatYen = Boolean(req.body?.applyLateNightFlatYen);
     const applyEarlyMorningFlatYen = Boolean(req.body?.applyEarlyMorningFlatYen);
     const applyEarlyRushFlatYen = Boolean(req.body?.applyEarlyRushFlatYen);
+    const applyLeftHandSurchargeFlat = Boolean(req.body?.applyLeftHandSurchargeFlat);
     if (tariffVersionId) {
       const ver = await prisma.tariffPlanVersion.findFirst({
         where: { id: tariffVersionId, plan: { tenantId: tid } },
@@ -176,6 +178,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         applyLateNightFlatYen,
         applyEarlyMorningFlatYen,
         applyEarlyRushFlatYen,
+        applyLeftHandSurchargeFlat,
       });
     }
     const role = req.body?.role === "PARTNER_DRIVER" ? "PARTNER_DRIVER" : "MAIN_DRIVER";
@@ -203,6 +206,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         applyLateNightFlatYen,
         applyEarlyMorningFlatYen,
         applyEarlyRushFlatYen,
+        applyLeftHandSurchargeFlat,
       },
     });
     return trip;
@@ -226,6 +230,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       applyLateNightFlatYen?: boolean;
       applyEarlyMorningFlatYen?: boolean;
       applyEarlyRushFlatYen?: boolean;
+      applyLeftHandSurchargeFlat?: boolean;
     };
   }>("/daily-reports/:id/trips/:tripId", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
@@ -291,6 +296,10 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         : trip.applyEarlyMorningFlatYen;
     const applyEarlyRushFlatYen =
       req.body?.applyEarlyRushFlatYen !== undefined ? Boolean(req.body.applyEarlyRushFlatYen) : trip.applyEarlyRushFlatYen;
+    const applyLeftHandSurchargeFlat =
+      req.body?.applyLeftHandSurchargeFlat !== undefined
+        ? Boolean(req.body.applyLeftHandSurchargeFlat)
+        : trip.applyLeftHandSurchargeFlat;
 
     let fareYen = trip.fareYen;
     if (tariffVersionId) {
@@ -309,6 +318,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         applyLateNightFlatYen,
         applyEarlyMorningFlatYen,
         applyEarlyRushFlatYen,
+        applyLeftHandSurchargeFlat,
       });
     } else {
       fareYen = 0;
@@ -334,6 +344,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         applyLateNightFlatYen,
         applyEarlyMorningFlatYen,
         applyEarlyRushFlatYen,
+        applyLeftHandSurchargeFlat,
       },
     });
     return updated;

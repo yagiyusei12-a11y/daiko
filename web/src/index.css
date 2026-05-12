@@ -352,6 +352,46 @@ textarea:focus-visible {
   box-shadow: 0 0 0 3px var(--color-accent-muted);
 }
 
+/* checkbox/radio: 上の input 全般ルールの width:100% を上書きし、ラベル内で横並び整列 */
+input[type="checkbox"],
+input[type="radio"] {
+  width: auto;
+  max-width: none;
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
+label:has(> input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+label:has(> input[type="radio"]) {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+label:has(> input[type="radio"]) > input[type="radio"] {
+  margin-top: 0.2em;
+}
+
+label.tariff-version-pick {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+label.tariff-version-pick .tariff-version-pick__text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
 button {
   margin-top: 0.55rem;
   padding: 0.5rem 0.9rem;

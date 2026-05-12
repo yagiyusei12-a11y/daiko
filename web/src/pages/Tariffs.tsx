@@ -33,6 +33,7 @@ type Ver = {
   cancellationFeeYen: number;
   nightSurchargeBps: number;
   leftHandSurchargeBps: number;
+  leftHandSurchargeFlatYen?: number;
   nightSurchargeFlatYen?: number;
   lateNightFlatYen?: number;
   earlyMorningFlatYen?: number;
@@ -113,6 +114,7 @@ function versionToPricingInput(v: Ver): VersionPricingInput {
     distanceDiscountFromM: v.distanceDiscountFromM ?? null,
     distanceDiscountBps: v.distanceDiscountBps ?? 0,
     nightSurchargeFlatYen: v.nightSurchargeFlatYen ?? 0,
+    leftHandSurchargeFlatYen: v.leftHandSurchargeFlatYen ?? 0,
     lateNightFlatYen: v.lateNightFlatYen ?? 0,
     earlyMorningFlatYen: v.earlyMorningFlatYen ?? 0,
     earlyRushFlatYen: v.earlyRushFlatYen ?? 0,
@@ -197,6 +199,7 @@ export default function Tariffs(): JSX.Element {
   const [nwCancellationFeeYen, setNwCancellationFeeYen] = useState("0");
   const [nwNightSurchargeBps, setNwNightSurchargeBps] = useState("0");
   const [nwLeftHandSurchargeBps, setNwLeftHandSurchargeBps] = useState("0");
+  const [nwLeftHandSurchargeFlatYen, setNwLeftHandSurchargeFlatYen] = useState("0");
   const [nwNightSurchargeFlatYen, setNwNightSurchargeFlatYen] = useState("0");
   const [nwLateNightFlatYen, setNwLateNightFlatYen] = useState("0");
   const [nwEarlyMorningFlatYen, setNwEarlyMorningFlatYen] = useState("0");
@@ -226,6 +229,7 @@ export default function Tariffs(): JSX.Element {
   const [editCancellationFeeYen, setEditCancellationFeeYen] = useState("0");
   const [editNightSurchargeBps, setEditNightSurchargeBps] = useState("0");
   const [editLeftHandSurchargeBps, setEditLeftHandSurchargeBps] = useState("0");
+  const [editLeftHandSurchargeFlatYen, setEditLeftHandSurchargeFlatYen] = useState("0");
   const [editNightSurchargeFlatYen, setEditNightSurchargeFlatYen] = useState("0");
   const [editLateNightFlatYen, setEditLateNightFlatYen] = useState("0");
   const [editEarlyMorningFlatYen, setEditEarlyMorningFlatYen] = useState("0");
@@ -241,6 +245,7 @@ export default function Tariffs(): JSX.Element {
   const [simViaStops, setSimViaStops] = useState("0");
   const [simNight, setSimNight] = useState(false);
   const [simLeftHand, setSimLeftHand] = useState(false);
+  const [simLeftHandFlat, setSimLeftHandFlat] = useState(false);
   const [simPickupFromBaseM, setSimPickupFromBaseM] = useState("");
   const [simNightFlat, setSimNightFlat] = useState(false);
   const [simLateFlat, setSimLateFlat] = useState(false);
@@ -289,6 +294,7 @@ export default function Tariffs(): JSX.Element {
         applyLateNightFlatYen: simLateFlat,
         applyEarlyMorningFlatYen: simEarlyFlat,
         applyEarlyRushFlatYen: simRushFlat,
+        applyLeftHandSurchargeFlat: simLeftHandFlat,
       },
     );
   }, [
@@ -304,6 +310,7 @@ export default function Tariffs(): JSX.Element {
     simLateFlat,
     simEarlyFlat,
     simRushFlat,
+    simLeftHandFlat,
   ]);
 
   const simCancelHint = useMemo(() => {
@@ -357,6 +364,7 @@ export default function Tariffs(): JSX.Element {
     setEditCancellationFeeYen(String(v.cancellationFeeYen ?? 0));
     setEditNightSurchargeBps(percentStrFromBps(v.nightSurchargeBps ?? 0));
     setEditLeftHandSurchargeBps(percentStrFromBps(v.leftHandSurchargeBps ?? 0));
+    setEditLeftHandSurchargeFlatYen(String(v.leftHandSurchargeFlatYen ?? 0));
     setEditNightSurchargeFlatYen(String(v.nightSurchargeFlatYen ?? 0));
     setEditLateNightFlatYen(String(v.lateNightFlatYen ?? 0));
     setEditEarlyMorningFlatYen(String(v.earlyMorningFlatYen ?? 0));
@@ -383,6 +391,7 @@ export default function Tariffs(): JSX.Element {
     setNwCancellationFeeYen("0");
     setNwNightSurchargeBps("0");
     setNwLeftHandSurchargeBps("0");
+    setNwLeftHandSurchargeFlatYen("0");
     setNwNightSurchargeFlatYen("0");
     setNwLateNightFlatYen("0");
     setNwEarlyMorningFlatYen("0");
@@ -434,6 +443,7 @@ export default function Tariffs(): JSX.Element {
         cancellationFeeYen: Math.floor(Number(nwCancellationFeeYen)),
         nightSurchargeBps: bpsFromPercentInput(nwNightSurchargeBps),
         leftHandSurchargeBps: bpsFromPercentInput(nwLeftHandSurchargeBps),
+        leftHandSurchargeFlatYen: Math.floor(Number(nwLeftHandSurchargeFlatYen)),
         nightSurchargeFlatYen: Math.floor(Number(nwNightSurchargeFlatYen)),
         lateNightFlatYen: Math.floor(Number(nwLateNightFlatYen)),
         earlyMorningFlatYen: Math.floor(Number(nwEarlyMorningFlatYen)),
@@ -526,6 +536,7 @@ export default function Tariffs(): JSX.Element {
     const nightSurchargeBps = bpsFromPercentInput(editNightSurchargeBps);
     const leftHandSurchargeBps = bpsFromPercentInput(editLeftHandSurchargeBps);
     const nightSurchargeFlatYen = Math.floor(Number(editNightSurchargeFlatYen));
+    const leftHandSurchargeFlatYen = Math.floor(Number(editLeftHandSurchargeFlatYen));
     const lateNightFlatYen = Math.floor(Number(editLateNightFlatYen));
     const earlyMorningFlatYen = Math.floor(Number(editEarlyMorningFlatYen));
     const earlyRushFlatYen = Math.floor(Number(editEarlyRushFlatYen));
@@ -541,6 +552,8 @@ export default function Tariffs(): JSX.Element {
       !Number.isFinite(leftHandSurchargeBps) ||
       !Number.isFinite(nightSurchargeFlatYen) ||
       nightSurchargeFlatYen < 0 ||
+      !Number.isFinite(leftHandSurchargeFlatYen) ||
+      leftHandSurchargeFlatYen < 0 ||
       !Number.isFinite(lateNightFlatYen) ||
       lateNightFlatYen < 0 ||
       !Number.isFinite(earlyMorningFlatYen) ||
@@ -569,6 +582,7 @@ export default function Tariffs(): JSX.Element {
           cancellationFeeYen,
           nightSurchargeBps,
           leftHandSurchargeBps,
+          leftHandSurchargeFlatYen,
           nightSurchargeFlatYen,
           lateNightFlatYen,
           earlyMorningFlatYen,
@@ -800,6 +814,8 @@ export default function Tariffs(): JSX.Element {
           <input value={nwNightSurchargeBps} onChange={(e) => setNwNightSurchargeBps(e.target.value)} inputMode="decimal" placeholder="例: 10 で約10%増" />
           <label>左ハンドル車に増やす割合（％）</label>
           <input value={nwLeftHandSurchargeBps} onChange={(e) => setNwLeftHandSurchargeBps(e.target.value)} inputMode="decimal" placeholder="例: 10 で約10%増" />
+          <label>左ハンドル車の定額を足す（円・便でオンにしたとき）</label>
+          <input value={nwLeftHandSurchargeFlatYen} onChange={(e) => setNwLeftHandSurchargeFlatYen(e.target.value)} inputMode="numeric" />
           <label>深夜の定額を足す（円・便の設定でオンにしたとき）</label>
           <input value={nwNightSurchargeFlatYen} onChange={(e) => setNwNightSurchargeFlatYen(e.target.value)} inputMode="numeric" />
           <label>さらに遅い時間帯の定額（円）</label>
@@ -1006,10 +1022,13 @@ export default function Tariffs(): JSX.Element {
               <ul>
                 {p.versions.map((v) => (
                   <li key={v.id}>
-                    <label>
-                      <input type="radio" name="ver" checked={selVer === v.id} onChange={() => setSelVer(v.id)} /> {v.version}番目{" "}
-                      （{DISTANCE_MODE_OPTIONS.find((x) => x.value === (v.distanceMode ?? "INITIAL_ADD"))?.label ?? "走行の料金"}） 最初の
-                      {v.initialDistanceM}メートルまで{v.initialFareYen}円
+                    <label className="tariff-version-pick">
+                      <input type="radio" name="ver" checked={selVer === v.id} onChange={() => setSelVer(v.id)} />
+                      <span className="tariff-version-pick__text">
+                        {v.version}番目 （
+                        {DISTANCE_MODE_OPTIONS.find((x) => x.value === (v.distanceMode ?? "INITIAL_ADD"))?.label ?? "走行の料金"}） 最初の
+                        {v.initialDistanceM}メートルまで{v.initialFareYen}円
+                      </span>
                     </label>
                     <ul>
                       {[...v.segments]
@@ -1117,6 +1136,8 @@ export default function Tariffs(): JSX.Element {
           <input value={editNightSurchargeBps} onChange={(e) => setEditNightSurchargeBps(e.target.value)} inputMode="decimal" placeholder="例: 10 で約10%増" />
           <label>左ハンドル車に増やす割合（％）</label>
           <input value={editLeftHandSurchargeBps} onChange={(e) => setEditLeftHandSurchargeBps(e.target.value)} inputMode="decimal" placeholder="例: 10 で約10%増" />
+          <label>左ハンドル車の定額を足す（円・便の設定でオンにしたとき）</label>
+          <input value={editLeftHandSurchargeFlatYen} onChange={(e) => setEditLeftHandSurchargeFlatYen(e.target.value)} inputMode="numeric" />
           <label>深夜の定額を足す（円・便の設定でオンにしたとき）</label>
           <input value={editNightSurchargeFlatYen} onChange={(e) => setEditNightSurchargeFlatYen(e.target.value)} inputMode="numeric" />
           <label>さらに遅い時間帯の定額（円）</label>
@@ -1165,6 +1186,9 @@ export default function Tariffs(): JSX.Element {
           </label>
           <label>
             <input type="checkbox" checked={simLeftHand} onChange={(e) => setSimLeftHand(e.target.checked)} /> 左ハンドル車の割増し（％）
+          </label>
+          <label>
+            <input type="checkbox" checked={simLeftHandFlat} onChange={(e) => setSimLeftHandFlat(e.target.checked)} /> 左ハンドル車の定額を足す
           </label>
           <label>
             <input type="checkbox" checked={simNightFlat} onChange={(e) => setSimNightFlat(e.target.checked)} /> 深夜の定額を足す
