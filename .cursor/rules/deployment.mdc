@@ -6,6 +6,7 @@ alwaysApply: true
 # 本番までの責務（デフォルトで最後まで）
 
 - ユーザーが **「本番に出さない」「デプロイ不要」** と明示したセッションを除き、**コードやプロダクトに触れた作業の完了時は、追加の依頼を待たず** 次まで一気に行う: **`npm run build`**（または同等の検証）→ 変更の **コミット** → **`npm run deploy:vps`**。手順の前提は [README.md](README.md) の「本番（VPS）」および [AGENTS.md](AGENTS.md)。
+- **省略禁止**: `prisma/migrations`・`schema.prisma`・`src/routes`・`web/src` など本番に影響する変更のあとに「デプロイはユーザーがやる」で終えない。`.env.deploy` が揃っていれば **必ず** `npm run deploy:vps` をこのセッション内で実行し、成功・失敗を報告する。
 - **`npm run deploy:vps`** は [`scripts/deploy-vps.ps1`](scripts/deploy-vps.ps1) が **`git push origin main`** する。**未コミットの変更だけでは本番に載らない**ため、デプロイ前に意図したファイルをステージしてコミットする（メッセージは変更内容が分かる一文）。
 - **`.env.deploy`** に `DAIKO_VPS_HOST` と `DAIKO_VPS_KEY`（SSH 鍵パス）が無い環境ではデプロイできない。その場合は試みなかったことと理由を明示し、設定または手動デプロイを依頼する。
 - ワーキングツリーが汚いとスクリプトが止まる。上記のとおり **先にコミット** する。ユーザーが意図的に未コミットを残したい場合のみ `-AllowDirty` を検討する。
