@@ -1,8 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { authenticate } from "../auth/pre.js";
 import { prisma } from "../db.js";
+import { WaitingRuleSchema } from "../lib/tariff-waiting.js";
 import { tenantIdFromReq } from "./tenant-scope.js";
+
+const distanceModeSchema = z.enum(["INITIAL_ADD", "SEGMENTS_ONLY", "TIERED_ADD"]);
 
 const versionPatchBodySchema = z
   .object({
@@ -11,6 +15,32 @@ const versionPatchBodySchema = z
     addUnitDistanceM: z.number().int().min(1),
     addFareYen: z.number().int().min(0),
     waitingFareYenPerMin: z.number().int().min(0),
+    distanceMode: distanceModeSchema.optional(),
+    waitingRuleJson: z.unknown().optional(),
+    perViaStopYen: z.number().int().min(0).optional(),
+    cancellationFeeYen: z.number().int().min(0).optional(),
+    nightSurchargeBps: z.number().int().optional(),
+    leftHandSurchargeBps: z.number().int().optional(),
+  })
+  .strict();
+
+const tierPostBodySchema = z
+  .object({
+    fromM: z.number().int().min(0),
+    untilM: z.number().int().min(0).nullable().optional(),
+    stepM: z.number().int().min(1),
+    addYenPerStep: z.number().int().min(0),
+    sortOrder: z.number().int().optional(),
+  })
+  .strict();
+
+const tierPatchBodySchema = z
+  .object({
+    fromM: z.number().int().min(0).optional(),
+    untilM: z.number().int().min(0).nullable().optional(),
+    stepM: z.number().int().min(1).optional(),
+    addYenPerStep: z.number().int().min(0).optional(),
+    sortOrder: z.number().int().optional(),
   })
   .strict();
 
@@ -21,13 +51,30 @@ function versionsTakeFromQuery(q: unknown): number {
   return Math.min(100, Math.max(1, n));
 }
 
+function linearWaitingJson(perMinYen: number, graceMin = 0): Prisma.InputJsonValue {
+  return { type: "linear", graceMin, perMinYen };
+}
+
+function versionsInclude(take: number): Prisma.TariffPlanInclude {
+  return {
+    versions: {
+      orderBy: { version: "desc" },
+      take,
+      include: {
+        segments: true,
+        distanceTiers: { orderBy: { sortOrder: "asc" } },
+      },
+    },
+  };
+}
+
 export async function registerTariffRoutes(app: FastifyInstance): Promise<void> {
   app.get("/tariff-plans", { preHandler: [authenticate] }, async (req) => {
     const tid = tenantIdFromReq(req);
     const take = versionsTakeFromQuery(req.query);
     const rows = await prisma.tariffPlan.findMany({
       where: { tenantId: tid },
-      include: { versions: { orderBy: { version: "desc" }, take, include: { segments: true } } },
+      include: versionsInclude(take),
       orderBy: { name: "asc" },
     });
     return { plans: rows };
@@ -47,6 +94,7 @@ export async function registerTariffRoutes(app: FastifyInstance): Promise<void> 
         addUnitDistanceM: 200,
         addFareYen: 100,
         waitingFareYenPerMin: 0,
+        waitingRuleJson: linearWaitingJson(0),
       },
     });
     return { plan, version: ver };
@@ -68,7 +116,7 @@ export async function registerTariffRoutes(app: FastifyInstance): Promise<void> 
     const last = await prisma.tariffPlanVersion.findFirst({
       where: { planId: plan.id },
       orderBy: { version: "desc" },
-      include: { segments: true },
+      include: { segments: true, distanceTiers: { orderBy: { sortOrder: "asc" } } },
     });
     const versionNum = (last?.version ?? 0) + 1;
 
@@ -95,6 +143,12 @@ export async function registerTariffRoutes(app: FastifyInstance): Promise<void> 
         addUnitDistanceM,
         addFareYen,
         waitingFareYenPerMin,
+        distanceMode: last?.distanceMode ?? "INITIAL_ADD",
+        waitingRuleJson: (last?.waitingRuleJson as Prisma.InputJsonValue) ?? linearWaitingJson(waitingFareYenPerMin),
+        perViaStopYen: last?.perViaStopYen ?? 0,
+        cancellationFeeYen: last?.cancellationFeeYen ?? 0,
+        nightSurchargeBps: last?.nightSurchargeBps ?? 0,
+        leftHandSurchargeBps: last?.leftHandSurchargeBps ?? 0,
       },
     });
 
@@ -105,13 +159,27 @@ export async function registerTariffRoutes(app: FastifyInstance): Promise<void> 
           fromM: s.fromM,
           toM: s.toM,
           fareYen: s.fareYen,
+          fareMemberYen: s.fareMemberYen,
+        })),
+      });
+    }
+
+    if (last?.distanceTiers?.length) {
+      await prisma.tariffDistanceTier.createMany({
+        data: last.distanceTiers.map((t) => ({
+          versionId: ver.id,
+          sortOrder: t.sortOrder,
+          fromM: t.fromM,
+          untilM: t.untilM,
+          stepM: t.stepM,
+          addYenPerStep: t.addYenPerStep,
         })),
       });
     }
 
     const full = await prisma.tariffPlanVersion.findFirst({
       where: { id: ver.id },
-      include: { segments: true },
+      include: { segments: true, distanceTiers: { orderBy: { sortOrder: "asc" } } },
     });
     return full ?? ver;
   });
@@ -130,6 +198,26 @@ export async function registerTariffRoutes(app: FastifyInstance): Promise<void> 
       return reply.code(400).send({ error: "invalid body", details: parsed.error.flatten() });
     }
     const b = parsed.data;
+
+    let waitingRuleJson: Prisma.InputJsonValue = ver.waitingRuleJson as Prisma.InputJsonValue;
+    let waitingFareYenPerMin = b.waitingFareYenPerMin;
+
+    if (b.waitingRuleJson !== undefined) {
+      const wr = WaitingRuleSchema.safeParse(b.waitingRuleJson);
+      if (!wr.success) {
+        return reply.code(400).send({ error: "invalid waitingRuleJson", details: wr.error.flatten() });
+      }
+      waitingRuleJson = wr.data as unknown as Prisma.InputJsonValue;
+      if (wr.data.type === "linear") {
+        waitingFareYenPerMin = wr.data.perMinYen;
+      }
+    } else {
+      waitingFareYenPerMin = b.waitingFareYenPerMin;
+      if (waitingFareYenPerMin !== ver.waitingFareYenPerMin) {
+        waitingRuleJson = linearWaitingJson(waitingFareYenPerMin, 0);
+      }
+    }
+
     const updated = await prisma.tariffPlanVersion.update({
       where: { id: ver.id },
       data: {
@@ -137,16 +225,22 @@ export async function registerTariffRoutes(app: FastifyInstance): Promise<void> 
         initialFareYen: b.initialFareYen,
         addUnitDistanceM: b.addUnitDistanceM,
         addFareYen: b.addFareYen,
-        waitingFareYenPerMin: b.waitingFareYenPerMin,
+        waitingFareYenPerMin,
+        waitingRuleJson,
+        ...(b.distanceMode !== undefined ? { distanceMode: b.distanceMode } : {}),
+        ...(b.perViaStopYen !== undefined ? { perViaStopYen: b.perViaStopYen } : {}),
+        ...(b.cancellationFeeYen !== undefined ? { cancellationFeeYen: b.cancellationFeeYen } : {}),
+        ...(b.nightSurchargeBps !== undefined ? { nightSurchargeBps: b.nightSurchargeBps } : {}),
+        ...(b.leftHandSurchargeBps !== undefined ? { leftHandSurchargeBps: b.leftHandSurchargeBps } : {}),
       },
-      include: { segments: true },
+      include: { segments: true, distanceTiers: { orderBy: { sortOrder: "asc" } } },
     });
     return updated;
   });
 
   app.post<{
     Params: { versionId: string };
-    Body: { fromM?: number; toM?: number; fareYen?: number };
+    Body: { fromM?: number; toM?: number; fareYen?: number; fareMemberYen?: number | null };
   }>("/tariff-versions/:versionId/segments", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
     const ver = await prisma.tariffPlanVersion.findFirst({
@@ -160,8 +254,22 @@ export async function registerTariffRoutes(app: FastifyInstance): Promise<void> 
       return reply.code(400).send({ error: "fromM, toM, fareYen required as numbers" });
     }
     if (fromM > toM) return reply.code(400).send({ error: "fromM must be <= toM" });
+    let fareMemberYen: number | null | undefined = undefined;
+    if (req.body?.fareMemberYen !== undefined && req.body.fareMemberYen !== null) {
+      const fm = Math.floor(Number(req.body.fareMemberYen));
+      if (!Number.isFinite(fm)) return reply.code(400).send({ error: "invalid fareMemberYen" });
+      fareMemberYen = fm;
+    } else if (req.body?.fareMemberYen === null) {
+      fareMemberYen = null;
+    }
     const seg = await prisma.tariffSegment.create({
-      data: { versionId: ver.id, fromM, toM, fareYen },
+      data: {
+        versionId: ver.id,
+        fromM,
+        toM,
+        fareYen,
+        ...(fareMemberYen !== undefined ? { fareMemberYen } : {}),
+      },
     });
     return seg;
   });
@@ -179,4 +287,85 @@ export async function registerTariffRoutes(app: FastifyInstance): Promise<void> 
       return { ok: true };
     },
   );
+
+  app.post<{
+    Params: { versionId: string };
+    Body: z.infer<typeof tierPostBodySchema>;
+  }>("/tariff-versions/:versionId/distance-tiers", { preHandler: [authenticate] }, async (req, reply) => {
+    const tid = tenantIdFromReq(req);
+    const ver = await prisma.tariffPlanVersion.findFirst({
+      where: { id: req.params.versionId, plan: { tenantId: tid } },
+    });
+    if (!ver) return reply.code(404).send({ error: "version not found" });
+    const parsed = tierPostBodySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid body", details: parsed.error.flatten() });
+    }
+    const b = parsed.data;
+    const untilM = b.untilM === undefined ? null : b.untilM;
+    if (untilM !== null && untilM <= b.fromM) {
+      return reply.code(400).send({ error: "untilM must be null or greater than fromM" });
+    }
+    let sortOrder = b.sortOrder;
+    if (sortOrder === undefined) {
+      const agg = await prisma.tariffDistanceTier.aggregate({
+        where: { versionId: ver.id },
+        _max: { sortOrder: true },
+      });
+      sortOrder = (agg._max.sortOrder ?? -1) + 1;
+    }
+    const tier = await prisma.tariffDistanceTier.create({
+      data: {
+        versionId: ver.id,
+        sortOrder,
+        fromM: b.fromM,
+        untilM,
+        stepM: b.stepM,
+        addYenPerStep: b.addYenPerStep,
+      },
+    });
+    return tier;
+  });
+
+  app.patch<{
+    Params: { tierId: string };
+    Body: z.infer<typeof tierPatchBodySchema>;
+  }>("/tariff-distance-tiers/:tierId", { preHandler: [authenticate] }, async (req, reply) => {
+    const tid = tenantIdFromReq(req);
+    const tier = await prisma.tariffDistanceTier.findFirst({
+      where: { id: req.params.tierId, version: { plan: { tenantId: tid } } },
+    });
+    if (!tier) return reply.code(404).send({ error: "not found" });
+    const parsed = tierPatchBodySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid body", details: parsed.error.flatten() });
+    }
+    const b = parsed.data;
+    const fromM = b.fromM ?? tier.fromM;
+    const untilM = b.untilM === undefined ? tier.untilM : b.untilM;
+    if (untilM !== null && untilM <= fromM) {
+      return reply.code(400).send({ error: "untilM must be null or greater than fromM" });
+    }
+    const updated = await prisma.tariffDistanceTier.update({
+      where: { id: tier.id },
+      data: {
+        ...(b.fromM !== undefined ? { fromM: b.fromM } : {}),
+        ...(b.untilM !== undefined ? { untilM: b.untilM } : {}),
+        ...(b.stepM !== undefined ? { stepM: b.stepM } : {}),
+        ...(b.addYenPerStep !== undefined ? { addYenPerStep: b.addYenPerStep } : {}),
+        ...(b.sortOrder !== undefined ? { sortOrder: b.sortOrder } : {}),
+      },
+    });
+    return updated;
+  });
+
+  app.delete<{ Params: { tierId: string } }>("/tariff-distance-tiers/:tierId", { preHandler: [authenticate] }, async (req, reply) => {
+    const tid = tenantIdFromReq(req);
+    const tier = await prisma.tariffDistanceTier.findFirst({
+      where: { id: req.params.tierId, version: { plan: { tenantId: tid } } },
+    });
+    if (!tier) return reply.code(404).send({ error: "not found" });
+    await prisma.tariffDistanceTier.delete({ where: { id: tier.id } });
+    return { ok: true };
+  });
 }

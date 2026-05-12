@@ -1,34 +1,67 @@
-import type { TariffPlanVersion, TariffSegment } from "@prisma/client";
+import type { TariffDistanceMode } from "@prisma/client";
+import { parseWaitingRule, waitingFareYen, type WaitingRule } from "./tariff-waiting.js";
 
-type VersionBase = Pick<
-  TariffPlanVersion,
-  "initialDistanceM" | "initialFareYen" | "addUnitDistanceM" | "addFareYen" | "waitingFareYenPerMin"
->;
+export type SegmentPick = {
+  fromM: number;
+  toM: number;
+  fareYen: number;
+  fareMemberYen?: number | null;
+};
 
-type SegmentPick = Pick<TariffSegment, "fromM" | "toM" | "fareYen">;
+export type TierPick = {
+  sortOrder: number;
+  fromM: number;
+  untilM: number | null;
+  stepM: number;
+  addYenPerStep: number;
+};
+
+export type VersionPricingInput = {
+  distanceMode: TariffDistanceMode | string;
+  initialDistanceM: number;
+  initialFareYen: number;
+  addUnitDistanceM: number;
+  addFareYen: number;
+  waitingFareYenPerMin: number;
+  waitingRuleJson: unknown;
+  perViaStopYen?: number | null;
+  nightSurchargeBps?: number | null;
+  leftHandSurchargeBps?: number | null;
+};
+
+export type TripPricingOpts = {
+  isMember?: boolean;
+  viaStopCount?: number;
+  applyNightSurcharge?: boolean;
+  applyLeftHandSurcharge?: boolean;
+};
+
+function modeOf(v: VersionPricingInput): string {
+  return String(v.distanceMode);
+}
+
+function segmentHitFare(seg: SegmentPick, isMember: boolean): number {
+  if (isMember && seg.fareMemberYen != null && seg.fareMemberYen !== undefined) {
+    return Math.max(0, seg.fareMemberYen);
+  }
+  return Math.max(0, seg.fareYen);
+}
 
 /**
- * 距離帯セグメントに該当すればその運賃（円）を返す。該当なしは null。
+ * 距離帯セグメントに該当すれば運賃（円）を返す。該当なしは null。
  */
-export function segmentFareYen(segments: SegmentPick[], distanceM: number): number | null {
+export function segmentFareYen(segments: SegmentPick[], distanceM: number, isMember: boolean): number | null {
   if (!segments.length) return null;
   const dist = Math.max(0, Math.floor(distanceM));
   const sorted = [...segments].sort((a, b) => a.fromM - b.fromM);
   for (const s of sorted) {
-    if (dist >= s.fromM && dist <= s.toM) return Math.max(0, s.fareYen);
+    if (dist >= s.fromM && dist <= s.toM) return segmentHitFare(s, isMember);
   }
   return null;
 }
 
-/**
- * 料金プラン版と実車距離から運賃（円）。セグメントが距離を覆う場合はセグメント運賃を優先。
- */
-export function fareYenForDistance(
-  version: VersionBase,
-  distanceM: number,
-  segments: SegmentPick[] = [],
-): number {
-  const seg = segmentFareYen(segments, distanceM);
+function fareInitialAdd(version: VersionPricingInput, distanceM: number, segments: SegmentPick[], isMember: boolean): number {
+  const seg = segmentFareYen(segments, distanceM, isMember);
   if (seg !== null) return seg;
   const dist = Math.max(0, Math.floor(distanceM));
   if (dist <= version.initialDistanceM) return Math.max(0, version.initialFareYen);
@@ -38,17 +71,100 @@ export function fareYenForDistance(
   return Math.max(0, version.initialFareYen + units * version.addFareYen);
 }
 
+function fareSegmentsOnly(distanceM: number, segments: SegmentPick[], isMember: boolean): number | null {
+  return segmentFareYen(segments, distanceM, isMember);
+}
+
+function sortedTiers(tiers: TierPick[]): TierPick[] {
+  return [...tiers].sort((a, b) => a.sortOrder - b.sortOrder || a.fromM - b.fromM);
+}
+
+function pickTierForPosition(list: TierPick[], pos: number): TierPick | null {
+  const candidates = list.filter((t) => pos >= t.fromM && (t.untilM == null || pos < t.untilM));
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => b.fromM - a.fromM || a.sortOrder - b.sortOrder);
+  return candidates[0] ?? null;
+}
+
 /**
- * 距離運賃 + 待機運賃（分 × 分あたり円）。
+ * TIERED_ADD: 初乗り区間は initial。超過分を tier の区間ごとに step 単位で加算（セグメントは無視）。
+ */
+export function fareYenTieredAdd(
+  initialDistanceM: number,
+  initialFareYen: number,
+  tiers: TierPick[],
+  distanceM: number,
+): number | null {
+  const D = Math.max(0, Math.floor(distanceM));
+  if (D <= initialDistanceM) return Math.max(0, initialFareYen);
+  let fare = Math.max(0, initialFareYen);
+  let pos = initialDistanceM;
+  const list = sortedTiers(tiers);
+  if (!list.length) return null;
+  let guard = 0;
+  while (pos < D && guard++ < 100000) {
+    const tier = pickTierForPosition(list, pos);
+    if (!tier || tier.stepM < 1) return null;
+    const cap = tier.untilM == null ? D : Math.min(D, tier.untilM);
+    if (cap <= pos) return null;
+    const span = cap - pos;
+    const steps = Math.ceil(span / tier.stepM);
+    fare += steps * tier.addYenPerStep;
+    pos = cap;
+  }
+  return fare;
+}
+
+/**
+ * 料金版と実車距離から距離運賃（円）。SEGMENTS_ONLY で未ヒットは null。
+ */
+export function fareYenForDistance(
+  version: VersionPricingInput,
+  distanceM: number,
+  segments: SegmentPick[] = [],
+  tiers: TierPick[] = [],
+  isMember = false,
+): number | null {
+  const mode = modeOf(version);
+  if (mode === "SEGMENTS_ONLY") {
+    return fareSegmentsOnly(distanceM, segments, isMember);
+  }
+  if (mode === "TIERED_ADD") {
+    return fareYenTieredAdd(version.initialDistanceM, version.initialFareYen, tiers, distanceM);
+  }
+  return fareInitialAdd(version, distanceM, segments, isMember);
+}
+
+function applyBps(amount: number, bps: number): number {
+  if (!bps) return amount;
+  return Math.round((amount * (10000 + bps)) / 10000);
+}
+
+/**
+ * 距離運賃（割増は距離部分のみ）＋待機＋経由ストップ。
  */
 export function fareYenForTrip(
-  version: VersionBase,
+  version: VersionPricingInput,
   distanceM: number,
   waitingMinutes: number,
   segments: SegmentPick[] = [],
+  tiers: TierPick[] = [],
+  opts: TripPricingOpts = {},
 ): number {
-  const base = fareYenForDistance(version, distanceM, segments);
-  const waitMin = Math.max(0, Math.floor(waitingMinutes));
-  const perMin = Math.max(0, version.waitingFareYenPerMin);
-  return base + waitMin * perMin;
+  const rawDistance = fareYenForDistance(version, distanceM, segments, tiers, opts.isMember ?? false);
+  let distanceFare = rawDistance === null ? 0 : rawDistance;
+
+  if (opts.applyNightSurcharge) {
+    const bps = version.nightSurchargeBps ?? 0;
+    distanceFare = applyBps(distanceFare, bps);
+  }
+  if (opts.applyLeftHandSurcharge) {
+    const bps = version.leftHandSurchargeBps ?? 0;
+    distanceFare = applyBps(distanceFare, bps);
+  }
+
+  const rule: WaitingRule = parseWaitingRule(version.waitingRuleJson, version.waitingFareYenPerMin);
+  const wait = waitingFareYen(rule, waitingMinutes);
+  const via = Math.max(0, Math.floor(opts.viaStopCount ?? 0)) * Math.max(0, version.perViaStopYen ?? 0);
+  return Math.max(0, distanceFare + wait + via);
 }

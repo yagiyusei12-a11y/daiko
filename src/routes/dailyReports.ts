@@ -1,9 +1,14 @@
 import type { FastifyInstance } from "fastify";
+import type { TripPassengerKind } from "@prisma/client";
 import { authenticate } from "../auth/pre.js";
 import { prisma } from "../db.js";
 import { businessDateYmdForOccurredAt } from "../lib/business-date.js";
 import { fareYenForTrip } from "../lib/pricing.js";
 import { tenantIdFromReq } from "./tenant-scope.js";
+
+function passengerKindFromBody(raw: unknown): TripPassengerKind {
+  return raw === "MEMBER" ? "MEMBER" : "GENERAL";
+}
 
 export async function registerDailyReportRoutes(app: FastifyInstance): Promise<void> {
   app.get("/daily-reports", { preHandler: [authenticate] }, async (req) => {
@@ -111,6 +116,10 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       waitingMinutes?: number;
       tariffVersionId?: string | null;
       role?: string;
+      passengerKind?: string;
+      viaStopCount?: number;
+      applyNightSurcharge?: boolean;
+      applyLeftHandSurcharge?: boolean;
     };
   }>("/daily-reports/:id/trips", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
@@ -128,13 +137,22 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     }
     let fareYen = 0;
     let tariffVersionId: string | null = req.body?.tariffVersionId ? String(req.body.tariffVersionId) : null;
+    const passengerKind = passengerKindFromBody(req.body?.passengerKind);
+    const viaStopCount = Math.max(0, Math.floor(Number(req.body?.viaStopCount ?? 0)));
+    const applyNightSurcharge = Boolean(req.body?.applyNightSurcharge);
+    const applyLeftHandSurcharge = Boolean(req.body?.applyLeftHandSurcharge);
     if (tariffVersionId) {
       const ver = await prisma.tariffPlanVersion.findFirst({
         where: { id: tariffVersionId, plan: { tenantId: tid } },
-        include: { segments: true },
+        include: { segments: true, distanceTiers: { orderBy: { sortOrder: "asc" } } },
       });
       if (!ver) return reply.code(400).send({ error: "invalid tariffVersionId" });
-      fareYen = fareYenForTrip(ver, distanceM, waitingMinutes, ver.segments);
+      fareYen = fareYenForTrip(ver, distanceM, waitingMinutes, ver.segments, ver.distanceTiers, {
+        isMember: passengerKind === "MEMBER",
+        viaStopCount,
+        applyNightSurcharge,
+        applyLeftHandSurcharge,
+      });
     }
     const role = req.body?.role === "PARTNER_DRIVER" ? "PARTNER_DRIVER" : "MAIN_DRIVER";
     const trip = await prisma.tripLeg.create({
@@ -152,6 +170,10 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         tariffVersionId,
         fareYen,
         role,
+        passengerKind,
+        viaStopCount,
+        applyNightSurcharge,
+        applyLeftHandSurcharge,
       },
     });
     return trip;
@@ -166,6 +188,10 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       clientName?: string;
       origin?: string;
       destination?: string;
+      passengerKind?: string;
+      viaStopCount?: number;
+      applyNightSurcharge?: boolean;
+      applyLeftHandSurcharge?: boolean;
     };
   }>("/daily-reports/:id/trips/:tripId", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
@@ -191,14 +217,32 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
 
     if (!Number.isFinite(distanceM)) return reply.code(400).send({ error: "invalid distanceM" });
 
+    const passengerKind =
+      req.body?.passengerKind !== undefined ? passengerKindFromBody(req.body.passengerKind) : trip.passengerKind;
+    const viaStopCount =
+      req.body?.viaStopCount !== undefined
+        ? Math.max(0, Math.floor(Number(req.body.viaStopCount)))
+        : trip.viaStopCount;
+    const applyNightSurcharge =
+      req.body?.applyNightSurcharge !== undefined ? Boolean(req.body.applyNightSurcharge) : trip.applyNightSurcharge;
+    const applyLeftHandSurcharge =
+      req.body?.applyLeftHandSurcharge !== undefined
+        ? Boolean(req.body.applyLeftHandSurcharge)
+        : trip.applyLeftHandSurcharge;
+
     let fareYen = trip.fareYen;
     if (tariffVersionId) {
       const ver = await prisma.tariffPlanVersion.findFirst({
         where: { id: tariffVersionId, plan: { tenantId: tid } },
-        include: { segments: true },
+        include: { segments: true, distanceTiers: { orderBy: { sortOrder: "asc" } } },
       });
       if (!ver) return reply.code(400).send({ error: "invalid tariffVersionId" });
-      fareYen = fareYenForTrip(ver, distanceM, waitingMinutes, ver.segments);
+      fareYen = fareYenForTrip(ver, distanceM, waitingMinutes, ver.segments, ver.distanceTiers, {
+        isMember: passengerKind === "MEMBER",
+        viaStopCount,
+        applyNightSurcharge,
+        applyLeftHandSurcharge,
+      });
     } else {
       fareYen = 0;
       tariffVersionId = null;
@@ -214,6 +258,10 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         waitingMinutes,
         tariffVersionId,
         fareYen,
+        passengerKind,
+        viaStopCount,
+        applyNightSurcharge,
+        applyLeftHandSurcharge,
       },
     });
     return updated;

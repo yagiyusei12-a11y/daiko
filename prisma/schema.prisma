@@ -34,6 +34,17 @@ enum TripRole {
   PARTNER_DRIVER
 }
 
+enum TariffDistanceMode {
+  INITIAL_ADD
+  SEGMENTS_ONLY
+  TIERED_ADD
+}
+
+enum TripPassengerKind {
+  GENERAL
+  MEMBER
+}
+
 model Tenant {
   id        String   @id @default(cuid())
   name      String
@@ -240,10 +251,34 @@ model TariffPlanVersion {
   addFareYen       Int @default(0)
   waitingFareYenPerMin Int @default(0)
 
-  segments TariffSegment[]
+  /// INITIAL_ADD: 初乗り＋単一加算（従来）。SEGMENTS_ONLY: セグメント表のみ。TIERED_ADD: 初乗り＋多段距離加算（TariffDistanceTier）。
+  distanceMode TariffDistanceMode @default(INITIAL_ADD)
+  /// 待機課金ルール（linear / block / grace_flat_then_linear）。従来列 waitingFareYenPerMin と併用し、保存時は同期可能。
+  waitingRuleJson Json @default("{}")
+  perViaStopYen            Int @default(0)
+  cancellationFeeYen     Int @default(0)
+  nightSurchargeBps        Int @default(0)
+  leftHandSurchargeBps     Int @default(0)
+
+  segments       TariffSegment[]
+  distanceTiers  TariffDistanceTier[]
   tripLegs TripLeg[]
 
   @@unique([planId, version])
+}
+
+/// 多段距離加算（absolute fromM 以上、untilM 未満の区間で stepM ごとに addYenPerStep）
+model TariffDistanceTier {
+  id            String @id @default(cuid())
+  versionId     String
+  version       TariffPlanVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  sortOrder     Int    @default(0)
+  fromM         Int
+  untilM        Int?
+  stepM         Int
+  addYenPerStep Int
+
+  @@index([versionId, sortOrder])
 }
 
 /// 距離帯の上書き（任意・将来拡張）
@@ -254,6 +289,8 @@ model TariffSegment {
   fromM      Int
   toM        Int
   fareYen    Int
+  /// null のとき会員料金は一般と同額（未使用扱い）
+  fareMemberYen Int?
 }
 
 model DailyReport {
@@ -295,12 +332,16 @@ model TripLeg {
   departedAt       DateTime
   arrivedAt        DateTime
   distanceM        Int
-  /// 待機時間（分）。待機運賃 = waitingMinutes * TariffPlanVersion.waitingFareYenPerMin
+  /// 待機時間（分）。waitingRuleJson と waitingFareYenPerMin に基づき待機運賃を計算
   waitingMinutes   Int      @default(0)
   tariffVersionId  String?
   tariffVersion    TariffPlanVersion? @relation(fields: [tariffVersionId], references: [id], onDelete: SetNull)
   fareYen          Int      @default(0)
   role             TripRole @default(MAIN_DRIVER)
+  passengerKind           TripPassengerKind @default(GENERAL)
+  viaStopCount            Int               @default(0)
+  applyNightSurcharge     Boolean           @default(false)
+  applyLeftHandSurcharge  Boolean           @default(false)
   createdAt        DateTime @default(now())
 
   @@index([dailyReportId])

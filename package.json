@@ -6,6 +6,7 @@
   "scripts": {
     "build": "npm run build:web && tsc",
     "build:web": "npm --prefix web install && npm --prefix web run build",
+    "test:pricing": "tsx src/lib/pricing.selftest.ts",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "db:generate": "prisma generate",
