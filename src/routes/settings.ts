@@ -4,6 +4,11 @@ import bcrypt from "bcryptjs";
 import { authenticate, jwtUser } from "../auth/pre.js";
 import { JP_DRIVER_LICENSE_CLASSES, JP_PLATE_REGION_NAMES } from "../lib/jp-constants.js";
 import { JP_LICENSE_CONDITION_OPTIONS } from "../lib/jp-license-conditions.js";
+import {
+  coerceBusinessBasicsFromCustomJson,
+  mergeBusinessBasicsIntoCustomJson,
+  parseBusinessBasicsPut,
+} from "../lib/business-basics.js";
 import { coercePricingPrefs, mergePricingPrefsUpdate } from "../lib/pricing-prefs.js";
 import { prisma } from "../db.js";
 
@@ -185,6 +190,34 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
         ...clean,
       },
       update: clean,
+    });
+    return reply.send({ ok: true });
+  });
+
+  app.get("/basics", async (req) => {
+    const { tenantId } = jwtUser(req);
+    const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+    return coerceBusinessBasicsFromCustomJson(s?.customJson);
+  });
+
+  app.put<{ Body: Record<string, unknown> }>("/basics", async (req, reply) => {
+    const { tenantId } = jwtUser(req);
+    const parsed = parseBusinessBasicsPut((req.body || {}) as Record<string, unknown>);
+    if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
+
+    const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+    const prevRoot = asObj(s?.customJson);
+    const nextCustom = mergeBusinessBasicsIntoCustomJson(prevRoot, parsed.value);
+
+    await prisma.tenantSettings.upsert({
+      where: { tenantId },
+      create: {
+        tenantId,
+        businessDayRollHour: 4,
+        featureFlags: {},
+        customJson: nextCustom as Prisma.InputJsonValue,
+      },
+      update: { customJson: nextCustom as Prisma.InputJsonValue },
     });
     return reply.send({ ok: true });
   });

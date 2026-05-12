@@ -889,6 +889,10 @@ td {
   border-bottom: none;
 }
 
+.settings-basic-hours-row {
+  flex-wrap: wrap;
+}
+
 .settings-sf-name {
   flex: 1;
   min-width: 0;

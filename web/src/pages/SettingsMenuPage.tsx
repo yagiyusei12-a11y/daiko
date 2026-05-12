@@ -4,6 +4,7 @@ import { apiFetch } from "../api";
 import { useSavedToast } from "../saved-toast";
 import { Card, Err, Tabs, type TabDef } from "../ui";
 import PricingSettingsPanel from "./PricingSettingsPanel";
+import BasicSettingsPanel from "./BasicSettingsPanel";
 
 const JP_PREFECTURES = [
   "北海道",
@@ -823,8 +824,11 @@ export default function SettingsMenuPage(): JSX.Element {
 
   const pricingPanel = <PricingSettingsPanel setErr={setErr} busy={busy} setBusy={setBusy} />;
 
+  const basicsPanel = <BasicSettingsPanel setErr={setErr} busy={busy} setBusy={setBusy} />;
+
   const tabItems: TabDef[] = [
     { id: "company", label: "会社情報", children: companyPanel },
+    { id: "basics", label: "基本", children: basicsPanel },
     { id: "employees", label: "従業員", children: employeesPanel },
     { id: "vehicles", label: "随伴車", children: vehiclesPanel },
     { id: "pricing", label: "料金", children: pricingPanel },
