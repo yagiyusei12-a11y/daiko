@@ -1,3 +1,12 @@
+/** バックエンド registerExtensionSchema と同一キー */
+export const SAFE_DRIVING_MANAGER_KEY = "isSafeDrivingManager";
+
+export function employeeIsSafeDrivingManager(registerExtension: unknown): boolean {
+  if (!registerExtension || typeof registerExtension !== "object" || Array.isArray(registerExtension)) return false;
+  const v = (registerExtension as Record<string, unknown>)[SAFE_DRIVING_MANAGER_KEY];
+  return v === true || v === "true";
+}
+
 /**
  * Employee.registerExtension のキーとラベル（バックエンド registerExtensionSchema と同期すること）
  */
@@ -16,6 +25,10 @@ export const REGISTER_EXTENSION_UI_FIELDS: { key: string; label: string }[] = [
   { key: "employmentType", label: "採用区分" },
   { key: "interviewerName", label: "面接担当者名" },
   { key: "jobCategory", label: "職種" },
+  {
+    key: SAFE_DRIVING_MANAGER_KEY,
+    label: "安全運転管理者（酒気確認の確認者として選べます）",
+  },
   { key: "licenseTypes", label: "免許の種類" },
   { key: "licenseNumber", label: "免許証の番号" },
   { key: "licenseExpiresOnYmd", label: "免許有効期限" },

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { REGISTER_EXTENSION_UI_FIELDS } from "../lib/registerExtensionFields";
+import { REGISTER_EXTENSION_UI_FIELDS, SAFE_DRIVING_MANAGER_KEY } from "../lib/registerExtensionFields";
 import { ReqLabel, ReqMark } from "../lib/reqLabel";
 import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
@@ -29,6 +29,10 @@ function asExt(raw: unknown): RegisterExt {
   const out: RegisterExt = {};
   for (const [k, v] of Object.entries(o)) {
     if (v == null) continue;
+    if (k === SAFE_DRIVING_MANAGER_KEY) {
+      out[k] = v === true || v === "true" ? "true" : "";
+      continue;
+    }
     out[k] = String(v);
   }
   return out;
@@ -404,6 +408,14 @@ export default function Employees(): JSX.Element {
     e.preventDefault();
     if (!editId) return;
     setErr(null);
+    const registerExtension: Record<string, unknown> = {};
+    for (const f of REGISTER_EXTENSION_UI_FIELDS) {
+      if (f.key === SAFE_DRIVING_MANAGER_KEY) {
+        registerExtension[f.key] = editExt[f.key] === "true";
+      } else {
+        registerExtension[f.key] = editExt[f.key] ?? "";
+      }
+    }
     const r = await apiFetch(`/employees/${editId}`, {
       method: "PATCH",
       json: {
@@ -411,7 +423,7 @@ export default function Employees(): JSX.Element {
         givenName: editGiven.trim(),
         furigana: editFurigana.trim() || null,
         address: editAddress.trim() || null,
-        registerExtension: editExt,
+        registerExtension,
       },
     });
     if (!r.ok) setErr((r as { ok: false; error: string }).error);
@@ -524,20 +536,33 @@ export default function Employees(): JSX.Element {
               <textarea rows={2} value={editAddress} onChange={(e) => setEditAddress(e.target.value)} style={{ width: "100%" }} />
               {REGISTER_EXTENSION_UI_FIELDS.map((f) => (
                 <div key={f.key} style={{ marginTop: "0.35rem" }}>
-                  <label>{f.label}</label>
-                  {f.key === "educationNotes" || f.key === "rosterNotes" || f.key === "licenseConditionsNote" || f.key === "licenseOtherNotes" ? (
-                    <textarea
-                      rows={2}
-                      value={editExt[f.key] ?? ""}
-                      onChange={(e) => setExtField(f.key, e.target.value)}
-                      style={{ width: "100%", maxWidth: 420 }}
-                    />
+                  {f.key === SAFE_DRIVING_MANAGER_KEY ? (
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <input
+                        type="checkbox"
+                        checked={editExt[f.key] === "true"}
+                        onChange={(e) => setExtField(f.key, e.target.checked ? "true" : "")}
+                      />
+                      {f.label}
+                    </label>
                   ) : (
-                    <input
-                      value={editExt[f.key] ?? ""}
-                      onChange={(e) => setExtField(f.key, e.target.value)}
-                      style={{ width: "100%", maxWidth: 420 }}
-                    />
+                    <>
+                      <label>{f.label}</label>
+                      {f.key === "educationNotes" || f.key === "rosterNotes" || f.key === "licenseConditionsNote" || f.key === "licenseOtherNotes" ? (
+                        <textarea
+                          rows={2}
+                          value={editExt[f.key] ?? ""}
+                          onChange={(e) => setExtField(f.key, e.target.value)}
+                          style={{ width: "100%", maxWidth: 420 }}
+                        />
+                      ) : (
+                        <input
+                          value={editExt[f.key] ?? ""}
+                          onChange={(e) => setExtField(f.key, e.target.value)}
+                          style={{ width: "100%", maxWidth: 420 }}
+                        />
+                      )}
+                    </>
                   )}
                 </div>
               ))}

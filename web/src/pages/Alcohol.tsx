@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { useAuth, isStaffShiftOnlyMe } from "../auth";
+import { employeeIsSafeDrivingManager } from "../lib/registerExtensionFields";
 import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
-type Emp = { id: string; familyName: string; givenName: string };
+type Emp = { id: string; familyName: string; givenName: string; registerExtension?: unknown };
 type Check = {
   id: string;
   businessDate: string;
@@ -39,7 +40,7 @@ export default function Alcohol(): JSX.Element {
   const [submitting, setSubmitting] = useState(false);
   const [employeeId, setEmployeeId] = useState("");
   const [phase, setPhase] = useState("運転前");
-  const [checkerName, setCheckerName] = useState("");
+  const [checkerEmployeeId, setCheckerEmployeeId] = useState("");
   const [checkMethod, setCheckMethod] = useState("対面");
   const [checkMethodOther, setCheckMethodOther] = useState("");
   const [methodNote, setMethodNote] = useState("");
@@ -68,6 +69,8 @@ export default function Alcohol(): JSX.Element {
     })();
   }, [staffOnly, me?.employeeId]);
 
+  const checkerManagers = emps.filter((e) => employeeIsSafeDrivingManager(e.registerExtension));
+
   useEffect(() => {
     void load();
   }, [businessDate]);
@@ -75,7 +78,7 @@ export default function Alcohol(): JSX.Element {
   function closeWizard(): void {
     setWizardOpen(false);
     setPhase("運転前");
-    setCheckerName("");
+    setCheckerEmployeeId("");
     setCheckMethod("対面");
     setCheckMethodOther("");
     setMethodNote("");
@@ -95,7 +98,6 @@ export default function Alcohol(): JSX.Element {
       const json: Record<string, unknown> = {
         employeeId,
         phase: phase.trim() || "確認",
-        checkerName: checkerName.trim() || undefined,
         checkMethod: checkMethod.trim() || undefined,
         checkMethodOther: checkMethod === "その他" ? checkMethodOther.trim() || undefined : undefined,
         methodNote: methodNote.trim() || undefined,
@@ -104,6 +106,7 @@ export default function Alcohol(): JSX.Element {
         instructionNote: instructionNote.trim() || undefined,
         otherNote: otherNote.trim() || undefined,
       };
+      if (checkerEmployeeId.trim()) json.checkerEmployeeId = checkerEmployeeId.trim();
       const iso = datetimeLocalToIso(checkedAtLocal);
       if (iso) json.checkedAt = iso;
       const r = await apiFetch<Check>("/alcohol-checks", {
@@ -122,6 +125,7 @@ export default function Alcohol(): JSX.Element {
   }
 
   const empLabel = emps.find((e) => e.id === employeeId);
+  const checkerLabel = checkerManagers.find((e) => e.id === checkerEmployeeId);
   const empOk = Boolean(employeeId);
   const phaseOk = phase.trim().length > 0;
   const methodOtherOk = checkMethod !== "その他" || checkMethodOther.trim().length > 0;
@@ -179,12 +183,24 @@ export default function Alcohol(): JSX.Element {
     {
       id: "checker",
       title: "確認者・確認方法",
-      description: "様式の確認者氏名・対面／電話／その他を記録します。",
+      description: "確認者は安全運転管理者として登録された従業員から選びます。対面／電話／その他を記録します。",
       canProceed: methodOtherOk,
       children: (
         <>
-          <label>確認者氏名（任意）</label>
-          <input value={checkerName} onChange={(e) => setCheckerName(e.target.value)} />
+          <label>確認者（任意・安全運転管理者のみ）</label>
+          <select value={checkerEmployeeId} onChange={(e) => setCheckerEmployeeId(e.target.value)}>
+            <option value="">— 未指定 —</option>
+            {checkerManagers.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.familyName} {x.givenName}
+              </option>
+            ))}
+          </select>
+          {checkerManagers.length === 0 ? (
+            <p style={{ marginTop: "0.35rem", fontSize: "0.9rem", opacity: 0.9 }}>
+              候補がありません。従業員マスタの「従事者名簿用・基本情報」で安全運転管理者にチェックを入れてください。
+            </p>
+          ) : null}
           <label>確認の方法</label>
           <select value={checkMethod} onChange={(e) => setCheckMethod(e.target.value)}>
             <option value="対面">対面</option>
@@ -235,7 +251,7 @@ export default function Alcohol(): JSX.Element {
           <dt>段階</dt>
           <dd>{phase}</dd>
           <dt>確認者</dt>
-          <dd>{checkerName.trim() || "—"}</dd>
+          <dd>{checkerLabel ? `${checkerLabel.familyName} ${checkerLabel.givenName}` : "—（未指定）"}</dd>
           <dt>方法</dt>
           <dd>
             {checkMethod}
@@ -253,6 +269,14 @@ export default function Alcohol(): JSX.Element {
       ),
     },
   ];
+
+  async function removeCheck(id: string): Promise<void> {
+    if (!window.confirm("この酒気確認記録を削除しますか？")) return;
+    setErr(null);
+    const r = await apiFetch<{ ok: boolean }>(`/alcohol-checks/${id}`, { method: "DELETE" });
+    if (!r.ok) setErr(r.error);
+    else await load();
+  }
 
   return (
     <Card title="酒気確認">
@@ -290,6 +314,7 @@ export default function Alcohol(): JSX.Element {
               <th>指示</th>
               <th>その他</th>
               <th>日時</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -309,6 +334,11 @@ export default function Alcohol(): JSX.Element {
                 <td style={{ maxWidth: "8rem", fontSize: "0.85rem" }}>{c.instructionNote ?? "—"}</td>
                 <td style={{ maxWidth: "8rem", fontSize: "0.85rem" }}>{c.otherNote ?? "—"}</td>
                 <td style={{ whiteSpace: "nowrap", fontSize: "0.85rem" }}>{new Date(c.checkedAt).toLocaleString()}</td>
+                <td>
+                  <button type="button" onClick={() => void removeCheck(c.id)} style={{ color: "#b00020" }}>
+                    削除
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

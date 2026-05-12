@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+/** PATCH 等で文字列が混ざっても boolean に正規化する */
+const jsonBooleanOptional = z.preprocess((v) => {
+  if (v === true || v === "true") return true;
+  if (v === false || v === "false") return false;
+  return undefined;
+}, z.boolean().optional());
+
 /** 従事者名簿用 JSON（Employee.registerExtension） */
 export const registerExtensionSchema = z
   .object({
@@ -26,9 +33,21 @@ export const registerExtensionSchema = z
     pledgeSignedOnYmd: z.string().max(20).optional(),
     educationNotes: z.string().max(2000).optional(),
     rosterNotes: z.string().max(4000).optional(),
+    /** 安全運転管理者（酒気確認の確認者候補） */
+    isSafeDrivingManager: jsonBooleanOptional,
   });
 
 export type RegisterExtension = z.infer<typeof registerExtensionSchema>;
+
+/** 酒気確認の確認者として選べる従業員か（registerExtension のフラグ） */
+export function employeeIsSafeDrivingManager(registerExtension: unknown): boolean {
+  const parsed = registerExtensionSchema.safeParse(
+    registerExtension && typeof registerExtension === "object" && !Array.isArray(registerExtension)
+      ? registerExtension
+      : {}
+  );
+  return parsed.success && parsed.data.isSafeDrivingManager === true;
+}
 
 const ymdStrict = z
   .string()
