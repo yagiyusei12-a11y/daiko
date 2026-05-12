@@ -884,6 +884,60 @@ td {
   font-size: 0.78rem;
 }
 
+.pricing-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.pricing-modal {
+  width: 100%;
+  max-width: 28rem;
+  max-height: min(90vh, 40rem);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.2), var(--shadow-card);
+  overflow: hidden;
+}
+
+.pricing-modal-title {
+  margin: 0;
+  padding: 1rem 1.1rem 0;
+  font-size: 1.05rem;
+}
+
+.pricing-modal > .settings-hint {
+  margin: 0.35rem 1.1rem 0;
+}
+
+.pricing-modal > .settings-form {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.75rem 1.1rem 1rem;
+  margin: 0;
+}
+
+.pricing-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem 1.1rem 1rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
 .trip-editor {
   margin-bottom: 1rem;
 }

@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { StepWizard, type StepWizardStep } from "../ui";
 
 const PRICING_FEATURE_OPTS: { id: string; label: string }[] = [
   { id: "pickup", label: "迎車料金" },
@@ -56,6 +55,13 @@ function emptyD(): DistanceBand {
 
 function emptyT(): TimeBand {
   return { baseFareYen: 0, includedMinutes: 0, addEveryMin: 0, addFareYen: 0 };
+}
+
+function regimeLabel(r: PricingPrefsV1["regime"]): string {
+  if (r === "distance") return "距離制を主とする";
+  if (r === "time") return "時間制を主とする";
+  if (r === "both") return "距離・時間の併用";
+  return "未選択";
 }
 
 function defaultPrefs(): PricingPrefsV1 {
@@ -208,11 +214,45 @@ export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: 
     void load();
   }, [load]);
 
+  function startSpecialDraftIfRegimeOk(r: PricingPrefsV1["regime"]): void {
+    if (r !== "distance" && r !== "time" && r !== "both") {
+      setErr("特別料金を追加するには、先に画面上部で料金体制（距離制・時間制・併用のいずれか）を選んでください。");
+      return;
+    }
+    setErr(null);
+    setDraft({
+      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `sf_${Date.now()}`,
+      name: "",
+      regime: r,
+      distance: emptyD(),
+      time: emptyT(),
+      nightExtraYen: 0,
+      earlyExtraYen: 0,
+      memberExtraYen: 0,
+    });
+    setSpecialOpen(true);
+  }
+
   const toggleFeature = (id: string): void => {
-    setPrefs((p) => ({
-      ...p,
-      features: p.features.includes(id) ? p.features.filter((x) => x !== id) : [...p.features, id],
-    }));
+    setPrefs((p) => {
+      if (p.features.includes(id)) {
+        if (id === "specialFare") {
+          queueMicrotask(() => {
+            setSpecialOpen(false);
+            setDraft(null);
+          });
+        }
+        return { ...p, features: p.features.filter((x) => x !== id) };
+      }
+      const next = { ...p, features: [...p.features, id] };
+      if (id === "specialFare") {
+        const regimeAtClick = next.regime;
+        queueMicrotask(() => {
+          startSpecialDraftIfRegimeOk(regimeAtClick);
+        });
+      }
+      return next;
+    });
   };
 
   const toggleSfSel = (id: string): void => {
@@ -242,109 +282,37 @@ export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: 
   }
 
   const openNewSpecial = (): void => {
-    setDraft({
-      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `sf_${Date.now()}`,
-      name: "",
-      regime: "distance",
-      distance: emptyD(),
-      time: emptyT(),
-      nightExtraYen: 0,
-      earlyExtraYen: 0,
-      memberExtraYen: 0,
-    });
-    setSpecialOpen(true);
+    startSpecialDraftIfRegimeOk(prefs.regime);
   };
 
-  const specialSteps: StepWizardStep[] = useMemo(() => {
-    if (!draft) return [];
-    return [
-      {
-        id: "meta",
-        title: "特別料金",
-        description: "名称と深夜・早朝・会員の追加額（任意）を入力します。",
-        canProceed: Boolean(draft.name.trim()),
-        children: (
-          <div className="settings-form">
-            <label>特別料金名称</label>
-            <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-            <p className="settings-hint">深夜料金・早朝料金・会員料金（円・任意）</p>
-            <NumInput
-              label="深夜料金（円）"
-              value={draft.nightExtraYen}
-              onChange={(n) => setDraft({ ...draft, nightExtraYen: n })}
-            />
-            <NumInput
-              label="早朝料金（円）"
-              value={draft.earlyExtraYen}
-              onChange={(n) => setDraft({ ...draft, earlyExtraYen: n })}
-            />
-            <NumInput
-              label="会員料金（円）"
-              value={draft.memberExtraYen}
-              onChange={(n) => setDraft({ ...draft, memberExtraYen: n })}
-            />
-          </div>
-        ),
-      },
-      {
-        id: "regime",
-        title: "料金体制（この特別料金）",
-        description: "距離制・時間制・併用から選び、次の画面で金額を入力します。",
-        canProceed: true,
-        children: (
-          <fieldset className="settings-fieldset">
-            <legend>料金体制をお選びください</legend>
-            <label>
-              <input
-                type="radio"
-                name="sfreg"
-                checked={draft.regime === "distance"}
-                onChange={() => setDraft({ ...draft, regime: "distance" })}
-              />{" "}
-              距離制
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="sfreg"
-                checked={draft.regime === "time"}
-                onChange={() => setDraft({ ...draft, regime: "time" })}
-              />{" "}
-              時間制
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="sfreg"
-                checked={draft.regime === "both"}
-                onChange={() => setDraft({ ...draft, regime: "both" })}
-              />{" "}
-              距離・時間の併用
-            </label>
-          </fieldset>
-        ),
-      },
-      {
-        id: "amounts",
-        title: "料金の内訳",
-        canProceed: true,
-        children: (
-          <div className="settings-form">
-            {(draft.regime === "distance" || draft.regime === "both") && (
-              <DistanceBlockFields
-                title="距離制"
-                v={draft.distance}
-                onChange={(distance) => setDraft({ ...draft, distance })}
-              />
-            )}
-            {(draft.regime === "time" || draft.regime === "both") && (
-              <TimeBlockFields title="時間制" v={draft.time} onChange={(time) => setDraft({ ...draft, time })} />
-            )}
-          </div>
-        ),
-      },
-    ];
-  }, [draft]);
+  function copyMainRatesToDraft(): void {
+    if (!draft) return;
+    setDraft({
+      ...draft,
+      regime: prefs.regime === "distance" || prefs.regime === "time" || prefs.regime === "both" ? prefs.regime : draft.regime,
+      distance: { ...prefs.mainDistance },
+      time: { ...prefs.mainTime },
+    });
+  }
+
+  function saveSpecialToList(): void {
+    if (!draft?.name.trim()) {
+      setErr("特別料金名称を入力してください。");
+      return;
+    }
+    const r = prefs.regime === "distance" || prefs.regime === "time" || prefs.regime === "both" ? prefs.regime : null;
+    if (!r) {
+      setErr("料金体制が未選択のため保存できません。");
+      return;
+    }
+    setErr(null);
+    setPrefs((p) => ({
+      ...p,
+      specialFares: [...p.specialFares, { ...draft, regime: r }],
+    }));
+    setSpecialOpen(false);
+    setDraft(null);
+  }
 
   if (!loaded) return <p className="settings-hint">読み込み中…</p>;
 
@@ -456,7 +424,7 @@ export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: 
       {prefs.features.includes("specialFare") && (
         <div className="settings-special-fare">
           <div className="settings-toolbar">
-            <button type="button" onClick={openNewSpecial}>
+            <button type="button" disabled={!prefs.regime} onClick={openNewSpecial} title={!prefs.regime ? "先に料金体制を選んでください" : undefined}>
               特別料金を追加
             </button>
             <button type="button" disabled={!selectedSf.size} onClick={deleteSelectedSf}>
@@ -470,7 +438,7 @@ export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: 
                   <input type="checkbox" checked={selectedSf.has(sf.id)} onChange={() => toggleSfSel(sf.id)} />
                 </label>
                 <span className="settings-sf-name">{sf.name}</span>
-                <span className="settings-sf-meta">{sf.regime}</span>
+                <span className="settings-sf-meta">{regimeLabel(sf.regime)}</span>
               </li>
             ))}
           </ul>
@@ -481,22 +449,87 @@ export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: 
         保存
       </button>
 
-      <StepWizard
-        open={specialOpen && !!draft}
-        onClose={() => {
-          setSpecialOpen(false);
-          setDraft(null);
-        }}
-        title="特別料金の追加"
-        steps={specialSteps}
-        finishLabel="保存して一覧へ"
-        onFinish={() => {
-          if (!draft?.name.trim()) return;
-          setPrefs((p) => ({ ...p, specialFares: [...p.specialFares, draft] }));
-          setSpecialOpen(false);
-          setDraft(null);
-        }}
-      />
+      {specialOpen && draft ? (
+        <div
+          className="pricing-modal-backdrop"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              setSpecialOpen(false);
+              setDraft(null);
+            }
+          }}
+        >
+          <div
+            className="pricing-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pricing-special-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h2 id="pricing-special-title" className="pricing-modal-title">
+              追加料金を設定する
+            </h2>
+            <p className="settings-hint">
+              画面上部の「料金体制をお選びください」で選んだ <strong>{regimeLabel(prefs.regime)}</strong>{" "}
+              に合わせて入力します（ここでは体制を変えられません）。
+            </p>
+            <div className="settings-form">
+              <label>特別料金名称</label>
+              <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} autoFocus />
+
+              <button type="button" className="settings-secondary" onClick={copyMainRatesToDraft}>
+                基本と同じ料金（追加料金のみ）
+              </button>
+              <p className="settings-hint" style={{ marginTop: 0 }}>
+                メインの距離・時間の数値をこの特別料金欄にコピーします。追加分だけ変える場合の出発点に使えます。
+              </p>
+
+              {(prefs.regime === "distance" || prefs.regime === "both") && (
+                <DistanceBlockFields
+                  title="距離制（追加料金）"
+                  v={draft.distance}
+                  onChange={(distance) => setDraft({ ...draft, distance })}
+                />
+              )}
+              {(prefs.regime === "time" || prefs.regime === "both") && (
+                <TimeBlockFields title="時間制（追加料金）" v={draft.time} onChange={(time) => setDraft({ ...draft, time })} />
+              )}
+
+              <p className="settings-hint">深夜・早朝・会員（円・任意）</p>
+              <NumInput
+                label="深夜料金（円）"
+                value={draft.nightExtraYen}
+                onChange={(n) => setDraft({ ...draft, nightExtraYen: n })}
+              />
+              <NumInput
+                label="早朝料金（円）"
+                value={draft.earlyExtraYen}
+                onChange={(n) => setDraft({ ...draft, earlyExtraYen: n })}
+              />
+              <NumInput
+                label="会員料金（円）"
+                value={draft.memberExtraYen}
+                onChange={(n) => setDraft({ ...draft, memberExtraYen: n })}
+              />
+            </div>
+            <div className="pricing-modal-actions">
+              <button type="button" className="settings-primary" onClick={saveSpecialToList}>
+                保存して一覧へ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSpecialOpen(false);
+                  setDraft(null);
+                }}
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
