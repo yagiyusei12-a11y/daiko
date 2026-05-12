@@ -129,7 +129,7 @@ textarea {
   text-align: center;
 }
 
-.app-header-logout {
+.app-header .app-header-logout {
   flex-shrink: 0;
   margin-top: 0;
   padding: 0.45rem 0.85rem;
@@ -143,12 +143,13 @@ textarea {
   transition: var(--transition-fast);
 }
 
-.app-header-logout:hover {
-  background: var(--color-nav-hover);
-  border-color: rgba(255, 255, 255, 0.35);
+.app-header .app-header-logout:hover {
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #fff;
 }
 
-.app-header-logout:focus-visible {
+.app-header .app-header-logout:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
