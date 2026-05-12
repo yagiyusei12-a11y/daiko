@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch, apiFetchBlob } from "../api";
-import { Card, Err, Tabs } from "../ui";
+import { Card, Err, FieldWithHint, Tabs } from "../ui";
 
 type CatDoc = { kind: string; label: string; dataSources: string };
 
@@ -96,7 +96,7 @@ export default function Documents(): JSX.Element {
   }
 
   return (
-    <Card title="法定・届出系帳票（9 種）">
+    <Card title="法令の書類（自動で埋める）">
       <Err msg={err} />
       <Tabs
         aria-label="帳票ビュー"
@@ -109,21 +109,26 @@ export default function Documents(): JSX.Element {
             children: (
               <>
                 <p style={{ fontSize: "0.85rem", marginTop: 0 }}>
-                  テナント設定の法定プロフィール列・<code>documentForms</code> と業務データ（苦情/指導/日報等）から自動埋めします。印刷はプレビュー表示後にブラウザの印刷を利用してください。
+                  テナント設定の届出プロフィールと、日報・苦情などのデータから、PDF に近い形で自動埋めします。印刷はプレビューのあとブラウザの印刷を使ってください。
                 </p>
-                <label>表示・集計用の月（YYYY-MM）</label>
-                <input type="month" value={ym} onChange={(e) => setYm(e.target.value)} />
-                <label style={{ display: "block", marginTop: "0.5rem" }}>乗務記録・酒気確認用 運行日（YYYY-MM-DD）</label>
-                <input type="date" value={businessDate} onChange={(e) => setBusinessDate(e.target.value)} />
-                <label style={{ display: "block", marginTop: "0.5rem" }}>誓約書用 従事者</label>
-                <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} style={{ minWidth: 220 }}>
-                  <option value="">（未選択）</option>
-                  {employees.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.familyName} {e.givenName}
-                    </option>
-                  ))}
-                </select>
+                <div className="stack-form">
+                  <FieldWithHint label="表示に使う月" hint="集計や一覧の基準になる月です（YYYY-MM）。">
+                    <input type="month" value={ym} onChange={(e) => setYm(e.target.value)} />
+                  </FieldWithHint>
+                  <FieldWithHint label="乗務記録・アルコール検査用の運行日" hint="1日単位で選びます（YYYY-MM-DD）。">
+                    <input type="date" value={businessDate} onChange={(e) => setBusinessDate(e.target.value)} />
+                  </FieldWithHint>
+                  <FieldWithHint label="誓約書に使うスタッフ" optional hint="未選択のままなら、誓約書以外は影響しません。">
+                    <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} style={{ minWidth: 220 }}>
+                      <option value="">（未選択）</option>
+                      {employees.map((e) => (
+                        <option key={e.id} value={e.id}>
+                          {e.familyName} {e.givenName}
+                        </option>
+                      ))}
+                    </select>
+                  </FieldWithHint>
+                </div>
               </>
             ),
           },

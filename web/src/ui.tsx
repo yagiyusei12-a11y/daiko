@@ -1,5 +1,5 @@
-import type { KeyboardEvent, ReactNode } from "react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import type { KeyboardEvent, ReactElement, ReactNode } from "react";
+import { cloneElement, isValidElement, useCallback, useEffect, useId, useRef, useState } from "react";
 
 export function Card({ title, children }: { title?: string; children: ReactNode }): JSX.Element {
   return (
@@ -13,6 +13,51 @@ export function Card({ title, children }: { title?: string; children: ReactNode 
 export function Err({ msg }: { msg: string | null }): JSX.Element | null {
   if (!msg) return null;
   return <p className="err">{msg}</p>;
+}
+
+/** ラベル → 説明文 → 入力。`children` は 1 つのフォームコントロール想定。`aria-describedby` を付与する。 */
+export function FieldWithHint({
+  label,
+  hint,
+  optional,
+  children,
+}: {
+  label: ReactNode;
+  hint: string;
+  optional?: boolean;
+  children: ReactNode;
+}): JSX.Element {
+  const rid = useId().replace(/:/g, "");
+  const hintDomId = `field-hint-${rid}`;
+  const fallbackInputId = `field-input-${rid}`;
+
+  let control: ReactNode = children;
+  if (isValidElement(children)) {
+    const el = children as ReactElement<{ id?: string; "aria-describedby"?: string }>;
+    const inputId = el.props.id ?? fallbackInputId;
+    const prev = el.props["aria-describedby"];
+    const describedBy = prev ? `${prev} ${hintDomId}` : hintDomId;
+    control = cloneElement(el, { id: inputId, "aria-describedby": describedBy });
+  }
+
+  const labelFor = isValidElement(children)
+    ? ((children as ReactElement<{ id?: string }>).props.id ?? fallbackInputId)
+    : fallbackInputId;
+
+  return (
+    <div className="field-with-hint">
+      <label className="field-with-hint__label" htmlFor={labelFor}>
+        <span className="field-with-hint__label-text">
+          {label}
+          {optional ? <span className="field-optional">（任意）</span> : null}
+        </span>
+      </label>
+      <p id={hintDomId} className="field-hint">
+        {hint}
+      </p>
+      {control}
+    </div>
+  );
 }
 
 export type TabDef = { id: string; label: string; children: ReactNode };

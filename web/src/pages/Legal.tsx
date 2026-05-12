@@ -698,8 +698,11 @@ export default function Legal(): JSX.Element {
   ];
 
   return (
-    <Card title="法定記録">
+    <Card title="法令で決まっている記録">
       <Err msg={err} />
+      <p style={{ fontSize: "0.85rem", marginTop: 0 }}>
+        苦情の処理・教育の記録・届出の変更など、代行業の法令で求められる帳票のたたき台です。専門用語が残る欄は、画面下の説明や括弧書きをあわせて読んでください。
+      </p>
       <Tabs
         aria-label="法定記録の種別"
         activeId={legalTab}

@@ -1,23 +1,50 @@
 import { NavLink, Outlet, Navigate } from "react-router-dom";
 import { useAuth } from "../auth";
 
-const links: { to: string; label: string; perm?: string }[] = [
-  { to: "/", label: "ホーム" },
-  { to: "/employees", label: "従業員" },
-  { to: "/vehicles", label: "車両" },
-  { to: "/tariffs", label: "料金" },
-  { to: "/daily-reports", label: "日報" },
-  { to: "/customers", label: "顧客名簿" },
-  { to: "/referral-sources", label: "紹介元" },
-  { to: "/receivables", label: "売掛" },
-  { to: "/dispatch", label: "配車" },
-  { to: "/time-punches", label: "勤怠" },
-  { to: "/alcohol", label: "酒気" },
-  { to: "/payroll", label: "給与" },
-  { to: "/documents", label: "帳票" },
-  { to: "/settings", label: "設定", perm: "tenant.settings" },
-  { to: "/rbac", label: "権限", perm: "rbac.manage" },
-  { to: "/legal", label: "法定" },
+type NavLinkItem = { to: string; label: string; perm?: string };
+
+const navGroups: { label: string; links: NavLinkItem[] }[] = [
+  {
+    label: "いつもの業務",
+    links: [
+      { to: "/", label: "ホーム" },
+      { to: "/daily-reports", label: "業務の記録" },
+      { to: "/time-punches", label: "出退勤" },
+      { to: "/alcohol", label: "アルコール検査" },
+    ],
+  },
+  {
+    label: "お客様・お店",
+    links: [
+      { to: "/customers", label: "お客様リスト" },
+      { to: "/referral-sources", label: "紹介してくれたお店" },
+      { to: "/receivables", label: "まだ入金前のお金" },
+    ],
+  },
+  {
+    label: "車と料金",
+    links: [
+      { to: "/vehicles", label: "車両" },
+      { to: "/tariffs", label: "料金ルール" },
+      { to: "/dispatch", label: "予約の予定" },
+    ],
+  },
+  {
+    label: "スタッフ・給与・書類",
+    links: [
+      { to: "/employees", label: "スタッフ" },
+      { to: "/payroll", label: "給与" },
+      { to: "/documents", label: "書類テンプレート" },
+      { to: "/legal", label: "法令で決まっている記録" },
+    ],
+  },
+  {
+    label: "設定",
+    links: [
+      { to: "/settings", label: "事業所の設定", perm: "tenant.settings" },
+      { to: "/rbac", label: "ログイン権限", perm: "rbac.manage" },
+    ],
+  },
 ];
 
 export default function Shell(): JSX.Element {
@@ -45,13 +72,20 @@ export default function Shell(): JSX.Element {
           </button>
         </div>
         <nav className="app-nav-tabs" aria-label="メインメニュー">
-          {links
-            .filter((l) => !l.perm || can(l.perm))
-            .map((l) => (
-              <NavLink key={l.to} to={l.to} end={l.to === "/"} className={({ isActive }) => (isActive ? "active" : "")}>
-                {l.label}
-              </NavLink>
-            ))}
+          {navGroups.map((g) => (
+            <div key={g.label} className="app-nav-group">
+              <span className="app-nav-group-label">{g.label}</span>
+              <div className="app-nav-group-links">
+                {g.links
+                  .filter((l) => !l.perm || can(l.perm))
+                  .map((l) => (
+                    <NavLink key={l.to} to={l.to} end={l.to === "/"} className={({ isActive }) => (isActive ? "active" : "")}>
+                      {l.label}
+                    </NavLink>
+                  ))}
+              </div>
+            </div>
+          ))}
         </nav>
       </header>
       <main className="app-main">

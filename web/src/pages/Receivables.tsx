@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { Card, Err } from "../ui";
+import { Card, Err, FieldWithHint } from "../ui";
 import { ReqMark } from "../lib/reqLabel";
 
 type Entry = {
@@ -69,27 +69,25 @@ export default function Receivables(): JSX.Element {
 
   return (
     <>
-      <Card title="売掛（未回収）">
+      <Card title="まだもらっていないお金（売掛のメモ）">
         <Err msg={err} />
+        <p style={{ fontSize: "0.82rem", marginTop: 0 }}>後から集金する予定の金額をメモしておきます。入金が済んだら「回収済み」に変えてください。</p>
         <form onSubmit={add} className="stack-form">
-          <label>
-            相手先 <ReqMark />
+          <FieldWithHint label={<><ReqMark />相手先（名前）</>} hint="お店名や担当者名など、あとから見てわかる呼び方で構いません。">
             <input value={partyName} onChange={(e) => setPartyName(e.target.value)} required />
-          </label>
-          <label>
-            金額（円） <ReqMark />
+          </FieldWithHint>
+          <FieldWithHint label={<><ReqMark />金額（円・税込みの目安）</>} hint="半角数字のまるめた円で入力します。">
             <input value={amountYen} onChange={(e) => setAmountYen(e.target.value)} inputMode="numeric" required />
-          </label>
-          <label>
-            参照メモ
+          </FieldWithHint>
+          <FieldWithHint label="参照メモ" optional hint="請求書番号や送迎の日付など、照合に使うメモです。">
             <input value={referenceNote} onChange={(e) => setReferenceNote(e.target.value)} />
-          </label>
+          </FieldWithHint>
           <button type="submit" disabled={submitting || !partyName.trim()}>
-            登録
+            登録する
           </button>
         </form>
       </Card>
-      <Card title="一覧">
+      <Card title="一覧（状態）">
         <div className="table-wrap">
           <table>
             <thead>
@@ -109,7 +107,7 @@ export default function Receivables(): JSX.Element {
                   <td>
                     {x.status === "OPEN" ? (
                       <button type="button" onClick={() => void markCollected(x.id)}>
-                        回収済みにする
+                        入金済みにする
                       </button>
                     ) : (
                       "—"

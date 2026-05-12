@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { Card, Err } from "../ui";
+import { Card, Err, FieldWithHint } from "../ui";
 import { ReqMark } from "../lib/reqLabel";
 
 type V = { id: string; label: string };
@@ -95,33 +95,30 @@ export default function Dispatch(): JSX.Element {
 
   return (
     <>
-      <Card title="配車・予約（一覧）">
+      <Card title="配車の予定を一覧する">
         <Err msg={err} />
-        <p style={{ opacity: 0.85, fontSize: "0.95rem" }}>ガント前段として、期間内の予約を一覧表示・登録します。</p>
-        <label>
-          期間 from（ISO）
-          <input value={from} onChange={(e) => setFrom(e.target.value)} style={{ width: "100%", maxWidth: 420 }} />
-        </label>
-        <label>
-          期間 to（ISO）
-          <input value={to} onChange={(e) => setTo(e.target.value)} style={{ width: "100%", maxWidth: 420 }} />
-        </label>
+        <p style={{ opacity: 0.9, fontSize: "0.9rem" }}>この期間に入っている予約をまとめて見ます。下のフォームから予約を足せます。</p>
+        <div className="stack-form">
+          <FieldWithHint label="表示を始める日時" hint="内部的な形式（ISO）です。変更不要ならそのままで問題ありません。">
+            <input value={from} onChange={(e) => setFrom(e.target.value)} style={{ width: "100%", maxWidth: 420 }} />
+          </FieldWithHint>
+          <FieldWithHint label="表示を終える日時" hint="ここまでの予約が一覧に出ます。">
+            <input value={to} onChange={(e) => setTo(e.target.value)} style={{ width: "100%", maxWidth: 420 }} />
+          </FieldWithHint>
+        </div>
         <button type="button" onClick={() => void load()}>
-          再読込
+          いまの期間でもう一度読み込む
         </button>
       </Card>
-      <Card title="予約を追加">
+      <Card title="予約を追加する">
         <form onSubmit={add} className="stack-form">
-          <label>
-            件名 <ReqMark />
+          <FieldWithHint label={<><ReqMark />件名・タイトル</>} hint="社内でわかる短い名前（例: 〇〇様 迎え）を付けます。">
             <input value={title} onChange={(e) => setTitle(e.target.value)} required />
-          </label>
-          <label>
-            メモ
+          </FieldWithHint>
+          <FieldWithHint label="メモ" optional hint="担当者への引き継ぎや注意事項があれば書きます。">
             <input value={note} onChange={(e) => setNote(e.target.value)} />
-          </label>
-          <label>
-            車両
+          </FieldWithHint>
+          <FieldWithHint label="割り当てる車" optional hint="まだ決まっていなければ「未割当」のままで登録できます。">
             <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
               <option value="">未割当</option>
               {vehicles.map((v) => (
@@ -130,17 +127,15 @@ export default function Dispatch(): JSX.Element {
                 </option>
               ))}
             </select>
-          </label>
-          <label>
-            開始 <ReqMark />
+          </FieldWithHint>
+          <FieldWithHint label={<><ReqMark />始まる日時</>} hint="カレンダーと時刻から選びます。">
             <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required />
-          </label>
-          <label>
-            終了 <ReqMark />
+          </FieldWithHint>
+          <FieldWithHint label={<><ReqMark />終わる日時</>} hint="迎えの予定なら、おおよその終了予定で構いません。">
             <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} required />
-          </label>
+          </FieldWithHint>
           <button type="submit" disabled={submitting || !title.trim()}>
-            登録
+            この内容で登録
           </button>
         </form>
       </Card>

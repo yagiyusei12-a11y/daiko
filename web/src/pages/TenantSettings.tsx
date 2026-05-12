@@ -349,8 +349,11 @@ export default function TenantSettings(): JSX.Element {
   if (!row && !err) return <p>読み込み中…</p>;
 
   return (
-    <Card title="テナント設定">
+    <Card title="会社全体の設定">
       <Err msg={err} />
+      <p style={{ fontSize: "0.85rem", marginTop: 0 }}>
+        日付の切り替え時刻・届出に載せる住所・機能のオンオフなどをまとめます。変更したあとは、法令の書類画面で意図どおり出るか一度確認してください。
+      </p>
       {row ? (
         <form onSubmit={(e) => void save(e)}>
           <Tabs
