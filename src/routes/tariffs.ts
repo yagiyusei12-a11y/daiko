@@ -89,6 +89,16 @@ export async function registerTariffRoutes(app: FastifyInstance): Promise<void> 
     return { plans: rows };
   });
 
+  app.delete<{ Params: { planId: string } }>("/tariff-plans/:planId", { preHandler: [authenticate] }, async (req, reply) => {
+    const tid = tenantIdFromReq(req);
+    const plan = await prisma.tariffPlan.findFirst({
+      where: { id: req.params.planId, tenantId: tid },
+    });
+    if (!plan) return reply.code(404).send({ error: "not found" });
+    await prisma.tariffPlan.delete({ where: { id: plan.id } });
+    return { ok: true };
+  });
+
   app.post<{ Body: { name?: string } }>("/tariff-plans", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
     const name = String(req.body?.name || "").trim();
