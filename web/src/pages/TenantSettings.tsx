@@ -135,6 +135,29 @@ export default function TenantSettings(): JSX.Element {
   const [sgIncident, setSgIncident] = useState("");
   const [ntBody, setNtBody] = useState("");
 
+  const [demoBatchCount, setDemoBatchCount] = useState<number | null>(null);
+  const [demoLastAt, setDemoLastAt] = useState<string | null>(null);
+  const [demoBusy, setDemoBusy] = useState(false);
+  const [demoErr, setDemoErr] = useState<string | null>(null);
+  const [demoOk, setDemoOk] = useState<string | null>(null);
+
+  async function refreshDemoStatus(): Promise<void> {
+    const r = await apiFetch<{ batchCount: number; lastCreatedAt: string | null }>("/tenant-settings/demo-seed");
+    if (!r.ok) {
+      setDemoErr(r.error);
+      return;
+    }
+    setDemoErr(null);
+    setDemoBatchCount(r.data.batchCount);
+    setDemoLastAt(r.data.lastCreatedAt);
+  }
+
+  useEffect(() => {
+    if (settingsTab === "demo") void refreshDemoStatus();
+    // refreshDemoStatus はタブ表示時のみでよい
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- タブ切替のみで再取得
+  }, [settingsTab]);
+
   useEffect(() => {
     void (async () => {
       const r = await apiFetch<Row>("/tenant-settings");
@@ -346,6 +369,71 @@ export default function TenantSettings(): JSX.Element {
     }
   }
 
+  async function runDemoSeed(): Promise<void> {
+    if (
+      !window.confirm(
+        "このテナントに、従業員・車両・日報（便を数百件）・勤怠・酒気・給与・配車などを含む大量のデモ用サンプルを追加します。本番では負荷・混同に注意してください。続行しますか？",
+      )
+    )
+      return;
+    setDemoBusy(true);
+    setDemoErr(null);
+    setDemoOk(null);
+    const r = await apiFetch<{
+      ok: true;
+      summary: {
+        employees: number;
+        vehicles: number;
+        dailyReports: number;
+        tripLegsApprox: number;
+        timePunches: number;
+        alcoholChecks: number;
+        payrollRuns: number;
+        tariffPlans: number;
+        customers: number;
+        referralSources: number;
+        dispatchReservations: number;
+        accountsReceivableEntries: number;
+        complaintLedgers: number;
+        guidanceSessions: number;
+        legalRegisterStubs: number;
+        legalChangeNotices: number;
+      };
+    }>("/tenant-settings/demo-seed", { method: "POST" });
+    setDemoBusy(false);
+    if (!r.ok) {
+      setDemoErr(r.error);
+      return;
+    }
+    const s = r.data.summary;
+    setDemoOk(
+      `追加しました。便の目安 ${String(s.tripLegsApprox)} 件 / 従業員 ${String(s.employees)} / 車両 ${String(s.vehicles)} / 日報 ${String(s.dailyReports)} / 勤怠 ${String(s.timePunches)} / 酒気 ${String(s.alcoholChecks)} / 給与実行 ${String(s.payrollRuns)} / 顧客 ${String(s.customers)} / 料金プラン ${String(s.tariffPlans)} ほか。`,
+    );
+    void refreshDemoStatus();
+  }
+
+  async function runDemoDelete(): Promise<void> {
+    if (
+      !window.confirm(
+        "「サンプルを流し込む」で記録されたバッチをすべて削除します。ログインユーザー・権限・手入力のデータには触れません。この操作は取り消せません。続行しますか？",
+      )
+    )
+      return;
+    setDemoBusy(true);
+    setDemoErr(null);
+    setDemoOk(null);
+    const r = await apiFetch<{ ok: true; summary: { removedBatches: number } }>("/tenant-settings/demo-seed", {
+      method: "DELETE",
+    });
+    setDemoBusy(false);
+    if (!r.ok) {
+      setDemoErr(r.error);
+      return;
+    }
+    setDemoOk(`削除しました（処理したバッチ数: ${String(r.data.summary.removedBatches)}）。`);
+    void refreshDemoStatus();
+  }
+
   if (!row && !err) return <p>読み込み中…</p>;
 
   return (
@@ -473,6 +561,40 @@ export default function TenantSettings(): JSX.Element {
                     </p>
                     <label>customJson</label>
                     <textarea rows={12} value={customText} onChange={(e) => setCustomText(e.target.value)} style={{ width: "100%" }} />
+                  </>
+                ),
+              },
+              {
+                id: "demo",
+                label: "デモデータ",
+                children: (
+                  <>
+                    <p style={{ fontSize: "0.85rem", marginTop: 0 }}>
+                      このテナントにのみ、一覧で判別しやすい「【デモ】」接頭辞付きのサンプルを一括投入します。ログインユーザー・ロール・Subscription
+                      には触れません。投入は何度も行え、削除はこれまでの投入バッチをまとめて消します（手入力のデータは対象外です）。
+                    </p>
+                    <p style={{ fontSize: "0.85rem" }}>
+                      登録済みデモバッチ数:{" "}
+                      <strong>{demoBatchCount === null ? "—" : String(demoBatchCount)}</strong>
+                      {demoLastAt ? (
+                        <>
+                          {" "}
+                          / 直近の投入: {new Date(demoLastAt).toLocaleString("ja-JP")}
+                        </>
+                      ) : null}
+                    </p>
+                    <Err msg={demoErr} />
+                    {demoOk ? (
+                      <p style={{ color: "var(--ok, #0a6)", fontSize: "0.9rem", margin: "0.5rem 0" }}>{demoOk}</p>
+                    ) : null}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", marginTop: "0.75rem" }}>
+                      <button type="button" disabled={demoBusy} onClick={() => void runDemoSeed()}>
+                        サンプルを流し込む
+                      </button>
+                      <button type="button" disabled={demoBusy} onClick={() => void runDemoDelete()}>
+                        サンプルを消す
+                      </button>
+                    </div>
                   </>
                 ),
               },

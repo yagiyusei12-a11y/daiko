@@ -7,6 +7,7 @@ import { userHasPermission } from "../lib/permissions.js";
 import { prisma } from "../db.js";
 import { tenantIdFromReq } from "./tenant-scope.js";
 import { validateDispatchProfileInCustomJson, validateDocumentFormsInCustomJson } from "../lib/dispatch-profile.js";
+import { deleteAllDemoSeedsForTenant, getDemoSeedStatus, seedDemoDataForTenant } from "../lib/demoSeed.js";
 
 const patchBodySchema = z.object({
   businessDayRollHour: z.number().int().min(0).max(23).optional(),
@@ -161,5 +162,57 @@ export async function registerTenantSettingsRoutes(app: FastifyInstance): Promis
     });
 
     return updated;
+  });
+
+  app.get("/tenant-settings/demo-seed", { preHandler: [authenticate] }, async (req, reply) => {
+    const tid = tenantIdFromReq(req);
+    const u = jwtUser(req);
+    const allowed = await userHasPermission(u.sub, tid, "tenant.settings");
+    if (!allowed) return reply.code(403).send({ error: "forbidden" });
+    return getDemoSeedStatus(tid);
+  });
+
+  app.post("/tenant-settings/demo-seed", { preHandler: [authenticate] }, async (req, reply) => {
+    const tid = tenantIdFromReq(req);
+    const u = jwtUser(req);
+    const allowed = await userHasPermission(u.sub, tid, "tenant.settings");
+    if (!allowed) return reply.code(403).send({ error: "forbidden" });
+    try {
+      const summary = await seedDemoDataForTenant(tid);
+      await writeAuditEvent({
+        tenantId: tid,
+        actorUserId: u.sub,
+        action: "tenant.demo_seed.create",
+        entityType: "DemoSeedBatch",
+        entityId: null,
+        payload: summary as unknown as Prisma.InputJsonValue,
+      });
+      return { ok: true, summary };
+    } catch (e) {
+      req.log.error(e);
+      return reply.code(500).send({ error: "demo_seed_failed" });
+    }
+  });
+
+  app.delete("/tenant-settings/demo-seed", { preHandler: [authenticate] }, async (req, reply) => {
+    const tid = tenantIdFromReq(req);
+    const u = jwtUser(req);
+    const allowed = await userHasPermission(u.sub, tid, "tenant.settings");
+    if (!allowed) return reply.code(403).send({ error: "forbidden" });
+    try {
+      const summary = await deleteAllDemoSeedsForTenant(tid);
+      await writeAuditEvent({
+        tenantId: tid,
+        actorUserId: u.sub,
+        action: "tenant.demo_seed.delete_all",
+        entityType: "DemoSeedBatch",
+        entityId: null,
+        payload: summary as unknown as Prisma.InputJsonValue,
+      });
+      return { ok: true, summary };
+    } catch (e) {
+      req.log.error(e);
+      return reply.code(500).send({ error: "demo_seed_delete_failed" });
+    }
   });
 }
