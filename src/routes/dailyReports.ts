@@ -252,6 +252,15 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
       paymentCardYen?: number;
       paymentPayPayYen?: number;
       paymentReceivableYen?: number;
+      partnerEmployeeId?: string | null;
+      meterStart?: number;
+      meterEnd?: number;
+      dutyStartAt?: string | null;
+      dutyEndAt?: string | null;
+      breakTaken?: boolean;
+      breakStartAt?: string | null;
+      breakEndAt?: string | null;
+      breakLocation?: string | null;
     };
   }>("/daily-reports/:id", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
@@ -275,9 +284,86 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
     if (nums.paymentCashNoReceiptYen > nums.paymentCashYen) {
       return reply.code(400).send({ error: "paymentCashNoReceiptYen cannot exceed paymentCashYen" });
     }
+
+    let meterStart = row.meterStart;
+    let meterEnd = row.meterEnd;
+    if (b.meterStart !== undefined) {
+      const ms = Math.floor(Number(b.meterStart));
+      if (!Number.isFinite(ms)) return reply.code(400).send({ error: "invalid meterStart" });
+      meterStart = ms;
+    }
+    if (b.meterEnd !== undefined) {
+      const me = Math.floor(Number(b.meterEnd));
+      if (!Number.isFinite(me)) return reply.code(400).send({ error: "invalid meterEnd" });
+      meterEnd = me;
+    }
+    if (meterEnd < meterStart) return reply.code(400).send({ error: "meterEnd must be >= meterStart" });
+
+    let partnerEmployeeId: string | null | undefined = undefined;
+    if (b.partnerEmployeeId !== undefined) {
+      if (b.partnerEmployeeId === null || b.partnerEmployeeId === "") {
+        partnerEmployeeId = null;
+      } else {
+        const pid = String(b.partnerEmployeeId);
+        if (pid === row.mainEmployeeId) return reply.code(400).send({ error: "partner cannot be same as main driver" });
+        const emp = await prisma.employee.findFirst({ where: { id: pid, tenantId: tid } });
+        if (!emp) return reply.code(400).send({ error: "invalid partnerEmployeeId" });
+        partnerEmployeeId = pid;
+      }
+    }
+
+    const readOptIso = (v: unknown): { ok: true; v: Date | null } | { ok: false } => {
+      if (v === null || v === "") return { ok: true, v: null };
+      const d = new Date(String(v));
+      if (!Number.isFinite(d.getTime())) return { ok: false };
+      return { ok: true, v: d };
+    };
+
+    let dutyStartAt: Date | null | undefined = undefined;
+    if (b.dutyStartAt !== undefined) {
+      const p = readOptIso(b.dutyStartAt);
+      if (!p.ok) return reply.code(400).send({ error: "invalid dutyStartAt" });
+      dutyStartAt = p.v;
+    }
+    let dutyEndAt: Date | null | undefined = undefined;
+    if (b.dutyEndAt !== undefined) {
+      const p = readOptIso(b.dutyEndAt);
+      if (!p.ok) return reply.code(400).send({ error: "invalid dutyEndAt" });
+      dutyEndAt = p.v;
+    }
+    let breakStartAt: Date | null | undefined = undefined;
+    if (b.breakStartAt !== undefined) {
+      const p = readOptIso(b.breakStartAt);
+      if (!p.ok) return reply.code(400).send({ error: "invalid breakStartAt" });
+      breakStartAt = p.v;
+    }
+    let breakEndAt: Date | null | undefined = undefined;
+    if (b.breakEndAt !== undefined) {
+      const p = readOptIso(b.breakEndAt);
+      if (!p.ok) return reply.code(400).send({ error: "invalid breakEndAt" });
+      breakEndAt = p.v;
+    }
+
+    const breakTaken = b.breakTaken !== undefined ? Boolean(b.breakTaken) : undefined;
+    let breakLocation: string | null | undefined = undefined;
+    if (b.breakLocation !== undefined) {
+      breakLocation = b.breakLocation === null || b.breakLocation === "" ? null : String(b.breakLocation).trim() || null;
+    }
+
     return prisma.dailyReport.update({
       where: { id: row.id },
-      data: nums,
+      data: {
+        ...nums,
+        meterStart,
+        meterEnd,
+        ...(partnerEmployeeId !== undefined ? { partnerEmployeeId } : {}),
+        ...(dutyStartAt !== undefined ? { dutyStartAt } : {}),
+        ...(dutyEndAt !== undefined ? { dutyEndAt } : {}),
+        ...(breakTaken !== undefined ? { breakTaken } : {}),
+        ...(breakStartAt !== undefined ? { breakStartAt } : {}),
+        ...(breakEndAt !== undefined ? { breakEndAt } : {}),
+        ...(breakLocation !== undefined ? { breakLocation } : {}),
+      },
       include: { vehicle: true, mainEmployee: true, partnerEmployee: true, trips: { include: tripRel } },
     });
   });
@@ -538,6 +624,11 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
       clientName?: string;
       origin?: string;
       destination?: string;
+      charterVehicleNo?: string | null;
+      viaNote?: string | null;
+      departedAt?: string;
+      arrivedAt?: string;
+      role?: string;
       passengerKind?: string;
       viaStopCount?: number;
       applyNightSurcharge?: boolean;
@@ -677,12 +768,48 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
     const excludeFromOfficialPrint =
       req.body?.excludeFromOfficialPrint !== undefined ? Boolean(req.body.excludeFromOfficialPrint) : trip.excludeFromOfficialPrint;
 
+    let departedAt = trip.departedAt;
+    let arrivedAt = trip.arrivedAt;
+    if (req.body?.departedAt !== undefined) {
+      const d = new Date(String(req.body.departedAt));
+      if (!Number.isFinite(d.getTime())) return reply.code(400).send({ error: "invalid departedAt" });
+      departedAt = d;
+    }
+    if (req.body?.arrivedAt !== undefined) {
+      const d = new Date(String(req.body.arrivedAt));
+      if (!Number.isFinite(d.getTime())) return reply.code(400).send({ error: "invalid arrivedAt" });
+      arrivedAt = d;
+    }
+    if (departedAt >= arrivedAt) return reply.code(400).send({ error: "departedAt must be before arrivedAt" });
+
+    let nextRole = trip.role;
+    if (req.body?.role === "PARTNER_DRIVER" || req.body?.role === "MAIN_DRIVER") {
+      nextRole = req.body.role;
+    }
+
+    let charterVehicleNo = trip.charterVehicleNo;
+    if (req.body?.charterVehicleNo !== undefined) {
+      charterVehicleNo =
+        req.body.charterVehicleNo === null || req.body.charterVehicleNo === ""
+          ? null
+          : String(req.body.charterVehicleNo).trim() || null;
+    }
+    let viaNote = trip.viaNote;
+    if (req.body?.viaNote !== undefined) {
+      viaNote = req.body.viaNote === null || req.body.viaNote === "" ? null : String(req.body.viaNote).trim() || null;
+    }
+
     const updated = await prisma.tripLeg.update({
       where: { id: trip.id },
       data: {
         ...(req.body?.clientName !== undefined ? { clientName: String(req.body.clientName).trim() } : {}),
         ...(req.body?.origin !== undefined ? { origin: String(req.body.origin).trim() } : {}),
         ...(req.body?.destination !== undefined ? { destination: String(req.body.destination).trim() } : {}),
+        ...(req.body?.charterVehicleNo !== undefined ? { charterVehicleNo } : {}),
+        ...(req.body?.viaNote !== undefined ? { viaNote } : {}),
+        departedAt,
+        arrivedAt,
+        role: nextRole,
         distanceM,
         waitingMinutes,
         tariffVersionId,

@@ -204,20 +204,29 @@ async function buildJorokuBodyHtml(
       body += ` / 同乗: ${escapeHtml(`${rep.partnerEmployee.familyName} ${rep.partnerEmployee.givenName}`)}`;
     }
     body += `</td></tr></table>`;
-    if (rep.dutyStartAt || rep.dutyEndAt || rep.breakTaken || rep.breakLocation) {
+    if (rep.dutyStartAt || rep.dutyEndAt || rep.breakTaken || rep.breakLocation || rep.breakStartAt || rep.breakEndAt) {
       body += `<table class="meta" style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:8px;">`;
       body += `<tr><th style="border:1px solid #333;padding:4px;">始業</th><td style="border:1px solid #333;padding:4px;">${escapeHtml(rep.dutyStartAt ? fmtDt(rep.dutyStartAt) : "")}</td>`;
       body += `<th style="border:1px solid #333;padding:4px;">終業</th><td style="border:1px solid #333;padding:4px;">${escapeHtml(rep.dutyEndAt ? fmtDt(rep.dutyEndAt) : "")}</td></tr>`;
       body += `<tr><th style="border:1px solid #333;padding:4px;">休憩・仮眠</th><td style="border:1px solid #333;padding:4px;">${rep.breakTaken ? "有" : "無"}</td>`;
-      body += `<th style="border:1px solid #333;padding:4px;">休憩場所</th><td style="border:1px solid #333;padding:4px;">${escapeHtml(rep.breakLocation ?? "")}</td></tr>`;
+      body += `<th style="border:1px solid #333;padding:4px;">休憩時間</th><td style="border:1px solid #333;padding:4px;">${escapeHtml(
+        rep.breakStartAt && rep.breakEndAt
+          ? `${fmtDt(rep.breakStartAt)} ～ ${fmtDt(rep.breakEndAt)}`
+          : rep.breakStartAt
+            ? fmtDt(rep.breakStartAt)
+            : rep.breakEndAt
+              ? fmtDt(rep.breakEndAt)
+              : "",
+      )}</td></tr>`;
+      body += `<tr><th style="border:1px solid #333;padding:4px;">休憩場所</th><td style="border:1px solid #333;padding:4px;" colspan="3">${escapeHtml(rep.breakLocation ?? "")}</td></tr>`;
       body += `</table>`;
     }
 
     body +=
       "<table class='stub' border='1' cellpadding='4' cellspacing='0' style='border-collapse:collapse;width:100%;font-size:10px;'><thead><tr>" +
-      "<th>出発</th><th>到着</th><th>区間</th><th>お客様名</th><th>距離(m)</th><th>運賃(円)</th><th>役割</th></tr></thead><tbody>";
+      "<th>出発</th><th>到着</th><th>区間</th><th>お客様名</th><th>客車番号</th><th>経由</th><th>距離(m)</th><th>運賃(円)</th><th>役割</th></tr></thead><tbody>";
     if (!rep.trips.length) {
-      body += "<tr><td colspan='7'>運行レグがありません。</td></tr>";
+      body += "<tr><td colspan='9'>運行レグがありません。</td></tr>";
     } else {
       for (const t of rep.trips) {
         body += "<tr>";
@@ -225,6 +234,8 @@ async function buildJorokuBodyHtml(
         body += `<td>${escapeHtml(fmtDt(t.arrivedAt))}</td>`;
         body += `<td>${escapeHtml(t.origin)} → ${escapeHtml(t.destination)}</td>`;
         body += `<td>${escapeHtml(t.clientName)}</td>`;
+        body += `<td>${escapeHtml(t.charterVehicleNo ?? "")}</td>`;
+        body += `<td>${escapeHtml(t.viaNote ?? "")}</td>`;
         body += `<td style="text-align:right;">${t.distanceM}</td>`;
         body += `<td style="text-align:right;">${t.fareYen}</td>`;
         body += `<td>${escapeHtml(t.role)}</td>`;

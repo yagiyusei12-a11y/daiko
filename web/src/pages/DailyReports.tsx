@@ -31,6 +31,7 @@ export default function DailyReports(): JSX.Element {
   const [submitting, setSubmitting] = useState(false);
   const [vehicleId, setVehicleId] = useState("");
   const [mainEmployeeId, setMainEmployeeId] = useState("");
+  const [partnerEmployeeId, setPartnerEmployeeId] = useState("");
   const [meterStart, setMeterStart] = useState("");
   const [meterEnd, setMeterEnd] = useState("");
 
@@ -64,6 +65,7 @@ export default function DailyReports(): JSX.Element {
     setWizardOpen(false);
     setVehicleId("");
     setMainEmployeeId("");
+    setPartnerEmployeeId("");
     setMeterStart("");
     setMeterEnd("");
   }
@@ -72,14 +74,18 @@ export default function DailyReports(): JSX.Element {
     setErr(null);
     setSubmitting(true);
     try {
+      const json: Record<string, unknown> = {
+        vehicleId,
+        mainEmployeeId,
+        meterStart: Number(meterStart),
+        meterEnd: Number(meterEnd),
+      };
+      if (partnerEmployeeId && partnerEmployeeId !== mainEmployeeId) {
+        json.partnerEmployeeId = partnerEmployeeId;
+      }
       const r = await apiFetch<DR>("/daily-reports", {
         method: "POST",
-        json: {
-          vehicleId,
-          mainEmployeeId,
-          meterStart: Number(meterStart),
-          meterEnd: Number(meterEnd),
-        },
+        json,
       });
       if (!r.ok) {
         setErr(r.error);
@@ -136,6 +142,17 @@ export default function DailyReports(): JSX.Element {
               </option>
             ))}
           </select>
+          <label style={{ display: "block", marginTop: "0.75rem" }}>同乗者（任意・乗務記録の同伴欄）</label>
+          <select value={partnerEmployeeId} onChange={(e) => setPartnerEmployeeId(e.target.value)}>
+            <option value="">なし</option>
+            {emps
+              .filter((x) => x.id !== mainEmployeeId)
+              .map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.familyName} {x.givenName}
+                </option>
+              ))}
+          </select>
         </>
       ),
     },
@@ -163,6 +180,14 @@ export default function DailyReports(): JSX.Element {
           <dd>{vehLabel ?? "—"}</dd>
           <dt>主ドライバー</dt>
           <dd>{drvLabel ? `${drvLabel.familyName} ${drvLabel.givenName}` : "—"}</dd>
+          <dt>同乗者</dt>
+          <dd>
+            {partnerEmployeeId
+              ? `${emps.find((e) => e.id === partnerEmployeeId)?.familyName ?? ""} ${
+                  emps.find((e) => e.id === partnerEmployeeId)?.givenName ?? ""
+                }`.trim() || "—"
+              : "—"}
+          </dd>
           <dt>メーター</dt>
           <dd>
             {meterStart} → {meterEnd}
