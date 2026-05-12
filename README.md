@@ -104,7 +104,7 @@ npm run dev
 
 **ローカルの `npm run deploy:vps` との違い**: CI は GitHub 上の `main` が既に進んだあとで動くため **`git push` は行わない**（マージが push を済ませている想定）。リモートの pull / migrate / build / restart のみ行う。
 
-シークレットを置かない場合、ワークフローはエラーで終了する（手動デプロイのみの運用にしてよい）。
+**`DAIKO_VPS_HOST` と `DAIKO_VPS_SSH_KEY` が未設定のとき**: デプロイ job は **スキップ**され、ワークフローは失敗しません（ローカル `npm run deploy:vps` のみの運用で通知が届かないようにするため）。GitHub から自動デプロイしたい場合は上表の Secrets を設定してください。
 
 ## 事業日（スキーマ）
 

@@ -15,6 +15,8 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Secrets 未設定のまま main に push すると毎回失敗メールが届くため、必須が揃うときだけ実行する。
+    if: ${{ secrets.DAIKO_VPS_HOST != '' && secrets.DAIKO_VPS_SSH_KEY != '' }}
     steps:
       - name: Deploy over SSH
         env:
@@ -25,15 +27,11 @@ jobs:
           SSH_KEY: ${{ secrets.DAIKO_VPS_SSH_KEY }}
         run: |
           set -euo pipefail
-          if [ -z "${VPS_HOST:-}" ] || [ -z "${SSH_KEY:-}" ]; then
-            echo "::error::Repository secrets DAIKO_VPS_HOST and DAIKO_VPS_SSH_KEY are required for deploy."
-            exit 1
-          fi
           u="${VPS_USER:-ubuntu}"
           esc_cd="$(printf '%q' "${VPS_PATH:-}")"
           esc_svc="$(printf '%q' "${VPS_SERVICE:-daiko-app}")"
           mkdir -p ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/daiko_deploy_ci
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/daiko_deploy_ci
           chmod 600 ~/.ssh/daiko_deploy_ci
           ssh -i ~/.ssh/daiko_deploy_ci -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
             "${u}@${VPS_HOST}" \
