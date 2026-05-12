@@ -3,6 +3,7 @@ import Shell from "./layout/Shell";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import TodaySchedulePage from "./pages/TodaySchedulePage";
+import DailyReportDetailPage from "./pages/DailyReportDetailPage";
 import DailyReportsMenuPage from "./pages/DailyReportsMenuPage";
 import AttendanceMenuPage from "./pages/AttendanceMenuPage";
 import SettingsMenuPage from "./pages/SettingsMenuPage";
@@ -16,6 +17,7 @@ export default function App(): JSX.Element {
         <Route index element={<TodaySchedulePage />} />
         <Route path="schedule" element={<TodaySchedulePage />} />
         <Route path="daily-reports" element={<DailyReportsMenuPage />} />
+        <Route path="daily-reports/:reportId" element={<DailyReportDetailPage />} />
         <Route path="attendance" element={<AttendanceMenuPage />} />
         <Route path="settings" element={<SettingsMenuPage />} />
       </Route>

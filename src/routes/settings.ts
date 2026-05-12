@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { authenticate, jwtUser } from "../auth/pre.js";
 import { JP_DRIVER_LICENSE_CLASSES, JP_PLATE_REGION_NAMES } from "../lib/jp-constants.js";
 import { JP_LICENSE_CONDITION_OPTIONS } from "../lib/jp-license-conditions.js";
+import { coercePricingPrefs, mergePricingPrefsUpdate } from "../lib/pricing-prefs.js";
 import { prisma } from "../db.js";
 
 type JsonObj = Record<string, unknown>;
@@ -35,13 +36,6 @@ function mergeVehicleDetail(existing: unknown, patch: JsonObj): JsonObj {
     next.voluntaryInsurance = { ...asObj(cur.voluntaryInsurance), ...ins };
   }
   return next;
-}
-
-const PRICING_STRIP = new Set(["distance", "time"]);
-
-function sanitizePricingFeatures(raw: unknown): string[] {
-  const arr = Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : [];
-  return arr.filter((id) => !PRICING_STRIP.has(id));
 }
 
 function buildRegisterExtension(
@@ -469,22 +463,24 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const { tenantId } = jwtUser(req);
     const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
     const cj = asObj(s?.customJson);
-    const pp = asObj(cj.pricingPrefs);
+    const prefs = coercePricingPrefs(cj.pricingPrefs);
     return {
-      regime: typeof pp.regime === "string" ? pp.regime : "",
-      features: sanitizePricingFeatures(pp.features),
+      regime: prefs.regime,
+      features: prefs.features,
+      pricingPrefs: prefs,
     };
   });
 
   app.put<{ Body: Record<string, unknown> }>("/pricing", async (req) => {
     const { tenantId } = jwtUser(req);
     const b = req.body || {};
-    const regime = b.regime !== undefined ? String(b.regime) : "";
-    const features = sanitizePricingFeatures(b.features);
 
     const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
-    const prev = asObj(s?.customJson);
-    const nextCustom = { ...prev, pricingPrefs: { regime, features } };
+    const prevRoot = asObj(s?.customJson);
+    const prevPrefs = coercePricingPrefs(prevRoot.pricingPrefs);
+    const nextPrefs = mergePricingPrefsUpdate(prevPrefs, b);
+
+    const nextCustom = { ...prevRoot, pricingPrefs: nextPrefs as unknown as Record<string, unknown> };
 
     await prisma.tenantSettings.upsert({
       where: { tenantId },
@@ -492,9 +488,9 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
         tenantId,
         businessDayRollHour: 4,
         featureFlags: {},
-        customJson: nextCustom,
+        customJson: nextCustom as Prisma.InputJsonValue,
       },
-      update: { customJson: nextCustom },
+      update: { customJson: nextCustom as Prisma.InputJsonValue },
     });
     return { ok: true };
   });

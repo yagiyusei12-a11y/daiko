@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth";
 import { apiFetch } from "../api";
 import { Card, Err, Tabs, type TabDef } from "../ui";
+import PricingSettingsPanel from "./PricingSettingsPanel";
 
 const JP_PREFECTURES = [
   "北海道",
@@ -51,15 +52,6 @@ const JP_PREFECTURES = [
   "宮崎県",
   "鹿児島県",
   "沖縄県",
-];
-
-const PRICING_FEATURE_OPTS: { id: string; label: string }[] = [
-  { id: "pickup", label: "迎車料金" },
-  { id: "waiting", label: "待機時間" },
-  { id: "leftHand", label: "左ハンドル" },
-  { id: "foreignCar", label: "外車" },
-  { id: "specialFare", label: "特別料金" },
-  { id: "cancel", label: "キャンセル" },
 ];
 
 type CompanyDto = {
@@ -171,9 +163,6 @@ export default function SettingsMenuPage(): JSX.Element {
     insurancePeriodTo: "",
   });
 
-  const [pricingRegime, setPricingRegime] = useState("");
-  const [pricingFeatures, setPricingFeatures] = useState<string[]>([]);
-
   const loadMeta = useCallback(async () => {
     const r = await apiFetch<{
       licenseClasses: string[];
@@ -205,21 +194,12 @@ export default function SettingsMenuPage(): JSX.Element {
     else setErr(r.error);
   }, []);
 
-  const loadPricing = useCallback(async () => {
-    const r = await apiFetch<{ regime: string; features: string[] }>("/settings/pricing");
-    if (r.ok) {
-      setPricingRegime(r.data.regime);
-      setPricingFeatures(r.data.features.filter((id) => id !== "distance" && id !== "time"));
-    } else setErr(r.error);
-  }, []);
-
   useEffect(() => {
     void loadMeta();
     void loadCompany();
     void loadEmployees();
     void loadVehicles();
-    void loadPricing();
-  }, [loadMeta, loadCompany, loadEmployees, loadVehicles, loadPricing]);
+  }, [loadMeta, loadCompany, loadEmployees, loadVehicles]);
 
   useEffect(() => {
     if (!company) return;
@@ -470,26 +450,6 @@ export default function SettingsMenuPage(): JSX.Element {
       fillVehForm(null);
       await loadVehicles();
     }
-  }
-
-  async function savePricing(): Promise<void> {
-    setBusy(true);
-    setErr(null);
-    setMsg(null);
-    const r = await apiFetch("/settings/pricing", {
-      method: "PUT",
-      json: {
-        regime: pricingRegime,
-        features: pricingFeatures.filter((id) => id !== "distance" && id !== "time"),
-      },
-    });
-    setBusy(false);
-    if (!r.ok) setErr(r.error);
-    else setMsg("料金の希望を保存しました。");
-  }
-
-  function togglePricingFeature(id: string): void {
-    setPricingFeatures((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
   function onLicensePhotoSide(side: "front" | "back", f: File | null): void {
@@ -833,63 +793,7 @@ export default function SettingsMenuPage(): JSX.Element {
     </div>
   );
 
-  const pricingPanel = (
-    <div className="settings-form">
-      <fieldset className="settings-fieldset">
-        <legend>料金体制をお選びください</legend>
-        <label>
-          <input type="radio" name="regime" value="" checked={pricingRegime === ""} onChange={() => setPricingRegime("")} />{" "}
-          未選択
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="regime"
-            value="distance"
-            checked={pricingRegime === "distance"}
-            onChange={() => setPricingRegime("distance")}
-          />{" "}
-          距離制を主とする
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="regime"
-            value="time"
-            checked={pricingRegime === "time"}
-            onChange={() => setPricingRegime("time")}
-          />{" "}
-          時間制を主とする
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="regime"
-            value="both"
-            checked={pricingRegime === "both"}
-            onChange={() => setPricingRegime("both")}
-          />{" "}
-          距離・時間の併用
-        </label>
-      </fieldset>
-      <p className="settings-hint">取り扱い項目（複数選択）</p>
-      <div className="settings-check-grid">
-        {PRICING_FEATURE_OPTS.map((o) => (
-          <label key={o.id} className="settings-check">
-            <input
-              type="checkbox"
-              checked={pricingFeatures.includes(o.id)}
-              onChange={() => togglePricingFeature(o.id)}
-            />{" "}
-            {o.label}
-          </label>
-        ))}
-      </div>
-      <button type="button" className="settings-primary" disabled={busy} onClick={() => void savePricing()}>
-        保存
-      </button>
-    </div>
-  );
+  const pricingPanel = <PricingSettingsPanel setMsg={setMsg} setErr={setErr} busy={busy} setBusy={setBusy} />;
 
   const tabItems: TabDef[] = [
     { id: "company", label: "会社情報", children: companyPanel },

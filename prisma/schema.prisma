@@ -458,6 +458,9 @@ model TripLeg {
   /// 公式帳票・税理士提出用 CSV から除外（データは保持。集計は用途に応じて全件／公式のみを API で切替）
   excludeFromOfficialPrint Boolean @default(false)
 
+  /// 迎車・左ハンドル・外車・キャンセル等（設定の基本額をデフォルト表示）
+  legSurchargesJson Json @default("{}")
+
   @@index([dailyReportId])
 }
 
