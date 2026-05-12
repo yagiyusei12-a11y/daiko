@@ -15,14 +15,13 @@ git push -u origin main
 
 履歴を `order` モノレポから切り出したい場合は `git filter-repo` 等で別途行ってください。このディレクトリを新規リポジトリとして運用する前提です。
 
-## 機能スコープ（実装済み骨格）
+## 機能スコープ（いま動いているもの）
 
-- マルチテナント: テナント登録、設定、サブスクプラン（FREE 開始）、RBAC（`owner` ロール）
-- 認証: 登録・ログイン（slug+email+password）、JWT アクセストークン + リフレッシュトークン
-- マスタ: 従業員、随伴車、料金プラン＋版
-- 業務: 日報（事業日自動）、運行明細＋料金計算、タイムカード、酒気確認
-- 給与: 月次プレビュー（ドラフト保存）・確定ロック
-- 帳票: テンプレート CRUD（シード）と HTML プレビュー（PDF は後段で Chromium 等を追加可能）
+アプリを**一から作り直す**段階のため、**API は認証のみ**（`register` / `login` / `refresh` / `me`）、**Web は登録・ログイン・ホーム**のみです。
+
+- マルチテナント・認証: `POST /api/v1/auth/register` でテナント＋`TenantSettings`＋`Subscription`＋`owner`/`staff` ロール＋オーナーユーザー、`login` / `refresh` / `me`（JWT + リフレッシュトークン）
+- **Prisma スキーマとマイグレーション**は従来どおり（従業員・日報・帳票テンプレ用テーブルなど）。**REST ルートは未登録**のため、DB の業務テーブルは API からは触れません。機能を足すときにルートと UI を追加してください。
+- `npm run db:seed` は **帳票用 `DocumentTemplate` 等**のシードのみ（従来どおり）。
 
 ## ブラウザ UI（SPA）
 
@@ -56,7 +55,7 @@ npm run dev
 - systemd: `deploy/daiko-app.service` を `/etc/systemd/system/` に配置（`WorkingDirectory` は **daiko 専用 clone のルート**、例: `/home/ubuntu/daiko`）
 - 初回のみ VPS 上で `git clone <daiko-remote> ~/daiko` のあと、order の clone から `bash ~/order/deploy/vps/install-daiko-systemd.sh ~/daiko`（VPS で order が `~/order` の場合）
 - 既存で `~/order/daiko` にあった場合: **pull でサブフォルダが消える前に** `.env` のバックアップ、`mv ~/order/daiko ~/daiko` などで専用 clone に移し、systemd の `WorkingDirectory` / `EnvironmentFile` を合わせる
-- デプロイ: `scripts/deploy-vps.ps1`（`.env.deploy` に `DAIKO_VPS_*`）。リモートでは `migrate deploy` のあと **`npm run db:seed`** で帳票テンプレ（9 種＋酒気スタブ）を投入する。
+- デプロイ: `scripts/deploy-vps.ps1`（`.env.deploy` に `DAIKO_VPS_*`）。リモートでは `migrate deploy` のあと **`npm run db:seed`** で帳票テンプレ（9 種＋酒気スタブ）を投入する（**アプリ API は認証のみ**でもシードは従来どおり実行されます）。
 
 ### 本番 DB を白紙にする（テナント・業務データをすべて消す）
 
@@ -107,6 +106,6 @@ npm run dev
 
 シークレットを置かない場合、ワークフローはエラーで終了する（手動デプロイのみの運用にしてよい）。
 
-## 事業日
+## 事業日（スキーマ）
 
-テナントの `TenantSettings.businessDayRollHour` と `Tenant.timezone` に基づき、`src/lib/business-date.ts`（Luxon）で **YYYY-MM-DD** を算出し、日報・打刻・酒気に保存する。
+`TenantSettings.businessDayRollHour` や `Tenant.timezone` は DB に残っています。日報・打刻などの API を再実装するときに利用してください。

@@ -6,7 +6,6 @@
   "scripts": {
     "build": "npm run build:web && tsc",
     "build:web": "npm --prefix web install && npm --prefix web run build",
-    "test:pricing": "tsx src/lib/pricing.selftest.ts",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "db:generate": "prisma generate",
@@ -29,14 +28,10 @@
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.2",
     "fastify": "^5.2.2",
-    "luxon": "^3.5.0",
-    "playwright": "^1.50.0",
-    "prisma": "^6.19.3",
-    "zod": "^3.24.1"
+    "prisma": "^6.19.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
-    "@types/luxon": "^3.7.1",
     "@types/node": "^24.0.0",
     "tsx": "^4.19.3",
     "typescript": "^5.8.3"

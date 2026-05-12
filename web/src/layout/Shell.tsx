@@ -1,39 +1,10 @@
 import { NavLink, Outlet, Navigate } from "react-router-dom";
-import { useAuth, isStaffShiftOnlyMe } from "../auth";
+import { useAuth } from "../auth";
 
-const fullNavLinks: { to: string; label: string; perm?: string }[] = [
-  { to: "/", label: "ホーム" },
-  { to: "/employees", label: "従業員" },
-  { to: "/vehicles", label: "車両" },
-  { to: "/tariffs", label: "料金" },
-  { to: "/daily-reports", label: "日報" },
-  { to: "/customers", label: "顧客名簿" },
-  { to: "/referral-sources", label: "紹介元" },
-  { to: "/receivables", label: "売掛" },
-  { to: "/dispatch", label: "配車" },
-  { to: "/time-punches", label: "勤怠" },
-  { to: "/alcohol", label: "酒気" },
-  { to: "/payroll", label: "給与" },
-  { to: "/documents", label: "帳票" },
-  { to: "/settings", label: "設定", perm: "tenant.settings" },
-  { to: "/rbac", label: "権限", perm: "rbac.manage" },
-  { to: "/legal", label: "法定" },
-];
-
-const staffNavLinks: { to: string; label: string }[] = [
-  { to: "/", label: "ホーム" },
-  { to: "/workflow", label: "勤務" },
-  { to: "/time-punches", label: "勤怠" },
-  { to: "/alcohol", label: "酒気" },
-  { to: "/daily-reports", label: "日報" },
-];
+const navLinks: { to: string; label: string }[] = [{ to: "/", label: "ホーム" }];
 
 export default function Shell(): JSX.Element {
-  const { me, loading, logout, can } = useAuth();
-  const staffOnly = Boolean(me && isStaffShiftOnlyMe(me.permissions));
-  const navLinks = staffOnly
-    ? staffNavLinks
-    : fullNavLinks.filter((l) => !l.perm || can(l.perm));
+  const { me, loading, logout } = useAuth();
   if (loading) {
     return (
       <div className="app-loading">
