@@ -461,7 +461,8 @@ export default function DailyReports(): JSX.Element {
       <p style={{ marginTop: postCreateReportId || endShiftReportId ? "0.75rem" : 0 }}>
         <button type="button" onClick={() => setWizardOpen(true)}>
           日報を作成
-        </button>
+        </button>{" "}
+        <Link to="/daily-reports/run">一画面で日報＋運行を作成</Link>
       </p>
       <StepWizard
         open={wizardOpen}

@@ -424,6 +424,13 @@ model TripLeg {
   applyEarlyRushFlatYen          Boolean @default(false)
   createdAt        DateTime @default(now())
 
+  /// 駐車場等の立替金（円）。運賃・売上集計とは別扱い
+  parkingAdvanceYen Int @default(0)
+  /// 運行区間のメーター開始（任意・記録用、メートル単位の整数など運用で統一）
+  tripMeterStartM Int?
+  /// 運行区間のメーター終了（任意）
+  tripMeterEndM Int?
+
   customerId       String?
   customer         Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   referralSourceId String?

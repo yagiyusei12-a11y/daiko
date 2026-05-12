@@ -75,6 +75,31 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     return { dailyReports: rows };
   });
 
+  app.get("/daily-reports/vehicle-day-context", { preHandler: [authenticate] }, async (req, reply) => {
+    const tid = tenantIdFromReq(req);
+    const { vehicleId, occurredAt } = req.query as { vehicleId?: string; occurredAt?: string };
+    if (!vehicleId) return reply.code(400).send({ error: "vehicleId required" });
+    const veh = await prisma.vehicle.findFirst({ where: { id: vehicleId, tenantId: tid } });
+    if (!veh) return reply.code(404).send({ error: "vehicle not found" });
+    const tenant = await prisma.tenant.findUnique({ where: { id: tid }, include: { settings: true } });
+    if (!tenant?.settings) return reply.code(500).send({ error: "tenant settings missing" });
+    const at = occurredAt ? new Date(occurredAt) : new Date();
+    if (!Number.isFinite(at.getTime())) return reply.code(400).send({ error: "invalid occurredAt" });
+    const businessDate = businessDateYmdForOccurredAt(at, tenant.timezone, tenant.settings.businessDayRollHour);
+    const reportsToday = await prisma.dailyReport.count({ where: { tenantId: tid, vehicleId, businessDate } });
+    const lastAny = await prisma.dailyReport.findFirst({
+      where: { tenantId: tid, vehicleId },
+      orderBy: [{ businessDate: "desc" }, { createdAt: "desc" }],
+    });
+    return {
+      businessDate,
+      reportsTodayWithVehicle: reportsToday,
+      isFirstVehicleUseToday: reportsToday === 0,
+      lastClosingMeterEnd: lastAny?.meterEnd ?? null,
+      lastReportBusinessDate: lastAny?.businessDate ?? null,
+    };
+  });
+
   app.get("/daily-reports/export-range.csv", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
     const u = jwtUser(req);
@@ -100,7 +125,9 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       },
       take: 400,
     });
-    const lines: string[] = ["\uFEFFbusinessDate,vehicle,mainDriver,partnerDriver,tripClient,origin,destination,fareYen,distanceM,waitingMinutes,officialExclude,customerId,referral"];
+    const lines: string[] = [
+      "\uFEFFbusinessDate,vehicle,mainDriver,partnerDriver,tripClient,origin,destination,fareYen,distanceM,waitingMinutes,officialExclude,customerId,referral,parkingAdvanceYen",
+    ];
     for (const r of rows) {
       const trips = only ? r.trips.filter((t) => !t.excludeFromOfficialPrint) : r.trips;
       for (const t of trips) {
@@ -119,6 +146,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
             csvCell(t.excludeFromOfficialPrint ? "1" : "0"),
             csvCell(t.customerId ?? ""),
             csvCell(t.referralSource?.name ?? ""),
+            csvCell(String(t.parkingAdvanceYen)),
           ].join(","),
         );
       }
@@ -265,7 +293,7 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
     if (!dailyReportVisibleToStaff(r, access)) return reply.code(404).send({ error: "not found" });
     const trips = only ? r.trips.filter((t) => !t.excludeFromOfficialPrint) : r.trips;
     const lines: string[] = [
-      "\uFEFFbusinessDate,vehicle,mainDriver,partnerDriver,tripClient,origin,destination,fareYen,distanceM,waitingMinutes,officialExclude,referral",
+      "\uFEFFbusinessDate,vehicle,mainDriver,partnerDriver,tripClient,origin,destination,fareYen,distanceM,waitingMinutes,officialExclude,referral,parkingAdvanceYen",
     ];
     for (const t of trips) {
       lines.push(
@@ -282,6 +310,7 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
           csvCell(String(t.waitingMinutes)),
           csvCell(t.excludeFromOfficialPrint ? "1" : "0"),
           csvCell(t.referralSource?.name ?? ""),
+          csvCell(String(t.parkingAdvanceYen)),
         ].join(","),
       );
     }
@@ -483,6 +512,15 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
       return reply.code(400).send({ error: "invalid duty/break datetime" });
     }
     const businessDate = businessDateYmdForOccurredAt(at, tenant.timezone, tenant.settings.businessDayRollHour);
+    const lastClosing = await prisma.dailyReport.findFirst({
+      where: { tenantId: tid, vehicleId },
+      orderBy: [{ businessDate: "desc" }, { createdAt: "desc" }],
+    });
+    if (lastClosing != null && meterStart < lastClosing.meterEnd) {
+      return reply
+        .code(400)
+        .send({ error: `meterStart must be >= previous report meter end (${lastClosing.meterEnd})` });
+    }
     const row = await prisma.dailyReport.create({
       data: {
         tenantId: tid,
@@ -547,6 +585,9 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
       referralSourceId?: string | null;
       fareOverrideYen?: number | null;
       excludeFromOfficialPrint?: boolean;
+      parkingAdvanceYen?: number;
+      tripMeterStartM?: number | null;
+      tripMeterEndM?: number | null;
     };
   }>("/daily-reports/:id/trips", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
@@ -624,6 +665,22 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
     const applyLeftHandSurchargeFlat = Boolean(req.body?.applyLeftHandSurchargeFlat);
     const excludeFromOfficialPrint = Boolean(req.body?.excludeFromOfficialPrint);
 
+    const parkingAdvanceYen = Math.max(0, Math.floor(Number(req.body?.parkingAdvanceYen ?? 0)));
+    if (!Number.isFinite(parkingAdvanceYen)) return reply.code(400).send({ error: "invalid parkingAdvanceYen" });
+
+    let tripMeterStartM: number | null = null;
+    if (req.body?.tripMeterStartM !== undefined && req.body.tripMeterStartM !== null) {
+      const t = Math.floor(Number(req.body.tripMeterStartM));
+      if (!Number.isFinite(t)) return reply.code(400).send({ error: "invalid tripMeterStartM" });
+      tripMeterStartM = t;
+    }
+    let tripMeterEndM: number | null = null;
+    if (req.body?.tripMeterEndM !== undefined && req.body.tripMeterEndM !== null) {
+      const t = Math.floor(Number(req.body.tripMeterEndM));
+      if (!Number.isFinite(t)) return reply.code(400).send({ error: "invalid tripMeterEndM" });
+      tripMeterEndM = t;
+    }
+
     let fareOverrideYen: number | null = null;
     if (req.body?.fareOverrideYen !== undefined && req.body.fareOverrideYen !== null) {
       const o = Math.floor(Number(req.body.fareOverrideYen));
@@ -686,6 +743,9 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
         referralSourceId,
         fareOverrideYen,
         excludeFromOfficialPrint,
+        parkingAdvanceYen,
+        tripMeterStartM,
+        tripMeterEndM,
       },
       include: tripRel,
     });
@@ -720,6 +780,9 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
       referralSourceId?: string | null;
       fareOverrideYen?: number | null;
       excludeFromOfficialPrint?: boolean;
+      parkingAdvanceYen?: number;
+      tripMeterStartM?: number | null;
+      tripMeterEndM?: number | null;
     };
   }>("/daily-reports/:id/trips/:tripId", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
@@ -848,6 +911,32 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
     const excludeFromOfficialPrint =
       req.body?.excludeFromOfficialPrint !== undefined ? Boolean(req.body.excludeFromOfficialPrint) : trip.excludeFromOfficialPrint;
 
+    let parkingAdvanceYen = trip.parkingAdvanceYen;
+    if (req.body?.parkingAdvanceYen !== undefined) {
+      const p = Math.floor(Number(req.body.parkingAdvanceYen));
+      if (!Number.isFinite(p) || p < 0) return reply.code(400).send({ error: "invalid parkingAdvanceYen" });
+      parkingAdvanceYen = p;
+    }
+
+    let tripMeterStartM: number | null | undefined = undefined;
+    if (req.body?.tripMeterStartM !== undefined) {
+      if (req.body.tripMeterStartM === null) tripMeterStartM = null;
+      else {
+        const t = Math.floor(Number(req.body.tripMeterStartM));
+        if (!Number.isFinite(t)) return reply.code(400).send({ error: "invalid tripMeterStartM" });
+        tripMeterStartM = t;
+      }
+    }
+    let tripMeterEndM: number | null | undefined = undefined;
+    if (req.body?.tripMeterEndM !== undefined) {
+      if (req.body.tripMeterEndM === null) tripMeterEndM = null;
+      else {
+        const t = Math.floor(Number(req.body.tripMeterEndM));
+        if (!Number.isFinite(t)) return reply.code(400).send({ error: "invalid tripMeterEndM" });
+        tripMeterEndM = t;
+      }
+    }
+
     let departedAt = trip.departedAt;
     let arrivedAt = trip.arrivedAt;
     if (req.body?.departedAt !== undefined) {
@@ -908,6 +997,9 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
         referralSourceId,
         fareOverrideYen: fareOverrideYen !== undefined ? fareOverrideYen : trip.fareOverrideYen,
         excludeFromOfficialPrint,
+        parkingAdvanceYen,
+        ...(tripMeterStartM !== undefined ? { tripMeterStartM } : {}),
+        ...(tripMeterEndM !== undefined ? { tripMeterEndM } : {}),
       },
       include: tripRel,
     });

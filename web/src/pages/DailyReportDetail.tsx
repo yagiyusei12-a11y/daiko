@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { apiFetch, apiFetchBlob, getAccessToken } from "../api";
+import { geolocationFillInto } from "../lib/reverseGeocode";
 import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 function isoToDatetimeLocal(iso: string | null | undefined): string {
@@ -16,6 +17,12 @@ function datetimeLocalToIso(s: string): string | null {
   if (!t) return null;
   const d = new Date(t);
   return Number.isFinite(d.getTime()) ? d.toISOString() : null;
+}
+
+function nowDatetimeLocal(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 type Trip = {
@@ -48,6 +55,9 @@ type Trip = {
   referralSource: { id: string; name: string } | null;
   fareOverrideYen: number | null;
   excludeFromOfficialPrint: boolean;
+  parkingAdvanceYen: number;
+  tripMeterStartM: number | null;
+  tripMeterEndM: number | null;
 };
 type Emp = { id: string; familyName: string; givenName: string };
 type VehicleRef = { id: string; label: string; plate: string | null };
@@ -125,6 +135,10 @@ export default function DailyReportDetail(): JSX.Element {
   const [payPayPay, setPayPayPay] = useState("0");
   const [payRecv, setPayRecv] = useState("0");
   const [paySaving, setPaySaving] = useState(false);
+
+  const [parkingAdvanceYen, setParkingAdvanceYen] = useState("0");
+  const [tripMeterStartM, setTripMeterStartM] = useState("");
+  const [tripMeterEndM, setTripMeterEndM] = useState("");
 
   const [employees, setEmployees] = useState<Emp[]>([]);
   const [metaMeterStart, setMetaMeterStart] = useState("");
@@ -231,6 +245,9 @@ export default function DailyReportDetail(): JSX.Element {
     setCharterVehicleNo("");
     setViaNote("");
     setTripRole("MAIN_DRIVER");
+    setParkingAdvanceYen("0");
+    setTripMeterStartM("");
+    setTripMeterEndM("");
   }
 
   function openAddTripWizard(): void {
@@ -302,6 +319,16 @@ export default function DailyReportDetail(): JSX.Element {
       if (fareOverrideYen.trim() !== "") {
         const fo = Math.floor(Number(fareOverrideYen));
         if (Number.isFinite(fo) && fo >= 0) json.fareOverrideYen = fo;
+      }
+      const park = Math.max(0, Math.floor(Number(parkingAdvanceYen || 0)));
+      json.parkingAdvanceYen = park;
+      if (tripMeterStartM.trim() !== "") {
+        const t = Math.floor(Number(tripMeterStartM));
+        if (Number.isFinite(t)) json.tripMeterStartM = t;
+      }
+      if (tripMeterEndM.trim() !== "") {
+        const t = Math.floor(Number(tripMeterEndM));
+        if (Number.isFinite(t)) json.tripMeterEndM = t;
       }
       const r = await apiFetch<Trip>(`/daily-reports/${id}/trips`, {
         method: "POST",
@@ -495,8 +522,8 @@ export default function DailyReportDetail(): JSX.Element {
   const steps: StepWizardStep[] = [
     {
       id: "route",
-      title: "顧客と区間",
-      description: "名簿から選択すると出発地・到着地・料金版を埋められます。",
+      title: "依頼者と区間",
+      description: "名簿から選択すると出発地・到着地・料金版を埋められます。GPSは HTTPS で位置情報の許可が必要です。",
       canProceed: routeOk,
       children: (
         <>
@@ -525,12 +552,22 @@ export default function DailyReportDetail(): JSX.Element {
               </option>
             ))}
           </select>
-          <label>顧客名</label>
+          <label>依頼者名</label>
           <input value={clientName} onChange={(e) => setClientName(e.target.value)} autoFocus />
-          <label>出発地</label>
+          <label>依頼場所（出発）</label>
           <input value={origin} onChange={(e) => setOrigin(e.target.value)} />
+          <p style={{ marginTop: "0.25rem" }}>
+            <button type="button" onClick={() => geolocationFillInto(setOrigin, setErr)}>
+              GPSで町名を入力
+            </button>
+          </p>
           <label>到着地</label>
           <input value={destination} onChange={(e) => setDestination(e.target.value)} />
+          <p style={{ marginTop: "0.25rem" }}>
+            <button type="button" onClick={() => geolocationFillInto(setDestination, setErr)}>
+              GPSで町名を入力
+            </button>
+          </p>
           <label>
             <input type="checkbox" checked={excludeFromOfficialPrint} onChange={(e) => setExcludeFromOfficialPrint(e.target.checked)} />{" "}
             公式帳票・提出用CSVから除外（裏帳簿扱い・データは保持）
@@ -540,20 +577,35 @@ export default function DailyReportDetail(): JSX.Element {
     },
     {
       id: "times",
-      title: "時刻・客車・役割",
-      description: "乗務記録様式に合わせた出発・到着時刻と客車番号などです。",
+      title: "時刻・客車・運行メーター",
+      description: "出発・到着、客車番号、運行メーター記録、役割です。",
       canProceed: timesOk,
       children: (
         <>
           <label>出発日時</label>
           <input type="datetime-local" value={departedAtLocal} onChange={(e) => setDepartedAtLocal(e.target.value)} />
-          <label>到着日時</label>
+          <button type="button" onClick={() => setDepartedAtLocal(nowDatetimeLocal())}>
+            出発に現在時刻
+          </button>
+          <label style={{ display: "block", marginTop: "0.5rem" }}>到着日時</label>
           <input type="datetime-local" value={arrivedAtLocal} onChange={(e) => setArrivedAtLocal(e.target.value)} />
-          <label>客車の車両番号（任意）</label>
+          <button type="button" onClick={() => setArrivedAtLocal(nowDatetimeLocal())}>
+            到着に現在時刻
+          </button>
+          <label style={{ display: "block", marginTop: "0.5rem" }}>客車の車両番号（任意）</label>
           <input value={charterVehicleNo} onChange={(e) => setCharterVehicleNo(e.target.value)} placeholder="例: 品川300あ1234" />
-          <label>経由地・メモ（任意）</label>
+          <label style={{ display: "block", marginTop: "0.5rem" }}>経由地・メモ（任意）</label>
           <input value={viaNote} onChange={(e) => setViaNote(e.target.value)} />
-          <label>運転の区分</label>
+          <p style={{ marginTop: "0.25rem" }}>
+            <button type="button" onClick={() => geolocationFillInto(setViaNote, setErr)}>
+              GPSで町名を入力
+            </button>
+          </p>
+          <label style={{ display: "block", marginTop: "0.5rem" }}>運行メーター開始（任意・記録用）</label>
+          <input value={tripMeterStartM} onChange={(e) => setTripMeterStartM(e.target.value)} inputMode="numeric" />
+          <label style={{ display: "block", marginTop: "0.35rem" }}>運行メーター終了（任意）</label>
+          <input value={tripMeterEndM} onChange={(e) => setTripMeterEndM(e.target.value)} inputMode="numeric" />
+          <label style={{ display: "block", marginTop: "0.5rem" }}>運転の区分</label>
           <select value={tripRole} onChange={(e) => setTripRole(e.target.value as "MAIN_DRIVER" | "PARTNER_DRIVER")}>
             <option value="MAIN_DRIVER">主として運転（代行）</option>
             <option value="PARTNER_DRIVER">同乗・随伴として運転</option>
@@ -563,12 +615,14 @@ export default function DailyReportDetail(): JSX.Element {
     },
     {
       id: "metrics",
-      title: "距離・待機・料金",
-      description: "手動運賃を入れると料金版より優先されます（空で料金版計算）。",
+      title: "距離・待機・料金・立替",
+      description: "駐車場等の立替は運賃・売上集計とは別です。手動運賃を入れると料金版より優先されます（空で料金版計算）。",
       canProceed: distOk && waitOk && viaOk && pickupOk && fareOvOk && timesOk,
       children: (
         <>
-          <label>手動運賃（円・空で料金版）</label>
+          <label>駐車場等の立替（円・運賃とは別）</label>
+          <input value={parkingAdvanceYen} onChange={(e) => setParkingAdvanceYen(e.target.value)} inputMode="numeric" />
+          <label style={{ display: "block", marginTop: "0.75rem" }}>手動運賃（円・空で料金版）</label>
           <input value={fareOverrideYen} onChange={(e) => setFareOverrideYen(e.target.value)} inputMode="numeric" />
           <label>距離 (m)</label>
           <input value={distanceM} onChange={(e) => setDistanceM(e.target.value)} inputMode="numeric" />
@@ -645,6 +699,12 @@ export default function DailyReportDetail(): JSX.Element {
           <dt>距離 / 待機</dt>
           <dd>
             {distanceM} m / {waitingMinutes || "0"} 分
+          </dd>
+          <dt>駐車場等の立替</dt>
+          <dd>{parkingAdvanceYen.trim() ? `${parkingAdvanceYen} 円` : "0 円"}</dd>
+          <dt>運行メーター</dt>
+          <dd>
+            {tripMeterStartM.trim() || "—"} → {tripMeterEndM.trim() || "—"}
           </dd>
           <dt>料金版</dt>
           <dd>{tariffVersionId ? `v${versions.find((x) => x.id === tariffVersionId)?.version ?? ""}` : "なし"}</dd>
@@ -809,6 +869,7 @@ export default function DailyReportDetail(): JSX.Element {
                 <th>経由</th>
                 <th>役割</th>
                 <th>運賃</th>
+                <th>立替</th>
                 <th>名簿/紹介</th>
                 <th>公式</th>
                 <th>距離</th>
@@ -834,6 +895,7 @@ export default function DailyReportDetail(): JSX.Element {
                   <td>{t.viaNote ?? "—"}</td>
                   <td>{t.role === "PARTNER_DRIVER" ? "同乗" : "主"}</td>
                   <td>{t.fareYen}</td>
+                  <td>{t.parkingAdvanceYen}</td>
                   <td>
                     {[t.customer?.displayName, t.referralSource?.name].filter(Boolean).join(" / ") || "—"}
                   </td>

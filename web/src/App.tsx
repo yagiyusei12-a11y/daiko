@@ -10,6 +10,7 @@ import Vehicles from "./pages/Vehicles";
 import Tariffs from "./pages/Tariffs";
 import DailyReports from "./pages/DailyReports";
 import DailyReportDetail from "./pages/DailyReportDetail";
+import DailyReportRunWizard from "./pages/DailyReportRunWizard";
 import TimePunches from "./pages/TimePunches";
 import Alcohol from "./pages/Alcohol";
 import Payroll from "./pages/Payroll";
@@ -34,6 +35,7 @@ export default function App(): JSX.Element {
         <Route path="time-punches" element={<TimePunches />} />
         <Route path="alcohol" element={<Alcohol />} />
         <Route path="daily-reports" element={<DailyReports />} />
+        <Route path="daily-reports/run" element={<DailyReportRunWizard />} />
         <Route path="daily-reports/:id" element={<DailyReportDetail />} />
         <Route element={<RequireFullNav />}>
           <Route path="employees" element={<Employees />} />

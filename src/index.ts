@@ -26,6 +26,7 @@ import { registerCustomerRoutes } from "./routes/customers.js";
 import { registerReferralSourceRoutes } from "./routes/referralSources.js";
 import { registerAccountsReceivableRoutes } from "./routes/accountsReceivable.js";
 import { registerDispatchReservationRoutes } from "./routes/dispatchReservations.js";
+import { registerGeocodeRoutes } from "./routes/geocode.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -108,6 +109,7 @@ await app.register(registerCustomerRoutes, { prefix: v1 });
 await app.register(registerReferralSourceRoutes, { prefix: v1 });
 await app.register(registerAccountsReceivableRoutes, { prefix: v1 });
 await app.register(registerDispatchReservationRoutes, { prefix: v1 });
+await app.register(registerGeocodeRoutes, { prefix: v1 });
 
 app.get("/api/v1/openapi.json", async () => app.swagger());
 
