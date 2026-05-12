@@ -80,6 +80,26 @@ export async function registerEmployeeRoutes(app: FastifyInstance): Promise<void
     return row;
   });
 
+  app.delete<{ Params: { id: string } }>("/employees/:id", { preHandler: [authenticate] }, async (req, reply) => {
+    const tid = tenantIdFromReq(req);
+    const id = req.params.id;
+    const cur = await prisma.employee.findFirst({ where: { id, tenantId: tid } });
+    if (!cur) return reply.code(404).send({ error: "not found" });
+
+    const mainReports = await prisma.dailyReport.count({
+      where: { tenantId: tid, mainEmployeeId: id },
+    });
+    if (mainReports > 0) {
+      return reply.code(409).send({
+        error:
+          "この従業員は運行日報の主運転者として登録があるため削除できません。該当日報の主運転者を変更するか、日報を削除してから再度お試しください。",
+      });
+    }
+
+    await prisma.employee.delete({ where: { id } });
+    return reply.code(204).send();
+  });
+
   app.patch<{
     Params: { id: string };
     Body: {

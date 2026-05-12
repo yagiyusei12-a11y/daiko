@@ -37,6 +37,23 @@ function ext(e: Emp, key: string): string {
   return asExt(e.registerExtension)[key] ?? "";
 }
 
+function ReqMark(): JSX.Element {
+  return (
+    <span style={{ color: "#c62828", fontWeight: 700, marginRight: "0.25em" }} aria-hidden>
+      ※
+    </span>
+  );
+}
+
+function ReqLabel({ children }: { children: React.ReactNode }): JSX.Element {
+  return (
+    <label>
+      <ReqMark />
+      {children}
+    </label>
+  );
+}
+
 function emptyCreateExt(): RegisterExt {
   return {
     gender: "",
@@ -181,10 +198,10 @@ export default function Employees(): JSX.Element {
       canProceed: nameOk,
       children: (
         <>
-          <label>姓</label>
-          <input value={familyName} onChange={(e) => setFamilyName(e.target.value)} autoFocus />
-          <label>名</label>
-          <input value={givenName} onChange={(e) => setGivenName(e.target.value)} />
+          <ReqLabel>姓</ReqLabel>
+          <input value={familyName} onChange={(e) => setFamilyName(e.target.value)} autoFocus required aria-required />
+          <ReqLabel>名</ReqLabel>
+          <input value={givenName} onChange={(e) => setGivenName(e.target.value)} required aria-required />
         </>
       ),
     },
@@ -195,10 +212,10 @@ export default function Employees(): JSX.Element {
       canProceed: stepRosterPersonOk,
       children: (
         <>
-          <label>フリガナ（必須）</label>
-          <input value={newFurigana} onChange={(e) => setNewFurigana(e.target.value)} placeholder="例: ヤマダ タロウ" />
-          <label>性別</label>
-          <select value={createExt.gender ?? ""} onChange={(e) => setCreateField("gender", e.target.value)}>
+          <ReqLabel>フリガナ</ReqLabel>
+          <input value={newFurigana} onChange={(e) => setNewFurigana(e.target.value)} placeholder="例: ヤマダ タロウ" required aria-required />
+          <ReqLabel>性別</ReqLabel>
+          <select value={createExt.gender ?? ""} onChange={(e) => setCreateField("gender", e.target.value)} required aria-required>
             <option value="">選択してください</option>
             {GENDER_OPTIONS.map((g) => (
               <option key={g} value={g}>
@@ -206,11 +223,13 @@ export default function Employees(): JSX.Element {
               </option>
             ))}
           </select>
-          <label>生年月日</label>
+          <ReqLabel>生年月日</ReqLabel>
           <input
             type="date"
             value={createExt.dateOfBirthYmd ?? ""}
             onChange={(e) => setCreateField("dateOfBirthYmd", e.target.value)}
+            required
+            aria-required
           />
         </>
       ),
@@ -222,14 +241,23 @@ export default function Employees(): JSX.Element {
       canProceed: stepAddressOk,
       children: (
         <>
-          <label>郵便番号（必須）</label>
+          <ReqLabel>郵便番号</ReqLabel>
           <input
             value={createExt.postalCode ?? ""}
             onChange={(e) => setCreateField("postalCode", e.target.value)}
             placeholder="例: 1234567"
+            required
+            aria-required
           />
-          <label>住所（必須）</label>
-          <textarea rows={3} value={newAddress} onChange={(e) => setNewAddress(e.target.value)} style={{ width: "100%", maxWidth: 480 }} />
+          <ReqLabel>住所</ReqLabel>
+          <textarea
+            rows={3}
+            value={newAddress}
+            onChange={(e) => setNewAddress(e.target.value)}
+            style={{ width: "100%", maxWidth: 480 }}
+            required
+            aria-required
+          />
         </>
       ),
     },
@@ -244,16 +272,19 @@ export default function Employees(): JSX.Element {
           <input value={createExt.phoneHome ?? ""} onChange={(e) => setCreateField("phoneHome", e.target.value)} />
           <label>電話（携帯）</label>
           <input value={createExt.phoneMobile ?? ""} onChange={(e) => setCreateField("phoneMobile", e.target.value)} />
-          <p style={{ fontSize: "0.8rem", margin: "0.25rem 0 0.5rem", opacity: 0.85 }}>
-            自宅・携帯のどちらか一方以上を入力してください。
+          <p style={{ fontSize: "0.8rem", margin: "0.35rem 0 0.5rem", color: "#c62828", fontWeight: 600 }}>
+            <ReqMark />
+            自宅または携帯のいずれか一方以上が必須です。
           </p>
-          <label>緊急連絡先 氏名（必須）</label>
+          <ReqLabel>緊急連絡先 氏名</ReqLabel>
           <input
             value={createExt.emergencyContactName ?? ""}
             onChange={(e) => setCreateField("emergencyContactName", e.target.value)}
+            required
+            aria-required
           />
-          <label>緊急連絡先 電話（必須）</label>
-          <input value={createExt.emergencyPhone ?? ""} onChange={(e) => setCreateField("emergencyPhone", e.target.value)} />
+          <ReqLabel>緊急連絡先 電話</ReqLabel>
+          <input value={createExt.emergencyPhone ?? ""} onChange={(e) => setCreateField("emergencyPhone", e.target.value)} required aria-required />
         </>
       ),
     },
@@ -264,10 +295,16 @@ export default function Employees(): JSX.Element {
       canProceed: stepEmploymentOk,
       children: (
         <>
-          <label>採用年月日</label>
-          <input type="date" value={createExt.hiredOnYmd ?? ""} onChange={(e) => setCreateField("hiredOnYmd", e.target.value)} />
-          <label>採用区分</label>
-          <select value={createExt.employmentType ?? ""} onChange={(e) => setCreateField("employmentType", e.target.value)}>
+          <ReqLabel>採用年月日</ReqLabel>
+          <input
+            type="date"
+            value={createExt.hiredOnYmd ?? ""}
+            onChange={(e) => setCreateField("hiredOnYmd", e.target.value)}
+            required
+            aria-required
+          />
+          <ReqLabel>採用区分</ReqLabel>
+          <select value={createExt.employmentType ?? ""} onChange={(e) => setCreateField("employmentType", e.target.value)} required aria-required>
             <option value="">選択してください</option>
             {EMPLOYMENT_TYPE_OPTIONS.map((t) => (
               <option key={t} value={t}>
@@ -275,8 +312,8 @@ export default function Employees(): JSX.Element {
               </option>
             ))}
           </select>
-          <label>面接担当者名</label>
-          <input value={createExt.interviewerName ?? ""} onChange={(e) => setCreateField("interviewerName", e.target.value)} />
+          <ReqLabel>面接担当者名</ReqLabel>
+          <input value={createExt.interviewerName ?? ""} onChange={(e) => setCreateField("interviewerName", e.target.value)} required aria-required />
         </>
       ),
     },
@@ -287,19 +324,23 @@ export default function Employees(): JSX.Element {
       canProceed: stepLicenseOk,
       children: (
         <>
-          <label>免許の種類（必須）</label>
+          <ReqLabel>免許の種類</ReqLabel>
           <input
             value={createExt.licenseTypes ?? ""}
             onChange={(e) => setCreateField("licenseTypes", e.target.value)}
             placeholder="例: 普通一種"
+            required
+            aria-required
           />
-          <label>免許証の番号（必須）</label>
-          <input value={createExt.licenseNumber ?? ""} onChange={(e) => setCreateField("licenseNumber", e.target.value)} />
-          <label>有効期限</label>
+          <ReqLabel>免許証の番号</ReqLabel>
+          <input value={createExt.licenseNumber ?? ""} onChange={(e) => setCreateField("licenseNumber", e.target.value)} required aria-required />
+          <ReqLabel>有効期限</ReqLabel>
           <input
             type="date"
             value={createExt.licenseExpiresOnYmd ?? ""}
             onChange={(e) => setCreateField("licenseExpiresOnYmd", e.target.value)}
+            required
+            aria-required
           />
           <label>免許の条件等（任意）</label>
           <textarea
@@ -403,11 +444,23 @@ export default function Employees(): JSX.Element {
     else await load();
   }
 
+  async function removeEmployee(id: string, displayName: string): Promise<void> {
+    if (!window.confirm(`「${displayName}」を削除します。取り消せません。よろしいですか？`)) return;
+    setErr(null);
+    const r = await apiFetch<unknown>(`/employees/${id}`, { method: "DELETE" });
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    if (editId === id) setEditId(null);
+    await load();
+  }
+
   return (
     <Card title="従業員">
       <Err msg={err} />
       <p style={{ fontSize: "0.82rem", marginTop: 0 }}>
-        新規追加は従事者名簿の項目（氏名・フリガナ・性別・生年月日・住所・連絡先・採用・免許など）をウィザードで入力します。一覧の免許・電話は参照のみです。退職日や続柄などは「名簿・基本情報」から追加入力できます。
+        新規追加は従事者名簿の項目（氏名・フリガナ・性別・生年月日・住所・連絡先・採用・免許など）をウィザードで入力します。一覧の免許・電話は参照のみです。退職日や続柄などは「名簿・基本情報」から追加入力できます。削除は運行日報の主運転者に登録されていない従業員のみ可能です。
       </p>
       <p style={{ marginTop: "0.5rem" }}>
         <button type="button" onClick={() => setAddWizardOpen(true)}>
@@ -457,7 +510,14 @@ export default function Employees(): JSX.Element {
                     <button type="button" onClick={() => void retire(x.id)}>
                       退職
                     </button>
-                  ) : null}
+                  ) : null}{" "}
+                  <button
+                    type="button"
+                    onClick={() => void removeEmployee(x.id, `${x.familyName} ${x.givenName}`)}
+                    style={{ color: "#b00020" }}
+                  >
+                    削除
+                  </button>
                 </td>
               </tr>
             ))}
