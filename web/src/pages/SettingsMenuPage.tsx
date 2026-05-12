@@ -1,19 +1,797 @@
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../auth";
-import { Card } from "../ui";
+import { apiFetch } from "../api";
+import { Card, Err, Tabs, type TabDef } from "../ui";
+
+const JP_PREFECTURES = [
+  "北海道",
+  "青森県",
+  "岩手県",
+  "宮城県",
+  "秋田県",
+  "山形県",
+  "福島県",
+  "茨城県",
+  "栃木県",
+  "群馬県",
+  "埼玉県",
+  "千葉県",
+  "東京都",
+  "神奈川県",
+  "新潟県",
+  "富山県",
+  "石川県",
+  "福井県",
+  "山梨県",
+  "長野県",
+  "岐阜県",
+  "静岡県",
+  "愛知県",
+  "三重県",
+  "滋賀県",
+  "京都府",
+  "大阪府",
+  "兵庫県",
+  "奈良県",
+  "和歌山県",
+  "鳥取県",
+  "島根県",
+  "岡山県",
+  "広島県",
+  "山口県",
+  "徳島県",
+  "香川県",
+  "愛媛県",
+  "高知県",
+  "福岡県",
+  "佐賀県",
+  "長崎県",
+  "熊本県",
+  "大分県",
+  "宮崎県",
+  "鹿児島県",
+  "沖縄県",
+];
+
+const PRICING_FEATURE_OPTS: { id: string; label: string }[] = [
+  { id: "distance", label: "距離制" },
+  { id: "time", label: "時間制" },
+  { id: "pickup", label: "迎車料金" },
+  { id: "waiting", label: "待機時間" },
+  { id: "leftHand", label: "左ハンドル" },
+  { id: "foreignCar", label: "外車" },
+  { id: "specialFare", label: "特別料金" },
+  { id: "cancel", label: "キャンセル" },
+];
+
+type CompanyDto = {
+  tenantName: string;
+  tenantSlug: string;
+  legalTradeName: string | null;
+  legalRepresentativeName: string | null;
+  legalPostalCode: string | null;
+  legalPrefecture: string | null;
+  legalStreetAddress: string | null;
+  legalBusinessAddress: string | null;
+  legalPhone: string | null;
+  legalCertificationNumber: string | null;
+  legalCertificationDate: string | null;
+};
+
+type EmployeeRow = {
+  id: string;
+  familyName: string;
+  givenName: string;
+  address: string | null;
+  status: string;
+  retiredAt: string | null;
+  registerExtension: unknown;
+  loginEmail: string | null;
+  userId: string | null;
+};
+
+type VehicleRow = {
+  id: string;
+  label: string;
+  plate: string | null;
+  detailJson: unknown;
+  legalCoverageStartOn: string | null;
+  active: boolean;
+};
+
+function extStr(ext: unknown, k: string): string {
+  if (!ext || typeof ext !== "object") return "";
+  const v = (ext as Record<string, unknown>)[k];
+  return typeof v === "string" ? v : "";
+}
+
+function asDetail(v: unknown): Record<string, unknown> {
+  return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+}
+
+function insOf(detail: unknown): Record<string, unknown> {
+  const d = asDetail(detail).voluntaryInsurance;
+  return asDetail(d);
+}
 
 export default function SettingsMenuPage(): JSX.Element {
   const { me } = useAuth();
+  const [tab, setTab] = useState("company");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const [licenseClasses, setLicenseClasses] = useState<string[]>([]);
+  const [plateRegions, setPlateRegions] = useState<string[]>([]);
+
+  const [company, setCompany] = useState<CompanyDto | null>(null);
+
+  const [employees, setEmployees] = useState<EmployeeRow[]>([]);
+  const [empSel, setEmpSel] = useState<string | "new" | null>(null);
+  const [empForm, setEmpForm] = useState({
+    loginEmail: "",
+    password: "",
+    familyName: "",
+    givenName: "",
+    birthDate: "",
+    address: "",
+    phone: "",
+    mobile: "",
+    hiredOn: "",
+    retiredOn: "",
+    usualWorkDays: "",
+    emergencyName: "",
+    emergencyTel: "",
+    licenseKind: "",
+    licenseNumber: "",
+    licenseExpiresOn: "",
+    licenseConditions: "",
+    licensePhotoDataUrl: "",
+  });
+
+  const [vehicles, setVehicles] = useState<VehicleRow[]>([]);
+  const [vehSel, setVehSel] = useState<string | "new" | null>(null);
+  const [vehForm, setVehForm] = useState({
+    label: "",
+    plateOffice: "",
+    plateCategory: "",
+    plateHiragana: "",
+    plateSerial: "",
+    inspectionValidTo: "",
+    insuranceCompany: "",
+    insurancePeriodFrom: "",
+    insurancePeriodTo: "",
+    active: true,
+  });
+
+  const [pricingRegime, setPricingRegime] = useState("");
+  const [pricingFeatures, setPricingFeatures] = useState<string[]>([]);
+
+  const loadMeta = useCallback(async () => {
+    const r = await apiFetch<{ licenseClasses: string[]; plateRegions: string[] }>("/settings/meta");
+    if (r.ok) {
+      setLicenseClasses(r.data.licenseClasses);
+      setPlateRegions(r.data.plateRegions);
+    }
+  }, []);
+
+  const loadCompany = useCallback(async () => {
+    const r = await apiFetch<CompanyDto>("/settings/company");
+    if (r.ok) setCompany(r.data);
+    else setErr(r.error);
+  }, []);
+
+  const loadEmployees = useCallback(async () => {
+    const r = await apiFetch<{ employees: EmployeeRow[] }>("/settings/employees");
+    if (r.ok) setEmployees(r.data.employees);
+    else setErr(r.error);
+  }, []);
+
+  const loadVehicles = useCallback(async () => {
+    const r = await apiFetch<{ vehicles: VehicleRow[] }>("/settings/vehicles");
+    if (r.ok) setVehicles(r.data.vehicles);
+    else setErr(r.error);
+  }, []);
+
+  const loadPricing = useCallback(async () => {
+    const r = await apiFetch<{ regime: string; features: string[] }>("/settings/pricing");
+    if (r.ok) {
+      setPricingRegime(r.data.regime);
+      setPricingFeatures(r.data.features);
+    } else setErr(r.error);
+  }, []);
+
+  useEffect(() => {
+    void loadMeta();
+    void loadCompany();
+    void loadEmployees();
+    void loadVehicles();
+    void loadPricing();
+  }, [loadMeta, loadCompany, loadEmployees, loadVehicles, loadPricing]);
+
+  const fillEmpForm = (e: EmployeeRow | null): void => {
+    if (!e) {
+      setEmpSel("new");
+      setEmpForm({
+        loginEmail: "",
+        password: "",
+        familyName: "",
+        givenName: "",
+        birthDate: "",
+        address: "",
+        phone: "",
+        mobile: "",
+        hiredOn: "",
+        retiredOn: "",
+        usualWorkDays: "",
+        emergencyName: "",
+        emergencyTel: "",
+        licenseKind: "",
+        licenseNumber: "",
+        licenseExpiresOn: "",
+        licenseConditions: "",
+        licensePhotoDataUrl: "",
+      });
+      return;
+    }
+    const ex = e.registerExtension;
+    setEmpSel(e.id);
+    setEmpForm({
+      loginEmail: e.loginEmail ?? "",
+      password: "",
+      familyName: e.familyName,
+      givenName: e.givenName,
+      birthDate: extStr(ex, "birthDate"),
+      address: e.address ?? "",
+      phone: extStr(ex, "phone"),
+      mobile: extStr(ex, "mobile"),
+      hiredOn: extStr(ex, "hiredOn"),
+      retiredOn: extStr(ex, "retiredOn"),
+      usualWorkDays: extStr(ex, "usualWorkDays"),
+      emergencyName: extStr(ex, "emergencyName"),
+      emergencyTel: extStr(ex, "emergencyTel"),
+      licenseKind: extStr(ex, "licenseKind"),
+      licenseNumber: extStr(ex, "licenseNumber"),
+      licenseExpiresOn: extStr(ex, "licenseExpiresOn"),
+      licenseConditions: extStr(ex, "licenseConditions"),
+      licensePhotoDataUrl: extStr(ex, "licensePhotoDataUrl"),
+    });
+  };
+
+  const fillVehForm = (v: VehicleRow | null): void => {
+    if (!v) {
+      setVehSel("new");
+      setVehForm({
+        label: "",
+        plateOffice: "",
+        plateCategory: "",
+        plateHiragana: "",
+        plateSerial: "",
+        inspectionValidTo: "",
+        insuranceCompany: "",
+        insurancePeriodFrom: "",
+        insurancePeriodTo: "",
+        active: true,
+      });
+      return;
+    }
+    const d = asDetail(v.detailJson);
+    const ins = insOf(v.detailJson);
+    setVehSel(v.id);
+    setVehForm({
+      label: v.label,
+      plateOffice: String(d.plateOffice ?? ""),
+      plateCategory: String(d.plateCategory ?? ""),
+      plateHiragana: String(d.plateHiragana ?? ""),
+      plateSerial: String(d.plateSerial ?? ""),
+      inspectionValidTo: String(d.inspectionValidTo ?? ""),
+      insuranceCompany: String(ins.companyName ?? ""),
+      insurancePeriodFrom: String(ins.periodFrom ?? ""),
+      insurancePeriodTo: String(ins.periodTo ?? ""),
+      active: v.active,
+    });
+  };
+
+  async function saveCompany(): Promise<void> {
+    if (!company) return;
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    const r = await apiFetch("/settings/company", {
+      method: "PUT",
+      json: {
+        legalTradeName: company.legalTradeName,
+        legalRepresentativeName: company.legalRepresentativeName,
+        legalPostalCode: company.legalPostalCode,
+        legalPrefecture: company.legalPrefecture,
+        legalStreetAddress: company.legalStreetAddress,
+        legalBusinessAddress: company.legalBusinessAddress,
+        legalPhone: company.legalPhone,
+        legalCertificationNumber: company.legalCertificationNumber,
+        legalCertificationDate: company.legalCertificationDate || null,
+      },
+    });
+    setBusy(false);
+    if (!r.ok) setErr(r.error);
+    else setMsg("会社情報を保存しました。");
+  }
+
+  async function saveEmployee(): Promise<void> {
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    const body = {
+      ...empForm,
+      password: empForm.password || undefined,
+    };
+    if (empSel === "new") {
+      const r = await apiFetch<{ id: string }>("/settings/employees", { method: "POST", json: body });
+      setBusy(false);
+      if (!r.ok) setErr(r.error);
+      else {
+        setMsg("従業員を登録しました。");
+        await loadEmployees();
+        fillEmpForm(null);
+      }
+      return;
+    }
+    if (empSel) {
+      const r = await apiFetch(`/settings/employees/${empSel}`, { method: "PATCH", json: body });
+      setBusy(false);
+      if (!r.ok) setErr(r.error);
+      else {
+        setMsg("従業員を更新しました。");
+        await loadEmployees();
+      }
+    }
+  }
+
+  async function deleteEmployee(): Promise<void> {
+    if (!empSel || empSel === "new") return;
+    if (!window.confirm("この従業員を削除しますか？（日報に紐づく場合は削除できません）")) return;
+    setBusy(true);
+    setErr(null);
+    const r = await apiFetch(`/settings/employees/${empSel}`, { method: "DELETE" });
+    setBusy(false);
+    if (!r.ok) setErr(r.error);
+    else {
+      setMsg("削除しました。");
+      setEmpSel(null);
+      fillEmpForm(null);
+      await loadEmployees();
+    }
+  }
+
+  async function saveVehicle(): Promise<void> {
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    const body = {
+      ...vehForm,
+      inspectionValidTo: vehForm.inspectionValidTo || "",
+      insuranceCompany: vehForm.insuranceCompany,
+      insurancePeriodFrom: vehForm.insurancePeriodFrom || "",
+      insurancePeriodTo: vehForm.insurancePeriodTo || "",
+    };
+    if (vehSel === "new") {
+      const r = await apiFetch<{ id: string }>("/settings/vehicles", { method: "POST", json: body });
+      setBusy(false);
+      if (!r.ok) setErr(r.error);
+      else {
+        setMsg("随伴車を登録しました。");
+        await loadVehicles();
+        fillVehForm(null);
+      }
+      return;
+    }
+    if (vehSel) {
+      const r = await apiFetch(`/settings/vehicles/${vehSel}`, { method: "PATCH", json: body });
+      setBusy(false);
+      if (!r.ok) setErr(r.error);
+      else {
+        setMsg("随伴車を更新しました。");
+        await loadVehicles();
+      }
+    }
+  }
+
+  async function deleteVehicle(): Promise<void> {
+    if (!vehSel || vehSel === "new") return;
+    if (!window.confirm("この車両を削除しますか？")) return;
+    setBusy(true);
+    const r = await apiFetch(`/settings/vehicles/${vehSel}`, { method: "DELETE" });
+    setBusy(false);
+    if (!r.ok) setErr(r.error);
+    else {
+      setMsg("削除しました。");
+      setVehSel(null);
+      fillVehForm(null);
+      await loadVehicles();
+    }
+  }
+
+  async function savePricing(): Promise<void> {
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    const r = await apiFetch("/settings/pricing", {
+      method: "PUT",
+      json: { regime: pricingRegime, features: pricingFeatures },
+    });
+    setBusy(false);
+    if (!r.ok) setErr(r.error);
+    else setMsg("料金の希望を保存しました。");
+  }
+
+  function togglePricingFeature(id: string): void {
+    setPricingFeatures((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function onLicensePhoto(f: File | null): void {
+    if (!f) return;
+    if (f.size > 900_000) {
+      setErr("画像が大きすぎます（900KB 以下にしてください）");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const s = typeof reader.result === "string" ? reader.result : "";
+      setEmpForm((p) => ({ ...p, licensePhotoDataUrl: s }));
+    };
+    reader.readAsDataURL(f);
+  }
+
+  const companyPanel = company ? (
+    <div className="settings-form">
+      <p className="settings-hint">
+        テナント: {company.tenantName}（{company.tenantSlug}） / ログイン: {me?.email}
+      </p>
+      <label>屋号</label>
+      <input
+        value={company.legalTradeName ?? ""}
+        onChange={(e) => setCompany({ ...company, legalTradeName: e.target.value })}
+      />
+      <label>代表者</label>
+      <input
+        value={company.legalRepresentativeName ?? ""}
+        onChange={(e) => setCompany({ ...company, legalRepresentativeName: e.target.value })}
+      />
+      <label>郵便番号</label>
+      <input
+        value={company.legalPostalCode ?? ""}
+        onChange={(e) => setCompany({ ...company, legalPostalCode: e.target.value })}
+        placeholder="例: 1234567"
+      />
+      <label>都道府県</label>
+      <select
+        value={company.legalPrefecture ?? ""}
+        onChange={(e) => setCompany({ ...company, legalPrefecture: e.target.value || null })}
+      >
+        <option value="">選択</option>
+        {JP_PREFECTURES.map((p) => (
+          <option key={p} value={p}>
+            {p}
+          </option>
+        ))}
+      </select>
+      <label>住所（番地以降）</label>
+      <input
+        value={company.legalStreetAddress ?? ""}
+        onChange={(e) => setCompany({ ...company, legalStreetAddress: e.target.value })}
+      />
+      <label>電話番号</label>
+      <input
+        value={company.legalPhone ?? ""}
+        onChange={(e) => setCompany({ ...company, legalPhone: e.target.value })}
+      />
+      <label>認定番号</label>
+      <div className="settings-inline-cert">
+        <span aria-hidden>第</span>
+        <input
+          className="settings-cert-core"
+          value={company.legalCertificationNumber ?? ""}
+          onChange={(e) => setCompany({ ...company, legalCertificationNumber: e.target.value })}
+          placeholder="1234"
+        />
+        <span aria-hidden>号</span>
+      </div>
+      <label>認定年月日</label>
+      <input
+        type="date"
+        value={company.legalCertificationDate ?? ""}
+        onChange={(e) => setCompany({ ...company, legalCertificationDate: e.target.value || null })}
+      />
+      <label>一括住所（帳票用・任意）</label>
+      <input
+        value={company.legalBusinessAddress ?? ""}
+        onChange={(e) => setCompany({ ...company, legalBusinessAddress: e.target.value })}
+        placeholder="上記と別に全文を残す場合"
+      />
+      <button type="button" className="settings-primary" disabled={busy} onClick={() => void saveCompany()}>
+        保存
+      </button>
+    </div>
+  ) : (
+    <p className="settings-hint">読み込み中…</p>
+  );
+
+  const employeesPanel = (
+    <div className="settings-two-col">
+      <div>
+        <div className="settings-toolbar">
+          <button type="button" onClick={() => fillEmpForm(null)}>
+            新規
+          </button>
+        </div>
+        <ul className="settings-list">
+          {employees.map((e) => (
+            <li key={e.id}>
+              <button
+                type="button"
+                className={`settings-list-btn${empSel === e.id ? " active" : ""}`}
+                onClick={() => fillEmpForm(e)}
+              >
+                {e.familyName} {e.givenName}
+                <span className="settings-list-meta">{e.loginEmail ?? "ログインなし"}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="settings-form">
+        <h3 className="settings-subtitle">{empSel === "new" ? "新規従業員" : empSel ? "編集" : "一覧から選択または新規"}</h3>
+        {(empSel === "new" || empSel) && (
+          <>
+            <label>ログインID（メール）</label>
+            <input
+              type="email"
+              value={empForm.loginEmail}
+              onChange={(e) => setEmpForm({ ...empForm, loginEmail: e.target.value })}
+              disabled={!!empSel && empSel !== "new"}
+              title={empSel !== "new" ? "ログインIDの変更は未対応です" : undefined}
+            />
+            <label>パスワード{empSel !== "new" ? "（変更する場合のみ）" : ""}</label>
+            <input
+              type="password"
+              value={empForm.password}
+              onChange={(e) => setEmpForm({ ...empForm, password: e.target.value })}
+              autoComplete="new-password"
+            />
+            <label>氏名（姓）</label>
+            <input value={empForm.familyName} onChange={(e) => setEmpForm({ ...empForm, familyName: e.target.value })} />
+            <label>氏名（名）</label>
+            <input value={empForm.givenName} onChange={(e) => setEmpForm({ ...empForm, givenName: e.target.value })} />
+            <label>生年月日</label>
+            <input type="date" value={empForm.birthDate} onChange={(e) => setEmpForm({ ...empForm, birthDate: e.target.value })} />
+            <label>住所</label>
+            <input value={empForm.address} onChange={(e) => setEmpForm({ ...empForm, address: e.target.value })} />
+            <label>電話番号</label>
+            <input value={empForm.phone} onChange={(e) => setEmpForm({ ...empForm, phone: e.target.value })} />
+            <label>携帯電話</label>
+            <input value={empForm.mobile} onChange={(e) => setEmpForm({ ...empForm, mobile: e.target.value })} />
+            <label>採用年月日</label>
+            <input type="date" value={empForm.hiredOn} onChange={(e) => setEmpForm({ ...empForm, hiredOn: e.target.value })} />
+            <label>退社年月日</label>
+            <input type="date" value={empForm.retiredOn} onChange={(e) => setEmpForm({ ...empForm, retiredOn: e.target.value })} />
+            <label>主な出勤日</label>
+            <input
+              value={empForm.usualWorkDays}
+              onChange={(e) => setEmpForm({ ...empForm, usualWorkDays: e.target.value })}
+              placeholder="例: 月〜金"
+            />
+            <label>緊急連絡先 氏名</label>
+            <input value={empForm.emergencyName} onChange={(e) => setEmpForm({ ...empForm, emergencyName: e.target.value })} />
+            <label>緊急連絡先 TEL</label>
+            <input value={empForm.emergencyTel} onChange={(e) => setEmpForm({ ...empForm, emergencyTel: e.target.value })} />
+            <label>免許種別</label>
+            <select value={empForm.licenseKind} onChange={(e) => setEmpForm({ ...empForm, licenseKind: e.target.value })}>
+              <option value="">選択</option>
+              {licenseClasses.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <label>免許番号</label>
+            <input value={empForm.licenseNumber} onChange={(e) => setEmpForm({ ...empForm, licenseNumber: e.target.value })} />
+            <label>免許期限</label>
+            <input
+              type="date"
+              value={empForm.licenseExpiresOn}
+              onChange={(e) => setEmpForm({ ...empForm, licenseExpiresOn: e.target.value })}
+            />
+            <label>免許の条件・限定等</label>
+            <textarea
+              rows={2}
+              value={empForm.licenseConditions}
+              onChange={(e) => setEmpForm({ ...empForm, licenseConditions: e.target.value })}
+            />
+            <label>免許証の写真</label>
+            <input type="file" accept="image/*" onChange={(e) => onLicensePhoto(e.target.files?.[0] ?? null)} />
+            {empForm.licensePhotoDataUrl ? (
+              <img className="settings-photo-preview" src={empForm.licensePhotoDataUrl} alt="免許証プレビュー" />
+            ) : null}
+            <div className="settings-actions">
+              <button type="button" className="settings-primary" disabled={busy} onClick={() => void saveEmployee()}>
+                保存
+              </button>
+              {empSel && empSel !== "new" ? (
+                <button type="button" className="settings-danger" disabled={busy} onClick={() => void deleteEmployee()}>
+                  削除
+                </button>
+              ) : null}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  const vehiclesPanel = (
+    <div className="settings-two-col">
+      <div>
+        <div className="settings-toolbar">
+          <button type="button" onClick={() => fillVehForm(null)}>
+            新規
+          </button>
+        </div>
+        <ul className="settings-list">
+          {vehicles.map((v) => (
+            <li key={v.id}>
+              <button
+                type="button"
+                className={`settings-list-btn${vehSel === v.id ? " active" : ""}`}
+                onClick={() => fillVehForm(v)}
+              >
+                {v.label}
+                <span className="settings-list-meta">{v.plate ?? ""}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="settings-form">
+        <h3 className="settings-subtitle">{vehSel === "new" ? "新規随伴車" : vehSel ? "編集" : "一覧から選択または新規"}</h3>
+        {(vehSel === "new" || vehSel) && (
+          <>
+            <label>名称</label>
+            <input value={vehForm.label} onChange={(e) => setVehForm({ ...vehForm, label: e.target.value })} />
+            <label>地域名（運輸支局）</label>
+            <select value={vehForm.plateOffice} onChange={(e) => setVehForm({ ...vehForm, plateOffice: e.target.value })}>
+              <option value="">選択</option>
+              {plateRegions.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+            <label>分類番号</label>
+            <input value={vehForm.plateCategory} onChange={(e) => setVehForm({ ...vehForm, plateCategory: e.target.value })} />
+            <label>ひらがな</label>
+            <input value={vehForm.plateHiragana} onChange={(e) => setVehForm({ ...vehForm, plateHiragana: e.target.value })} />
+            <label>ナンバー</label>
+            <input value={vehForm.plateSerial} onChange={(e) => setVehForm({ ...vehForm, plateSerial: e.target.value })} />
+            <label>車検有効期満了日</label>
+            <input
+              type="date"
+              value={vehForm.inspectionValidTo}
+              onChange={(e) => setVehForm({ ...vehForm, inspectionValidTo: e.target.value })}
+            />
+            <label>任意保険・保険会社名</label>
+            <input
+              value={vehForm.insuranceCompany}
+              onChange={(e) => setVehForm({ ...vehForm, insuranceCompany: e.target.value })}
+            />
+            <label>任意保険・期間（開始）</label>
+            <input
+              type="date"
+              value={vehForm.insurancePeriodFrom}
+              onChange={(e) => setVehForm({ ...vehForm, insurancePeriodFrom: e.target.value })}
+            />
+            <label>任意保険・期間（終了）</label>
+            <input
+              type="date"
+              value={vehForm.insurancePeriodTo}
+              onChange={(e) => setVehForm({ ...vehForm, insurancePeriodTo: e.target.value })}
+            />
+            <label>
+              <input
+                type="checkbox"
+                checked={vehForm.active}
+                onChange={(e) => setVehForm({ ...vehForm, active: e.target.checked })}
+              />{" "}
+              有効
+            </label>
+            <div className="settings-actions">
+              <button type="button" className="settings-primary" disabled={busy} onClick={() => void saveVehicle()}>
+                保存
+              </button>
+              {vehSel && vehSel !== "new" ? (
+                <button type="button" className="settings-danger" disabled={busy} onClick={() => void deleteVehicle()}>
+                  削除
+                </button>
+              ) : null}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  const pricingPanel = (
+    <div className="settings-form">
+      <fieldset className="settings-fieldset">
+        <legend>料金体制をお選びください</legend>
+        <label>
+          <input type="radio" name="regime" value="" checked={pricingRegime === ""} onChange={() => setPricingRegime("")} />{" "}
+          未選択
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="regime"
+            value="distance"
+            checked={pricingRegime === "distance"}
+            onChange={() => setPricingRegime("distance")}
+          />{" "}
+          距離制を主とする
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="regime"
+            value="time"
+            checked={pricingRegime === "time"}
+            onChange={() => setPricingRegime("time")}
+          />{" "}
+          時間制を主とする
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="regime"
+            value="both"
+            checked={pricingRegime === "both"}
+            onChange={() => setPricingRegime("both")}
+          />{" "}
+          距離・時間の併用
+        </label>
+      </fieldset>
+      <p className="settings-hint">取り扱い項目（複数選択）</p>
+      <div className="settings-check-grid">
+        {PRICING_FEATURE_OPTS.map((o) => (
+          <label key={o.id} className="settings-check">
+            <input
+              type="checkbox"
+              checked={pricingFeatures.includes(o.id)}
+              onChange={() => togglePricingFeature(o.id)}
+            />{" "}
+            {o.label}
+          </label>
+        ))}
+      </div>
+      <button type="button" className="settings-primary" disabled={busy} onClick={() => void savePricing()}>
+        保存
+      </button>
+    </div>
+  );
+
+  const tabItems: TabDef[] = [
+    { id: "company", label: "会社情報", children: companyPanel },
+    { id: "employees", label: "従業員", children: employeesPanel },
+    { id: "vehicles", label: "随伴車", children: vehiclesPanel },
+    { id: "pricing", label: "料金", children: pricingPanel },
+  ];
+
   return (
     <Card title="設定">
-      <dl style={{ margin: 0, fontSize: "0.9rem", display: "grid", gap: "0.5rem 1rem", gridTemplateColumns: "auto 1fr" }}>
-        <dt style={{ color: "var(--color-muted)" }}>テナント</dt>
-        <dd style={{ margin: 0 }}>{me?.tenant.name ?? "—"}（{me?.tenant.slug ?? "—"}）</dd>
-        <dt style={{ color: "var(--color-muted)" }}>メール</dt>
-        <dd style={{ margin: 0 }}>{me?.email ?? "—"}</dd>
-      </dl>
-      <p style={{ margin: "1rem 0 0", fontSize: "0.85rem", color: "var(--color-muted)" }}>
-        詳細設定は今後ここに追加します。
-      </p>
+      <Err msg={err} />
+      {msg ? (
+        <p className="settings-msg" role="status">
+          {msg}
+        </p>
+      ) : null}
+      <Tabs items={tabItems} activeId={tab} onActiveChange={setTab} aria-label="設定の種類" />
     </Card>
   );
 }

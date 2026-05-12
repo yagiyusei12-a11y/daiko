@@ -105,6 +105,10 @@ model TenantSettings {
   legalTradeName                  String?
   legalRepresentativeName         String?
   legalBusinessAddress            String?
+  /// 会社情報（設定タブ）: 郵便番号・都道府県・番地以降。legalBusinessAddress と併用可。
+  legalPostalCode                 String?
+  legalPrefecture                 String?
+  legalStreetAddress              String?
   legalPhone                      String?
   legalPublicSafetyCommission     String?
   legalCertificationNumber        String?
@@ -234,6 +238,8 @@ model Vehicle {
   label     String
   plate     String?
   legalCoverageStartOn DateTime?
+  /// 随伴車詳細（ナンバー分割・車検・任意保険など）JSON
+  detailJson Json @default("{}")
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
