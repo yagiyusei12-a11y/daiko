@@ -1,6 +1,7 @@
 import { NavLink, Outlet, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth";
 import { useDeviceKind } from "../hooks/useDeviceKind";
+import { SavedToastProvider } from "../saved-toast";
 
 const navItems: { to: string; label: string; match: "schedule" | "prefix" }[] = [
   { to: "/daily-reports", label: "日報", match: "prefix" },
@@ -66,7 +67,9 @@ export default function Shell(): JSX.Element {
         ) : null}
       </header>
       <main className={`app-main${touchNav ? " app-main--bottom-nav" : ""}`}>
-        <Outlet />
+        <SavedToastProvider>
+          <Outlet />
+        </SavedToastProvider>
       </main>
       {touchNav ? (
         <nav className="app-bottom-nav" aria-label="メインメニュー">

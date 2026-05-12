@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiFetch } from "../api";
 import { Card, Err } from "../ui";
+import { useSavedToast } from "../saved-toast";
 
 type TripLeg = {
   id: string;
@@ -48,6 +49,7 @@ function TripEditor({
   features: string[];
   onSaved: () => void;
 }): JSX.Element {
+  const { flashSaved } = useSavedToast();
   const j0 = trip.legSurchargesJson;
   const [clientName, setClientName] = useState(trip.clientName);
   const [origin, setOrigin] = useState(trip.origin);
@@ -57,7 +59,6 @@ function TripEditor({
   const [leftHand, setLeftHand] = useState(() => readSlot(j0, "leftHand"));
   const [foreignCar, setForeignCar] = useState(() => readSlot(j0, "foreignCar"));
   const [cancel, setCancel] = useState(() => readSlot(j0, "cancel"));
-  const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -77,7 +78,6 @@ function TripEditor({
   async function save(): Promise<void> {
     setBusy(true);
     setErr(null);
-    setMsg(null);
     const legSurchargesJson = {
       pickup: { apply: pickup.apply, yen: pickup.yen },
       leftHand: { apply: leftHand.apply, yen: leftHand.yen },
@@ -97,7 +97,7 @@ function TripEditor({
     setBusy(false);
     if (!r.ok) setErr(r.error);
     else {
-      setMsg("保存しました");
+      flashSaved();
       onSaved();
     }
   }
@@ -108,11 +108,6 @@ function TripEditor({
         運行: {trip.id.slice(0, 8)}…
       </h3>
       <Err msg={err} />
-      {msg ? (
-        <p className="settings-msg" role="status">
-          {msg}
-        </p>
-      ) : null}
       <div className="settings-form">
         <label>お客様名</label>
         <input value={clientName} onChange={(e) => setClientName(e.target.value)} />

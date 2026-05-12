@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth";
 import { apiFetch } from "../api";
+import { useSavedToast } from "../saved-toast";
 import { Card, Err, Tabs, type TabDef } from "../ui";
 import PricingSettingsPanel from "./PricingSettingsPanel";
 
@@ -113,6 +114,7 @@ function insOf(detail: unknown): Record<string, unknown> {
 
 export default function SettingsMenuPage(): JSX.Element {
   const { me } = useAuth();
+  const { flashSaved } = useSavedToast();
   const [tab, setTab] = useState("company");
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -355,7 +357,7 @@ export default function SettingsMenuPage(): JSX.Element {
     });
     setBusy(false);
     if (!r.ok) setErr(r.error);
-    else setMsg("会社情報を保存しました。");
+    else flashSaved();
   }
 
   async function saveEmployee(): Promise<void> {
@@ -371,7 +373,7 @@ export default function SettingsMenuPage(): JSX.Element {
       setBusy(false);
       if (!r.ok) setErr(r.error);
       else {
-        setMsg("従業員を登録しました。");
+        flashSaved();
         await loadEmployees();
         fillEmpForm(null);
       }
@@ -382,7 +384,7 @@ export default function SettingsMenuPage(): JSX.Element {
       setBusy(false);
       if (!r.ok) setErr(r.error);
       else {
-        setMsg("従業員を更新しました。");
+        flashSaved();
         await loadEmployees();
       }
     }
@@ -420,7 +422,7 @@ export default function SettingsMenuPage(): JSX.Element {
       setBusy(false);
       if (!r.ok) setErr(r.error);
       else {
-        setMsg("随伴車を登録しました。");
+        flashSaved();
         await loadVehicles();
         fillVehForm(null);
       }
@@ -431,7 +433,7 @@ export default function SettingsMenuPage(): JSX.Element {
       setBusy(false);
       if (!r.ok) setErr(r.error);
       else {
-        setMsg("随伴車を更新しました。");
+        flashSaved();
         await loadVehicles();
       }
     }
@@ -793,7 +795,7 @@ export default function SettingsMenuPage(): JSX.Element {
     </div>
   );
 
-  const pricingPanel = <PricingSettingsPanel setMsg={setMsg} setErr={setErr} busy={busy} setBusy={setBusy} />;
+  const pricingPanel = <PricingSettingsPanel setErr={setErr} busy={busy} setBusy={setBusy} />;
 
   const tabItems: TabDef[] = [
     { id: "company", label: "会社情報", children: companyPanel },

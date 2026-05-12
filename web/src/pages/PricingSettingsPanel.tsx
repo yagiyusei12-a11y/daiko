@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../api";
+import { useSavedToast } from "../saved-toast";
 
 const PRICING_FEATURE_OPTS: { id: string; label: string }[] = [
   { id: "pickup", label: "迎車料金" },
@@ -7,6 +8,7 @@ const PRICING_FEATURE_OPTS: { id: string; label: string }[] = [
   { id: "leftHand", label: "左ハンドル" },
   { id: "foreignCar", label: "外車" },
   { id: "specialFare", label: "特別料金" },
+  { id: "longDistanceDiscount", label: "長距離割引" },
   { id: "cancel", label: "キャンセル" },
 ];
 
@@ -24,15 +26,21 @@ type TimeBand = {
   addFareYen: number;
 };
 
+type LongDistanceDiscountTier = {
+  id: string;
+  thresholdKm: number;
+  discountKind: "flat" | "percent";
+  flatYen: number;
+  percent: number;
+};
+
 type SpecialFareEntry = {
   id: string;
   name: string;
   regime: "distance" | "time" | "both";
   distance: DistanceBand;
   time: TimeBand;
-  nightExtraYen: number;
-  earlyExtraYen: number;
-  memberExtraYen: number;
+  extraFlatYen: number;
 };
 
 type PricingPrefsV1 = {
@@ -47,7 +55,16 @@ type PricingPrefsV1 = {
   foreignCarBaseYen: number;
   cancelBaseYen: number;
   specialFares: SpecialFareEntry[];
+  longDistanceTiers: LongDistanceDiscountTier[];
 };
+
+function newId(prefix: string): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${prefix}_${Date.now()}`;
+}
+
+function emptyLongTier(): LongDistanceDiscountTier {
+  return { id: newId("ld"), thresholdKm: 0, discountKind: "flat", flatYen: 0, percent: 0 };
+}
 
 function emptyD(): DistanceBand {
   return { baseFareYen: 0, includedDistanceM: 0, addEveryM: 0, addFareYen: 0 };
@@ -64,6 +81,29 @@ function regimeLabel(r: PricingPrefsV1["regime"]): string {
   return "未選択";
 }
 
+function migrateExtraFlatYen(x: Record<string, unknown>): number {
+  const ex = Number(x.extraFlatYen) || 0;
+  const n = Number(x.nightExtraYen) || 0;
+  const e = Number(x.earlyExtraYen) || 0;
+  const m = Number(x.memberExtraYen) || 0;
+  return Math.max(0, Math.floor(ex + n + e + m));
+}
+
+function parseLongTier(raw: unknown, i: number): LongDistanceDiscountTier {
+  const x = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const id = typeof x.id === "string" && x.id.trim() ? x.id.trim() : `ld_${i}`;
+  const km = Number(x.thresholdKm);
+  const thresholdKm = Number.isFinite(km) && km >= 0 ? Math.round(km * 100) / 100 : 0;
+  const discountKind = x.discountKind === "percent" ? "percent" : "flat";
+  return {
+    id,
+    thresholdKm,
+    discountKind,
+    flatYen: Math.max(0, Math.floor(Number(x.flatYen) || 0)),
+    percent: Math.min(100, Math.max(0, Math.floor(Number(x.percent) || 0))),
+  };
+}
+
 function defaultPrefs(): PricingPrefsV1 {
   return {
     version: 1,
@@ -77,6 +117,7 @@ function defaultPrefs(): PricingPrefsV1 {
     foreignCarBaseYen: 0,
     cancelBaseYen: 0,
     specialFares: [],
+    longDistanceTiers: [],
   };
 }
 
@@ -87,7 +128,8 @@ function asPrefs(v: unknown): PricingPrefsV1 {
   const mt = (p.mainTime as TimeBand | undefined) ?? emptyT();
   const w = (p.waiting as TimeBand | undefined) ?? emptyT();
   const feats = Array.isArray(p.features) ? p.features.filter((x): x is string => typeof x === "string") : [];
-  const sf = Array.isArray(p.specialFares) ? (p.specialFares as SpecialFareEntry[]) : [];
+  const sf = Array.isArray(p.specialFares) ? (p.specialFares as Record<string, unknown>[]) : [];
+  const ltRaw = Array.isArray(p.longDistanceTiers) ? p.longDistanceTiers : [];
   return {
     version: 1,
     regime:
@@ -103,15 +145,21 @@ function asPrefs(v: unknown): PricingPrefsV1 {
     foreignCarBaseYen: Number(p.foreignCarBaseYen) || 0,
     cancelBaseYen: Number(p.cancelBaseYen) || 0,
     specialFares: sf
-      .filter((x) => x && typeof x === "object" && String((x as SpecialFareEntry).name || "").trim())
+      .filter((x) => x && typeof x === "object" && String((x as Record<string, unknown>).name || "").trim())
       .map((x) => ({
-        ...x,
-        distance: { ...emptyD(), ...(x as SpecialFareEntry).distance },
-        time: { ...emptyT(), ...(x as SpecialFareEntry).time },
-        nightExtraYen: Number((x as SpecialFareEntry).nightExtraYen) || 0,
-        earlyExtraYen: Number((x as SpecialFareEntry).earlyExtraYen) || 0,
-        memberExtraYen: Number((x as SpecialFareEntry).memberExtraYen) || 0,
+        id: String((x as Record<string, unknown>).id || newId("sf")),
+        name: String((x as Record<string, unknown>).name || ""),
+        regime:
+          (x as Record<string, unknown>).regime === "time" || (x as Record<string, unknown>).regime === "both"
+            ? ((x as Record<string, unknown>).regime as "time" | "both")
+            : (x as Record<string, unknown>).regime === "distance"
+              ? "distance"
+              : "distance",
+        distance: { ...emptyD(), ...((x as { distance?: DistanceBand }).distance ?? {}) },
+        time: { ...emptyT(), ...((x as { time?: TimeBand }).time ?? {}) },
+        extraFlatYen: migrateExtraFlatYen(x),
       })),
+    longDistanceTiers: ltRaw.map((row, i) => parseLongTier(row, i)),
   };
 }
 
@@ -187,18 +235,22 @@ function TimeBlockFields({
 }
 
 type Props = {
-  setMsg: (s: string | null) => void;
   setErr: (s: string | null) => void;
   busy: boolean;
   setBusy: (b: boolean) => void;
 };
 
-export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: Props): JSX.Element {
+export default function PricingSettingsPanel({ setErr, busy, setBusy }: Props): JSX.Element {
+  const { flashSaved } = useSavedToast();
   const [prefs, setPrefs] = useState<PricingPrefsV1>(() => defaultPrefs());
   const [loaded, setLoaded] = useState(false);
   const [specialOpen, setSpecialOpen] = useState(false);
   const [draft, setDraft] = useState<SpecialFareEntry | null>(null);
   const [selectedSf, setSelectedSf] = useState<Set<string>>(() => new Set());
+
+  const [longDiscountOpen, setLongDiscountOpen] = useState(false);
+  const [longDiscountDraft, setLongDiscountDraft] = useState<LongDistanceDiscountTier[] | null>(null);
+  const [longDiscountPendingNew, setLongDiscountPendingNew] = useState(false);
 
   const load = useCallback(async () => {
     const r = await apiFetch<{ pricingPrefs?: unknown }>("/settings/pricing");
@@ -221,14 +273,12 @@ export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: 
     }
     setErr(null);
     setDraft({
-      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `sf_${Date.now()}`,
+      id: newId("sf"),
       name: "",
       regime: r,
       distance: emptyD(),
       time: emptyT(),
-      nightExtraYen: 0,
-      earlyExtraYen: 0,
-      memberExtraYen: 0,
+      extraFlatYen: 0,
     });
     setSpecialOpen(true);
   }
@@ -242,18 +292,60 @@ export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: 
             setDraft(null);
           });
         }
+        if (id === "longDistanceDiscount") {
+          queueMicrotask(() => {
+            setLongDiscountOpen(false);
+            setLongDiscountDraft(null);
+            setLongDiscountPendingNew(false);
+          });
+        }
         return { ...p, features: p.features.filter((x) => x !== id) };
       }
-      const next = { ...p, features: [...p.features, id] };
+      const next: PricingPrefsV1 = { ...p, features: [...p.features, id] };
       if (id === "specialFare") {
         const regimeAtClick = next.regime;
         queueMicrotask(() => {
           startSpecialDraftIfRegimeOk(regimeAtClick);
         });
       }
+      if (id === "longDistanceDiscount") {
+        const tiersSnap =
+          next.longDistanceTiers.length > 0 ? next.longDistanceTiers.map((t) => ({ ...t })) : [emptyLongTier()];
+        queueMicrotask(() => {
+          setLongDiscountPendingNew(true);
+          setLongDiscountDraft(tiersSnap);
+          setLongDiscountOpen(true);
+        });
+      }
       return next;
     });
   };
+
+  function openLongDiscountEdit(): void {
+    setLongDiscountPendingNew(false);
+    setLongDiscountDraft(
+      prefs.longDistanceTiers.length > 0 ? prefs.longDistanceTiers.map((t) => ({ ...t })) : [emptyLongTier()],
+    );
+    setLongDiscountOpen(true);
+  }
+
+  function confirmLongDiscountModal(): void {
+    if (!longDiscountDraft) return;
+    const sorted = [...longDiscountDraft].sort((a, b) => a.thresholdKm - b.thresholdKm);
+    setPrefs((p) => ({ ...p, longDistanceTiers: sorted }));
+    setLongDiscountPendingNew(false);
+    setLongDiscountOpen(false);
+    setLongDiscountDraft(null);
+  }
+
+  function cancelLongDiscountModal(): void {
+    if (longDiscountPendingNew) {
+      setPrefs((p) => ({ ...p, features: p.features.filter((x) => x !== "longDistanceDiscount") }));
+    }
+    setLongDiscountPendingNew(false);
+    setLongDiscountOpen(false);
+    setLongDiscountDraft(null);
+  }
 
   const toggleSfSel = (id: string): void => {
     setSelectedSf((prev) => {
@@ -274,11 +366,10 @@ export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: 
   async function save(): Promise<void> {
     setBusy(true);
     setErr(null);
-    setMsg(null);
     const r = await apiFetch("/settings/pricing", { method: "PUT", json: { pricingPrefs: prefs } });
     setBusy(false);
     if (!r.ok) setErr(r.error);
-    else setMsg("料金設定を保存しました。");
+    else flashSaved();
   }
 
   const openNewSpecial = (): void => {
@@ -311,6 +402,26 @@ export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: 
     }));
     setSpecialOpen(false);
     setDraft(null);
+  }
+
+  function updateLongTier(i: number, patch: Partial<LongDistanceDiscountTier>): void {
+    setLongDiscountDraft((rows) => {
+      if (!rows) return rows;
+      const next = [...rows];
+      next[i] = { ...next[i], ...patch };
+      return next;
+    });
+  }
+
+  function addLongTierRow(): void {
+    setLongDiscountDraft((rows) => (rows ? [...rows, emptyLongTier()] : [emptyLongTier()]));
+  }
+
+  function removeLongTierRow(i: number): void {
+    setLongDiscountDraft((rows) => {
+      if (!rows || rows.length <= 1) return rows;
+      return rows.filter((_, j) => j !== i);
+    });
   }
 
   if (!loaded) return <p className="settings-hint">読み込み中…</p>;
@@ -420,6 +531,33 @@ export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: 
         </fieldset>
       )}
 
+      {prefs.features.includes("longDistanceDiscount") && (
+        <div className="settings-special-fare">
+          <p className="settings-hint">
+            走行距離が各段の「km 以上」のときの割引を設定します（定額の値引きまたは％）。複数段を km の昇順で並べます。
+          </p>
+          <div className="settings-toolbar">
+            <button type="button" onClick={openLongDiscountEdit}>
+              長距離割引を編集
+            </button>
+          </div>
+          {prefs.longDistanceTiers.length > 0 ? (
+            <ul className="settings-sf-list">
+              {prefs.longDistanceTiers.map((t) => (
+                <li key={t.id} className="settings-sf-row">
+                  <span className="settings-sf-name">
+                    {t.thresholdKm} km 以上 —{" "}
+                    {t.discountKind === "flat" ? `定額 ${t.flatYen} 円引き` : `％ ${t.percent} % 引き`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="settings-hint">未設定です。「長距離割引を編集」で段階を追加してください。</p>
+          )}
+        </div>
+      )}
+
       {prefs.features.includes("specialFare") && (
         <div className="settings-special-fare">
           <div className="settings-toolbar">
@@ -447,6 +585,94 @@ export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: 
       <button type="button" className="settings-primary" disabled={busy} onClick={() => void save()}>
         保存
       </button>
+
+      {longDiscountOpen && longDiscountDraft ? (
+        <div
+          className="pricing-modal-backdrop"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) cancelLongDiscountModal();
+          }}
+        >
+          <div
+            className="pricing-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pricing-longdisc-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h2 id="pricing-longdisc-title" className="pricing-modal-title">
+              長距離割引の設定
+            </h2>
+            <p className="settings-hint">距離の目安（km 以上）ごとに、定額で値引きするか％で値引きするかを選べます。</p>
+            <div className="settings-form">
+              {longDiscountDraft.map((tier, i) => (
+                <fieldset key={tier.id} className="settings-fieldset settings-pricing-block settings-long-tier">
+                  <legend>段階 {i + 1}</legend>
+                  <label>何 km 以上</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    inputMode="decimal"
+                    value={tier.thresholdKm}
+                    onChange={(e) => {
+                      const v = Math.max(0, Number(e.target.value) || 0);
+                      updateLongTier(i, { thresholdKm: Math.round(v * 100) / 100 });
+                    }}
+                  />
+                  <fieldset className="settings-fieldset" style={{ marginTop: "0.5rem" }}>
+                    <legend>割引の種類</legend>
+                    <label>
+                      <input
+                        type="radio"
+                        name={`ldk-${tier.id}`}
+                        checked={tier.discountKind === "flat"}
+                        onChange={() => updateLongTier(i, { discountKind: "flat" })}
+                      />{" "}
+                      定額（円引き）
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name={`ldk-${tier.id}`}
+                        checked={tier.discountKind === "percent"}
+                        onChange={() => updateLongTier(i, { discountKind: "percent" })}
+                      />{" "}
+                      ％割引
+                    </label>
+                  </fieldset>
+                  {tier.discountKind === "flat" ? (
+                    <NumInput label="割引額（円）" value={tier.flatYen} onChange={(n) => updateLongTier(i, { flatYen: n })} />
+                  ) : (
+                    <NumInput
+                      label="割引率（％・0〜100）"
+                      value={tier.percent}
+                      onChange={(n) => updateLongTier(i, { percent: Math.min(100, n) })}
+                    />
+                  )}
+                  {longDiscountDraft.length > 1 ? (
+                    <button type="button" className="settings-danger" style={{ marginTop: "0.5rem" }} onClick={() => removeLongTierRow(i)}>
+                      この段階を削除
+                    </button>
+                  ) : null}
+                </fieldset>
+              ))}
+              <button type="button" className="settings-secondary" onClick={addLongTierRow}>
+                入力欄を追加する
+              </button>
+            </div>
+            <div className="pricing-modal-actions">
+              <button type="button" className="settings-primary" onClick={confirmLongDiscountModal}>
+                確定
+              </button>
+              <button type="button" onClick={cancelLongDiscountModal}>
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {specialOpen && draft ? (
         <div
@@ -495,22 +721,8 @@ export default function PricingSettingsPanel({ setMsg, setErr, busy, setBusy }: 
                 <TimeBlockFields title="時間制（追加料金）" v={draft.time} onChange={(time) => setDraft({ ...draft, time })} />
               )}
 
-              <p className="settings-hint">深夜・早朝・会員（円・任意）</p>
-              <NumInput
-                label="深夜料金（円）"
-                value={draft.nightExtraYen}
-                onChange={(n) => setDraft({ ...draft, nightExtraYen: n })}
-              />
-              <NumInput
-                label="早朝料金（円）"
-                value={draft.earlyExtraYen}
-                onChange={(n) => setDraft({ ...draft, earlyExtraYen: n })}
-              />
-              <NumInput
-                label="会員料金（円）"
-                value={draft.memberExtraYen}
-                onChange={(n) => setDraft({ ...draft, memberExtraYen: n })}
-              />
+              <NumInput label="追加料金（定額）（円）" value={draft.extraFlatYen} onChange={(n) => setDraft({ ...draft, extraFlatYen: n })} />
+              <p className="settings-hint">距離・時間のメイン料金とは別に、一律で上乗せする金額です（任意）。</p>
             </div>
             <div className="pricing-modal-actions">
               <button type="button" className="settings-primary" onClick={saveSpecialToList}>

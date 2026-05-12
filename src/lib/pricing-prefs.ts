@@ -22,9 +22,20 @@ export type SpecialFareEntry = {
   regime: "distance" | "time" | "both";
   distance?: DistanceBand;
   time?: TimeBand;
-  nightExtraYen?: number;
-  earlyExtraYen?: number;
-  memberExtraYen?: number;
+  /** 追加料金（定額・円） */
+  extraFlatYen?: number;
+};
+
+/** 長距離割引の1段階（走行距離が閾値以上のとき適用イメージ） */
+export type LongDistanceDiscountTier = {
+  id: string;
+  /** この km 以上でこの段の割引を考慮 */
+  thresholdKm: number;
+  discountKind: "flat" | "percent";
+  /** 定額割引（円）— discountKind が flat のとき */
+  flatYen: number;
+  /** 割引率 0–100（%）— discountKind が percent のとき */
+  percent: number;
 };
 
 export type PricingPrefsV1 = {
@@ -39,6 +50,7 @@ export type PricingPrefsV1 = {
   foreignCarBaseYen?: number;
   cancelBaseYen?: number;
   specialFares: SpecialFareEntry[];
+  longDistanceTiers: LongDistanceDiscountTier[];
 };
 
 function num(v: unknown, d = 0): number {
@@ -76,6 +88,22 @@ function optionalTime(o: unknown): TimeBand | undefined {
   return timeBand(o);
 }
 
+function numKm(v: unknown): number {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.round(n * 100) / 100;
+}
+
+function longDistanceTier(o: unknown, i: number): LongDistanceDiscountTier {
+  const x = o && typeof o === "object" ? (o as Record<string, unknown>) : {};
+  const id = typeof x.id === "string" && x.id.trim() ? x.id.trim() : `ld_${i}`;
+  const thresholdKm = numKm(x.thresholdKm);
+  const discountKind = x.discountKind === "percent" ? "percent" : "flat";
+  const flatYen = num(x.flatYen);
+  const percent = Math.min(100, num(x.percent));
+  return { id, thresholdKm, discountKind, flatYen, percent };
+}
+
 export function emptyDistanceBand(): DistanceBand {
   return { baseFareYen: 0, includedDistanceM: 0, addEveryM: 0, addFareYen: 0 };
 }
@@ -105,19 +133,22 @@ export function coercePricingPrefs(raw: unknown): PricingPrefsV1 {
       const name = String(it.name ?? "").trim().slice(0, 120);
       const reg: SpecialFareEntry["regime"] =
         it.regime === "distance" || it.regime === "time" || it.regime === "both" ? it.regime : "distance";
+      const legacyExtra =
+        num(it.extraFlatYen) + num(it.nightExtraYen) + num(it.earlyExtraYen) + num(it.memberExtraYen);
       const row: SpecialFareEntry = {
         id,
         name,
         regime: reg,
         distance: optionalDistance(it.distance) ?? emptyDistanceBand(),
         time: optionalTime(it.time) ?? emptyTimeBand(),
-        nightExtraYen: num(it.nightExtraYen),
-        earlyExtraYen: num(it.earlyExtraYen),
-        memberExtraYen: num(it.memberExtraYen),
+        extraFlatYen: legacyExtra,
       };
       return row;
     })
     .filter((x) => x.name.length > 0);
+
+  const tiersRaw = Array.isArray(p.longDistanceTiers) ? p.longDistanceTiers : [];
+  const longDistanceTiers: LongDistanceDiscountTier[] = tiersRaw.map((row, i) => longDistanceTier(row, i));
 
   return {
     version: 1,
@@ -131,6 +162,7 @@ export function coercePricingPrefs(raw: unknown): PricingPrefsV1 {
     foreignCarBaseYen: num(p.foreignCarBaseYen),
     cancelBaseYen: num(p.cancelBaseYen),
     specialFares,
+    longDistanceTiers,
   };
 }
 
