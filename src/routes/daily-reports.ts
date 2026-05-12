@@ -11,22 +11,34 @@ function asObj(v: unknown): Record<string, unknown> {
 export async function registerDailyReportRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
 
-  app.get("/daily-reports", async (req) => {
+  app.get<{ Querystring: { businessDate?: string } }>("/daily-reports", async (req) => {
     const { tenantId } = jwtUser(req);
+    const q = String(req.query?.businessDate ?? "").trim();
+    const where: Prisma.DailyReportWhereInput = { tenantId };
+    if (q) where.businessDate = q;
     const reports = await prisma.dailyReport.findMany({
-      where: { tenantId },
-      orderBy: { businessDate: "desc" },
-      take: 40,
+      where,
+      orderBy: [{ businessDate: "desc" }, { createdAt: "desc" }],
+      take: q ? 200 : 40,
       select: {
         id: true,
         businessDate: true,
         meterStart: true,
         meterEnd: true,
-        vehicleId: true,
-        mainEmployeeId: true,
+        vehicle: { select: { label: true } },
+        mainEmployee: { select: { familyName: true, givenName: true } },
       },
     });
-    return { reports };
+    return {
+      reports: reports.map((r) => ({
+        id: r.id,
+        businessDate: r.businessDate,
+        meterStart: r.meterStart,
+        meterEnd: r.meterEnd,
+        vehicleLabel: r.vehicle.label,
+        mainEmployeeName: `${r.mainEmployee.familyName} ${r.mainEmployee.givenName}`,
+      })),
+    };
   });
 
   app.post("/daily-reports", async (req, reply) => {

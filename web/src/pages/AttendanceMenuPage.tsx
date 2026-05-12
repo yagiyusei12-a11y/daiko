@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import { useAuth, isStaffShiftOnlyMe } from "../auth";
-import { useDeviceKind } from "../hooks/useDeviceKind";
 import { useSavedToast } from "../saved-toast";
 import { Card, Err, Tabs, type TabDef } from "../ui";
 
@@ -44,20 +43,6 @@ function flexHmToMinutes(s: string): number {
   const m = FLEX_HM.exec(s.trim());
   if (!m) return NaN;
   return Number(m[1]) * 60 + Number(m[2]);
-}
-
-function scheduleBarPercentages(
-  startTime: string,
-  endTime: string,
-  axis: { mn: number; mx: number },
-): { startPct: number; sizePct: number } {
-  const st = flexHmToMinutes(startTime);
-  const en = flexHmToMinutes(endTime);
-  const span = axis.mx - axis.mn;
-  if (Number.isNaN(st) || Number.isNaN(en) || span <= 0) return { startPct: 0, sizePct: 0 };
-  const startPct = Math.max(0, ((st - axis.mn) / span) * 100);
-  const sizePct = Math.max(0.5, ((en - st) / span) * 100);
-  return { startPct, sizePct };
 }
 
 function validateDaysForSave(days: Record<string, ShiftDaySlot>): string | null {
@@ -574,7 +559,6 @@ export default function AttendanceMenuPage(): JSX.Element {
   const { me } = useAuth();
   const { flashSaved } = useSavedToast();
   const staffOnly = me ? isStaffShiftOnlyMe(me.permissions) : false;
-  const deviceKind = useDeviceKind();
 
   const [tab, setTab] = useState("shift");
   const [err, setErr] = useState<string | null>(null);
@@ -613,16 +597,6 @@ export default function AttendanceMenuPage(): JSX.Element {
   const [tcEmployeeId, setTcEmployeeId] = useState("");
   const [tcPunches, setTcPunches] = useState<Array<{ id: string; kind: string; punchedAt: string }>>([]);
   const [tcLoading, setTcLoading] = useState(false);
-
-  const [scheduleDate, setScheduleDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  });
-  const [scheduleBasicsSlots, setScheduleBasicsSlots] = useState<Array<{ open: string; close: string }>>([]);
-  const [scheduleDriverRows, setScheduleDriverRows] = useState<
-    Array<{ employeeId: string; name: string; startTime: string; endTime: string }>
-  >([]);
-  const [scheduleLoading, setScheduleLoading] = useState(false);
 
   const roster = useMemo(
     () => employees.filter((e) => e.status === "ACTIVE" && !e.retiredAt),
@@ -917,64 +891,6 @@ export default function AttendanceMenuPage(): JSX.Element {
     if (staffOnly && me?.employeeId) setTcEmployeeId(me.employeeId);
   }, [staffOnly, me?.employeeId]);
 
-  const loadSchedule = useCallback(async () => {
-    setScheduleLoading(true);
-    setErr(null);
-    const [b, c] = await Promise.all([
-      apiFetch<{ businessHours: Array<{ open: string; close: string }> }>(
-        `/settings/basics/resolved-hours?date=${encodeURIComponent(scheduleDate)}`,
-      ),
-      apiFetch<{ rows: AllDateShiftRow[] }>(
-        `/attendance/confirmed-shifts/by-date?date=${encodeURIComponent(scheduleDate)}`,
-      ),
-    ]);
-    setScheduleLoading(false);
-    if (!b.ok) {
-      setErr(b.error);
-      return;
-    }
-    if (!c.ok) {
-      setErr(c.error);
-      return;
-    }
-    setScheduleBasicsSlots(b.data.businessHours ?? []);
-    setScheduleDriverRows(
-      (c.data.rows ?? [])
-        .filter((r) => r.duties.includes("客車"))
-        .map((r) => ({
-          employeeId: r.employeeId,
-          name: `${r.familyName} ${r.givenName}`,
-          startTime: r.startTime,
-          endTime: r.endTime,
-        })),
-    );
-  }, [scheduleDate]);
-
-  useEffect(() => {
-    if (tab === "schedule") void loadSchedule();
-  }, [tab, scheduleDate, loadSchedule]);
-
-  const scheduleAxis = useMemo(() => {
-    let mn = 7 * 60;
-    let mx = 22 * 60;
-    for (const s of scheduleBasicsSlots) {
-      const a = flexHmToMinutes(s.open);
-      const b = flexHmToMinutes(s.close);
-      if (!Number.isNaN(a)) mn = Math.min(mn, a);
-      if (!Number.isNaN(b)) mx = Math.max(mx, b);
-    }
-    for (const d of scheduleDriverRows) {
-      const a = flexHmToMinutes(d.startTime);
-      const b = flexHmToMinutes(d.endTime);
-      if (!Number.isNaN(a)) mn = Math.min(mn, a);
-      if (!Number.isNaN(b)) mx = Math.max(mx, b);
-    }
-    if (mx <= mn) mx = mn + 15 * 4;
-    const step = 15;
-    const slotCount = Math.max(1, Math.ceil((mx - mn) / step));
-    return { mn, mx, slotCount, step };
-  }, [scheduleBasicsSlots, scheduleDriverRows]);
-
   async function postTimecardPunch(kind: string): Promise<void> {
     if (!tcEmployeeId || !tcDate) return;
     setTcLoading(true);
@@ -983,6 +899,19 @@ export default function AttendanceMenuPage(): JSX.Element {
       method: "POST",
       json: { employeeId: tcEmployeeId, businessDate: tcDate, kind },
     });
+    setTcLoading(false);
+    if (!r.ok) setErr(r.error);
+    else {
+      flashSaved();
+      void loadTcPunches();
+    }
+  }
+
+  async function deleteTimecardPunch(punchId: string): Promise<void> {
+    if (!tcEmployeeId) return;
+    setTcLoading(true);
+    setErr(null);
+    const r = await apiFetch(`/attendance/timecard/punches/${encodeURIComponent(punchId)}`, { method: "DELETE" });
     setTcLoading(false);
     if (!r.ok) setErr(r.error);
     else {
@@ -1266,6 +1195,15 @@ export default function AttendanceMenuPage(): JSX.Element {
                             : p.kind}
                   </span>
                   <span className="settings-sf-meta">{new Date(p.punchedAt).toLocaleString("ja-JP")}</span>
+                  <button
+                    type="button"
+                    className="settings-secondary"
+                    style={{ marginLeft: "auto", flexShrink: 0 }}
+                    disabled={tcLoading}
+                    onClick={() => void deleteTimecardPunch(p.id)}
+                  >
+                    削除
+                  </button>
                 </li>
               ))}
             </ul>
@@ -1275,146 +1213,10 @@ export default function AttendanceMenuPage(): JSX.Element {
     </div>
   );
 
-  const scheduleTranspose = deviceKind === "phone";
-  const scheduleSlotPx = 11;
-  const scheduleHeadPx = 36;
-  const scheduleGridPx = scheduleAxis.slotCount * scheduleSlotPx;
-
-  const schedulePanel = (
-    <div className="settings-form attend-shift-root">
-      <p className="settings-hint">
-        設定の「基本」（および曜日別・特定日）で解決したその日の営業時間を軸に15分刻みで表示し、その日の確定シフトで「客車」の従業員を並べます。スマホ表示では時間軸と担当者軸を入れ替えます。
-      </p>
-      <label htmlFor="sched-date">表示する日</label>
-      <input
-        id="sched-date"
-        type="date"
-        value={scheduleDate}
-        onChange={(e) => setScheduleDate(e.target.value)}
-      />
-      {scheduleLoading ? (
-        <p className="settings-hint">読み込み中…</p>
-      ) : scheduleDriverRows.length === 0 ? (
-        <p className="settings-hint">この日に客車担当の確定シフトはありません。</p>
-      ) : scheduleTranspose ? (
-        <div className="attend-schedule-wrap attend-schedule-wrap--transpose">
-          <div className="attend-schedule-transpose-inner">
-            <div className="attend-schedule-time-rail" style={{ width: "2.35rem", flexShrink: 0 }}>
-              <div className="attend-schedule-corner" style={{ minHeight: scheduleHeadPx, boxSizing: "border-box" }} />
-              <div style={{ height: scheduleGridPx, position: "relative", borderTop: "1px solid var(--color-border)" }}>
-                {Array.from({ length: scheduleAxis.slotCount }, (_, i) => {
-                  const t = scheduleAxis.mn + i * scheduleAxis.step;
-                  const h = Math.floor(t / 60);
-                  const m = t % 60;
-                  const show = m === 0;
-                  return (
-                    <div
-                      key={i}
-                      className={`attend-schedule-tick-slot${show ? " attend-schedule-tick-slot--hour" : ""}`}
-                      style={{
-                        position: "absolute",
-                        left: 0,
-                        width: "100%",
-                        top: `${(i / scheduleAxis.slotCount) * 100}%`,
-                        height: `${100 / scheduleAxis.slotCount}%`,
-                        boxSizing: "border-box",
-                        borderBottom: "1px solid color-mix(in srgb, var(--color-border) 55%, transparent)",
-                        fontSize: "0.62rem",
-                        color: "var(--color-muted)",
-                        textAlign: "right",
-                        paddingRight: 2,
-                        lineHeight: 1,
-                      }}
-                    >
-                      {show ? `${h}` : ""}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            {scheduleDriverRows.map((row) => {
-              const { startPct, sizePct } = scheduleBarPercentages(row.startTime, row.endTime, scheduleAxis);
-              return (
-                <div
-                  key={row.employeeId}
-                  className="attend-schedule-driver-col"
-                  style={{ width: "4.75rem", flexShrink: 0, borderLeft: "1px solid var(--color-border)" }}
-                >
-                  <div
-                    className="attend-schedule-col-head"
-                    style={{
-                      minHeight: scheduleHeadPx,
-                      maxHeight: scheduleHeadPx,
-                      boxSizing: "border-box",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      textAlign: "center",
-                      padding: "0.2rem",
-                      fontSize: "0.78rem",
-                      fontWeight: 600,
-                      borderBottom: "1px solid var(--color-border)",
-                    }}
-                  >
-                    {row.name}
-                  </div>
-                  <div
-                    style={{
-                      height: scheduleGridPx,
-                      position: "relative",
-                      background: "var(--color-surface)",
-                    }}
-                  >
-                    <div
-                      className="attend-schedule-bar attend-schedule-bar--transpose"
-                      style={{ top: `${startPct}%`, height: `${sizePct}%` }}
-                      title={`${row.startTime}–${row.endTime}`}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <div className="attend-schedule-wrap">
-          <div className="attend-schedule-axis">
-            <div className="attend-schedule-corner" />
-            <div className="attend-schedule-ticks" style={{ gridTemplateColumns: `repeat(${scheduleAxis.slotCount}, minmax(0, 1fr))` }}>
-              {Array.from({ length: scheduleAxis.slotCount }, (_, i) => {
-                const t = scheduleAxis.mn + i * scheduleAxis.step;
-                const h = Math.floor(t / 60);
-                const m = t % 60;
-                const show = m === 0;
-                return (
-                  <span key={i} className={`attend-schedule-tick${show ? " attend-schedule-tick--hour" : ""}`}>
-                    {show ? `${h}` : ""}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-          {scheduleDriverRows.map((row) => {
-            const { startPct, sizePct } = scheduleBarPercentages(row.startTime, row.endTime, scheduleAxis);
-            return (
-              <div key={row.employeeId} className="attend-schedule-row">
-                <div className="attend-schedule-name">{row.name}</div>
-                <div className="attend-schedule-track">
-                  <div className="attend-schedule-bar" style={{ left: `${startPct}%`, width: `${sizePct}%` }} title={`${row.startTime}–${row.endTime}`} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-
   const tabItems: TabDef[] = [
     { id: "shift", label: "シフト", children: shiftPanel },
     { id: "adjust", label: "シフト調整", children: adjustPanel },
     { id: "timecard", label: "タイムカード", children: timeCardPanel },
-    { id: "schedule", label: "スケジュール", children: schedulePanel },
   ];
 
   return (

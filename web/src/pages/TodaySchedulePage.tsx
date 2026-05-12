@@ -19,9 +19,14 @@ function scheduleBarPercentages(
 ): { startPct: number; sizePct: number } {
   const span = axis.mx - axis.mn;
   if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || span <= 0) return { startPct: 0, sizePct: 0 };
-  const startPct = Math.max(0, ((startMin - axis.mn) / span) * 100);
-  const sizePct = Math.max(0.5, ((endMin - startMin) / span) * 100);
-  return { startPct, sizePct };
+  const lo = Math.min(startMin, endMin);
+  const hi = Math.max(startMin, endMin);
+  const clipLo = Math.max(axis.mn, lo);
+  const clipHi = Math.min(axis.mx, hi);
+  if (clipHi <= clipLo) return { startPct: 0, sizePct: 0 };
+  const startPct = ((clipLo - axis.mn) / span) * 100;
+  const sizePct = Math.max(0.35, ((clipHi - clipLo) / span) * 100);
+  return { startPct, sizePct: Math.min(sizePct, 100 - startPct) };
 }
 
 function tokyoTodayYmd(): string {
@@ -130,8 +135,8 @@ export default function TodaySchedulePage(): JSX.Element {
   }, []);
 
   const scheduleAxis = useMemo(() => {
-    let mn = 7 * 60;
-    let mx = 22 * 60;
+    let mn = Number.POSITIVE_INFINITY;
+    let mx = Number.NEGATIVE_INFINITY;
     const slots = data?.businessHours ?? [];
     for (const s of slots) {
       const a = flexHmToMinutes(s.open);
@@ -139,25 +144,14 @@ export default function TodaySchedulePage(): JSX.Element {
       if (!Number.isNaN(a)) mn = Math.min(mn, a);
       if (!Number.isNaN(b)) mx = Math.max(mx, b);
     }
-    const drivers = data?.drivers ?? [];
-    for (const d of drivers) {
-      const a = flexHmToMinutes(d.startTime);
-      const b = flexHmToMinutes(d.endTime);
-      if (!Number.isNaN(a)) mn = Math.min(mn, a);
-      if (!Number.isNaN(b)) mx = Math.max(mx, b);
+    if (!Number.isFinite(mn) || !Number.isFinite(mx) || mx <= mn) {
+      mn = 7 * 60;
+      mx = 22 * 60;
     }
-    const res = data?.reservations ?? [];
-    for (const row of res) {
-      const st = minutesSinceTokyoDay(viewDate, row.startsAt);
-      const en = minutesSinceTokyoDay(viewDate, row.endsAt);
-      if (Number.isFinite(st)) mn = Math.min(mn, st);
-      if (Number.isFinite(en)) mx = Math.max(mx, en);
-    }
-    if (mx <= mn) mx = mn + 15 * 4;
     const step = 15;
     const slotCount = Math.max(1, Math.ceil((mx - mn) / step));
     return { mn, mx, slotCount, step };
-  }, [data, viewDate]);
+  }, [data?.businessHours]);
 
   const scheduleTranspose = deviceKind === "phone";
   const scheduleSlotPx = 11;
@@ -289,9 +283,6 @@ export default function TodaySchedulePage(): JSX.Element {
               </div>
             </div>
             {data.drivers.map((row) => {
-              const st = flexHmToMinutes(row.startTime);
-              const en = flexHmToMinutes(row.endTime);
-              const shiftBar = scheduleBarPercentages(st, en, scheduleAxis);
               const resList = reservationsByDriver.get(row.employeeId) ?? [];
               return (
                 <div
@@ -318,11 +309,6 @@ export default function TodaySchedulePage(): JSX.Element {
                     {row.name}
                   </div>
                   <div style={{ height: scheduleGridPx, position: "relative", background: "var(--color-surface)" }}>
-                    <div
-                      className="attend-schedule-bar attend-schedule-bar--transpose attend-schedule-bar--shift"
-                      style={{ top: `${shiftBar.startPct}%`, height: `${shiftBar.sizePct}%` }}
-                      title={`シフト ${row.startTime}–${row.endTime}`}
-                    />
                     {resList.map((rv) => {
                       const a = minutesSinceTokyoDay(viewDate, rv.startsAt);
                       const b = minutesSinceTokyoDay(viewDate, rv.endsAt);
@@ -361,19 +347,11 @@ export default function TodaySchedulePage(): JSX.Element {
             </div>
           </div>
           {data.drivers.map((row) => {
-            const st = flexHmToMinutes(row.startTime);
-            const en = flexHmToMinutes(row.endTime);
-            const shiftBar = scheduleBarPercentages(st, en, scheduleAxis);
             const resList = reservationsByDriver.get(row.employeeId) ?? [];
             return (
               <div key={row.employeeId} className="attend-schedule-row">
                 <div className="attend-schedule-name">{row.name}</div>
                 <div className="attend-schedule-track">
-                  <div
-                    className="attend-schedule-bar attend-schedule-bar--shift"
-                    style={{ left: `${shiftBar.startPct}%`, width: `${shiftBar.sizePct}%` }}
-                    title={`シフト ${row.startTime}–${row.endTime}`}
-                  />
                   {resList.map((rv) => {
                     const a = minutesSinceTokyoDay(viewDate, rv.startsAt);
                     const b = minutesSinceTokyoDay(viewDate, rv.endsAt);
@@ -395,7 +373,7 @@ export default function TodaySchedulePage(): JSX.Element {
       )}
 
       <p className="settings-hint" style={{ marginTop: "0.75rem" }}>
-        グレーのバーは確定シフト、青系は運行予定です。時刻軸は設定の営業時間（曜日別・特定日を含む）に合わせています。
+        横軸は設定の営業時間（曜日別・特定日を含む）に合わせた15分刻みです。表示は運行予定のみです（確定シフトの帯は表示しません）。
       </p>
 
       {dialogOpen ? (

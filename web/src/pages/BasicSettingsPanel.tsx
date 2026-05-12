@@ -388,8 +388,9 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
         営業時間は翌未明まで「26:00」のように入力できます。基本は全曜日共通です。曜日別・特定日で上書きすると、その優先順位で勤怠スケジュールの軸に使われます（特定日 → 曜日 → 基本）。
       </p>
 
-      <h3 className="settings-subtitle">営業時間</h3>
-      <div className="settings-toolbar" style={{ flexWrap: "wrap", gap: "0.35rem" }}>
+      <div className="settings-section-panel">
+        <h3 className="settings-subtitle">営業時間</h3>
+        <div className="settings-toolbar" style={{ flexWrap: "wrap", gap: "0.35rem" }}>
         <button
           type="button"
           className={hoursSubTab === "default" ? "settings-primary" : "settings-secondary"}
@@ -471,10 +472,10 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
           )}
         </div>
       ) : null}
+      </div>
 
-      <h3 className="settings-subtitle" style={{ marginTop: "1.25rem" }}>
-        支払方法（候補）
-      </h3>
+      <div className="settings-section-panel">
+        <h3 className="settings-subtitle">支払方法（候補）</h3>
       <p className="settings-hint">日報などで使う支払方法の名前を登録します。入力して追加できます。</p>
       <div className="settings-toolbar" style={{ flexWrap: "wrap", gap: "0.35rem" }}>
         <input
@@ -507,22 +508,23 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
           ))}
         </ul>
       )}
+      </div>
 
-      <h3 className="settings-subtitle" style={{ marginTop: "1.25rem" }}>
-        定休日
-      </h3>
+      <div className="settings-section-panel">
+        <h3 className="settings-subtitle">定休日</h3>
       <p className="settings-hint">現在の設定: {regularSummary}</p>
       <button type="button" className="settings-secondary" onClick={() => openRegularDialog()}>
         定休日を編集（ダイアログ）
       </button>
+      </div>
 
-      <h3 className="settings-subtitle" style={{ marginTop: "1.25rem" }}>
-        臨時休業日
-      </h3>
+      <div className="settings-section-panel">
+        <h3 className="settings-subtitle">臨時休業日</h3>
       <p className="settings-hint">選択中: {tempSummary}</p>
       <button type="button" className="settings-secondary" onClick={() => openTempDialog()}>
         臨時休業日を編集（カレンダー）
       </button>
+      </div>
 
       <div className="settings-actions" style={{ marginTop: "1.25rem" }}>
         <button type="button" className="settings-primary" disabled={busy} onClick={() => void saveAll()}>

@@ -553,4 +553,26 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
       punchedAt: row.punchedAt.toISOString(),
     };
   });
+
+  app.delete<{ Params: { punchId?: string } }>("/timecard/punches/:punchId", async (req, reply) => {
+    const { tenantId, sub: userId } = jwtUser(req);
+    const access = await loadUserAccess(userId, tenantId);
+    const punchId = String(req.params?.punchId ?? "").trim();
+    if (!punchId) return reply.code(400).send({ error: "punchId が必要です" });
+
+    const existing = await prisma.timeCardPunch.findFirst({
+      where: { id: punchId, tenantId },
+      select: { id: true, employeeId: true },
+    });
+    if (!existing) return reply.code(404).send({ error: "打刻が見つかりません" });
+
+    if (access.isStaffShiftOnly) {
+      if (!access.employeeId || existing.employeeId !== access.employeeId) {
+        return reply.code(403).send({ error: "この打刻を削除する権限がありません" });
+      }
+    }
+
+    await prisma.timeCardPunch.delete({ where: { id: punchId, tenantId } });
+    return reply.send({ ok: true });
+  });
 }
