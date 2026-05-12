@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { apiFetch, apiFetchBlob, getAccessToken } from "../api";
 import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
@@ -90,6 +90,7 @@ type ReferralRow = { id: string; name: string };
 export default function DailyReportDetail(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [rep, setRep] = useState<DR | null>(null);
   const [versions, setVersions] = useState<Ver[]>([]);
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
@@ -239,6 +240,21 @@ export default function DailyReportDetail(): JSX.Element {
     }
     setTripWizardOpen(true);
   }
+
+  useEffect(() => {
+    if (!rep || searchParams.get("addTrip") !== "1") return;
+    setDepartedAtLocal(`${rep.businessDate}T09:00`);
+    setArrivedAtLocal(`${rep.businessDate}T09:30`);
+    setTripWizardOpen(true);
+    setSearchParams(
+      (prev) => {
+        const n = new URLSearchParams(prev);
+        n.delete("addTrip");
+        return n;
+      },
+      { replace: true },
+    );
+  }, [rep, searchParams, setSearchParams]);
 
   async function submitTrip(): Promise<void> {
     if (!id) return;

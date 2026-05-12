@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { apiFetch, apiFetchBlob, getAccessToken } from "../api";
 import { useAuth, isStaffShiftOnlyMe } from "../auth";
+import {
+  clearShiftDailyReportSession,
+  loadShiftDailyReportSession,
+  saveShiftDailyReportSession,
+} from "../lib/shiftDailyReportSession";
 import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 type Emp = { id: string; familyName: string; givenName: string };
@@ -25,6 +30,7 @@ type DR = {
 
 export default function DailyReports(): JSX.Element {
   const { me } = useAuth();
+  const navigate = useNavigate();
   const staffOnly = Boolean(me && isStaffShiftOnlyMe(me.permissions));
   const [rows, setRows] = useState<DR[]>([]);
   const [emps, setEmps] = useState<Emp[]>([]);
@@ -35,8 +41,18 @@ export default function DailyReports(): JSX.Element {
   const [vehicleId, setVehicleId] = useState("");
   const [mainEmployeeId, setMainEmployeeId] = useState("");
   const [partnerEmployeeId, setPartnerEmployeeId] = useState("");
+  /** スタッフ向け: ペアの従業員（自分以外） */
+  const [staffPartnerPickId, setStaffPartnerPickId] = useState("");
+  /** スタッフ向け: true のときペアが主運転（自分は同乗） */
+  const [pairDrivesEscort, setPairDrivesEscort] = useState(false);
   const [meterStart, setMeterStart] = useState("");
   const [meterEnd, setMeterEnd] = useState("");
+  /** 作成直後: 業務続行の確認 */
+  const [postCreateReportId, setPostCreateReportId] = useState<string | null>(null);
+  /** いいえ選択後: 終了メーター入力 */
+  const [endShiftReportId, setEndShiftReportId] = useState<string | null>(null);
+  const [finalMeterEnd, setFinalMeterEnd] = useState("");
+  const [endShiftSubmitting, setEndShiftSubmitting] = useState(false);
 
   const [exportFrom, setExportFrom] = useState("");
   const [exportTo, setExportTo] = useState("");
@@ -65,31 +81,69 @@ export default function DailyReports(): JSX.Element {
   }, []);
 
   useEffect(() => {
-    if (staffOnly && me?.employeeId) setMainEmployeeId(me.employeeId);
-  }, [staffOnly, me?.employeeId]);
+    if (!wizardOpen || !me) return;
+    if (staffOnly && me.employeeId) setMainEmployeeId(me.employeeId);
+    const s = loadShiftDailyReportSession(me.tenant.id, me.id);
+    if (!s) return;
+    setVehicleId(s.vehicleId);
+    if (staffOnly && me.employeeId) {
+      if (s.mainEmployeeId === me.employeeId) {
+        setPairDrivesEscort(false);
+        setStaffPartnerPickId(s.partnerEmployeeId && s.partnerEmployeeId !== me.employeeId ? s.partnerEmployeeId : "");
+      } else {
+        setPairDrivesEscort(true);
+        setStaffPartnerPickId(s.mainEmployeeId);
+      }
+    } else {
+      setMainEmployeeId(s.mainEmployeeId);
+      setPartnerEmployeeId(s.partnerEmployeeId);
+    }
+  }, [wizardOpen, me, staffOnly]);
 
   function closeWizard(): void {
     setWizardOpen(false);
     setVehicleId("");
     setMainEmployeeId("");
     setPartnerEmployeeId("");
+    setStaffPartnerPickId("");
+    setPairDrivesEscort(false);
     setMeterStart("");
     setMeterEnd("");
+  }
+
+  function effectiveCreateMainPartner(): { mainId: string; partnerId: string | null } {
+    if (staffOnly && me?.employeeId) {
+      if (pairDrivesEscort) {
+        if (!staffPartnerPickId) return { mainId: "", partnerId: null };
+        return { mainId: staffPartnerPickId, partnerId: me.employeeId };
+      }
+      const pid = staffPartnerPickId && staffPartnerPickId !== me.employeeId ? staffPartnerPickId : null;
+      return { mainId: me.employeeId, partnerId: pid };
+    }
+    const pid = partnerEmployeeId && partnerEmployeeId !== mainEmployeeId ? partnerEmployeeId : null;
+    return { mainId: mainEmployeeId, partnerId: pid };
   }
 
   async function submitReport(): Promise<void> {
     setErr(null);
     setSubmitting(true);
     try {
+      const { mainId, partnerId } = effectiveCreateMainPartner();
+      if (!mainId) {
+        setErr("主ドライバーを指定してください");
+        return;
+      }
+      if (staffOnly && pairDrivesEscort && !staffPartnerPickId) {
+        setErr("ペアが運転する場合は、運転する従業員を選んでください");
+        return;
+      }
       const json: Record<string, unknown> = {
         vehicleId,
-        mainEmployeeId,
+        mainEmployeeId: mainId,
         meterStart: Number(meterStart),
         meterEnd: Number(meterEnd),
       };
-      if (partnerEmployeeId && partnerEmployeeId !== mainEmployeeId) {
-        json.partnerEmployeeId = partnerEmployeeId;
-      }
+      if (partnerId) json.partnerEmployeeId = partnerId;
       const r = await apiFetch<DR>("/daily-reports", {
         method: "POST",
         json,
@@ -98,6 +152,14 @@ export default function DailyReports(): JSX.Element {
         setErr(r.error);
         return;
       }
+      if (me) {
+        saveShiftDailyReportSession(me.tenant.id, me.id, {
+          vehicleId,
+          mainEmployeeId: mainId,
+          partnerEmployeeId: partnerId ?? "",
+        });
+      }
+      setPostCreateReportId(r.data.id);
       closeWizard();
       await load();
     } finally {
@@ -105,20 +167,50 @@ export default function DailyReports(): JSX.Element {
     }
   }
 
+  async function applyFinalMeterAndGoToWorkflow(): Promise<void> {
+    if (!me || !endShiftReportId) return;
+    const meNum = Math.floor(Number(finalMeterEnd));
+    if (!Number.isFinite(meNum)) {
+      setErr("メーター終了を数値で入力してください");
+      return;
+    }
+    setErr(null);
+    setEndShiftSubmitting(true);
+    try {
+      const r = await apiFetch(`/daily-reports/${endShiftReportId}`, {
+        method: "PATCH",
+        json: { meterEnd: meNum },
+      });
+      if (!r.ok) {
+        setErr(r.error);
+        return;
+      }
+      clearShiftDailyReportSession(me.tenant.id, me.id);
+      setEndShiftReportId(null);
+      setFinalMeterEnd("");
+      await load();
+      navigate("/workflow");
+    } finally {
+      setEndShiftSubmitting(false);
+    }
+  }
+
   const vehOk = Boolean(vehicleId);
-  const empOk = Boolean(mainEmployeeId);
+  const { mainId: effMain, partnerId: effPartner } = effectiveCreateMainPartner();
+  const empOk = staffOnly ? Boolean(me?.employeeId && (!pairDrivesEscort || Boolean(staffPartnerPickId))) : Boolean(effMain);
   const msOk = meterStart.trim() !== "" && !Number.isNaN(Number(meterStart));
   const meOk = meterEnd.trim() !== "" && !Number.isNaN(Number(meterEnd));
   const metersOk = msOk && meOk && Number(meterEnd) >= Number(meterStart);
 
   const vehLabel = vehs.find((v) => v.id === vehicleId)?.label;
-  const drvLabel = emps.find((e) => e.id === mainEmployeeId);
+  const mainLabel = emps.find((e) => e.id === effMain);
+  const partnerLabel = effPartner ? emps.find((e) => e.id === effPartner) : null;
 
   const steps: StepWizardStep[] = [
     {
       id: "veh",
-      title: "車両を選んでください",
-      description: "この日報に紐づく車両です。",
+      title: "随伴車を選んでください",
+      description: "この日報に紐づく車両です。前回と同じ勤務ならそのまま進めます。",
       canProceed: vehOk,
       children: (
         <>
@@ -131,22 +223,40 @@ export default function DailyReports(): JSX.Element {
               </option>
             ))}
           </select>
+          <p style={{ marginTop: "0.5rem" }}>
+            <button type="button" onClick={() => setVehicleId("")}>
+              随伴車を変更（選択をクリア）
+            </button>
+          </p>
         </>
       ),
     },
     {
       id: "drv",
-      title: staffOnly ? "ドライバー（本人＝主）" : "主ドライバーを選んでください",
+      title: staffOnly ? "ペアと運転の役割" : "主ドライバーを選んでください",
       canProceed: empOk,
       children: staffOnly && me?.employeeId ? (
         <>
-          <p style={{ marginTop: 0 }}>
-            主ドライバー（あなた）: <strong>{emps.find((e) => e.id === me.employeeId)?.familyName ?? ""}</strong>{" "}
+          <p style={{ marginTop: 0, fontSize: "0.95rem" }}>
+            あなた: <strong>{emps.find((e) => e.id === me.employeeId)?.familyName ?? ""}</strong>{" "}
             {emps.find((e) => e.id === me.employeeId)?.givenName ?? ""}
           </p>
-          <label style={{ display: "block", marginTop: "0.75rem" }}>同乗者（任意）</label>
-          <select value={partnerEmployeeId} onChange={(e) => setPartnerEmployeeId(e.target.value)}>
-            <option value="">なし</option>
+          <fieldset style={{ marginTop: "0.75rem", border: "1px solid #ccc", padding: "0.5rem 0.75rem" }}>
+            <legend style={{ fontSize: "0.9rem" }}>誰が随伴車を運転しますか？</legend>
+            <label style={{ display: "block", marginTop: "0.25rem" }}>
+              <input type="radio" name="pairDrive" checked={!pairDrivesEscort} onChange={() => setPairDrivesEscort(false)} />{" "}
+              自分（主ドライバー）
+            </label>
+            <label style={{ display: "block", marginTop: "0.35rem" }}>
+              <input type="radio" name="pairDrive" checked={pairDrivesEscort} onChange={() => setPairDrivesEscort(true)} />{" "}
+              ペア（自分は乗務員・同乗）
+            </label>
+          </fieldset>
+          <label style={{ display: "block", marginTop: "0.75rem" }}>
+            {pairDrivesEscort ? "運転するペア（必須）" : "同乗するペア（任意）"}
+          </label>
+          <select value={staffPartnerPickId} onChange={(e) => setStaffPartnerPickId(e.target.value)}>
+            <option value="">{pairDrivesEscort ? "選択してください" : "なし"}</option>
             {emps
               .filter((x) => x.id !== me.employeeId)
               .map((x) => (
@@ -155,6 +265,11 @@ export default function DailyReports(): JSX.Element {
                 </option>
               ))}
           </select>
+          <p style={{ marginTop: "0.5rem" }}>
+            <button type="button" onClick={() => setStaffPartnerPickId("")}>
+              ペアを変更（選択をクリア）
+            </button>
+          </p>
         </>
       ) : (
         <>
@@ -178,6 +293,11 @@ export default function DailyReports(): JSX.Element {
                 </option>
               ))}
           </select>
+          <p style={{ marginTop: "0.5rem" }}>
+            <button type="button" onClick={() => setPartnerEmployeeId("")}>
+              ペアを変更（同乗者をクリア）
+            </button>
+          </p>
         </>
       ),
     },
@@ -204,14 +324,10 @@ export default function DailyReports(): JSX.Element {
           <dt>車両</dt>
           <dd>{vehLabel ?? "—"}</dd>
           <dt>主ドライバー</dt>
-          <dd>{drvLabel ? `${drvLabel.familyName} ${drvLabel.givenName}` : "—"}</dd>
+          <dd>{mainLabel ? `${mainLabel.familyName} ${mainLabel.givenName}` : "—"}</dd>
           <dt>同乗者</dt>
           <dd>
-            {partnerEmployeeId
-              ? `${emps.find((e) => e.id === partnerEmployeeId)?.familyName ?? ""} ${
-                  emps.find((e) => e.id === partnerEmployeeId)?.givenName ?? ""
-                }`.trim() || "—"
-              : "—"}
+            {partnerLabel ? `${partnerLabel.familyName} ${partnerLabel.givenName}` : "—"}
           </dd>
           <dt>メーター</dt>
           <dd>
@@ -268,7 +384,81 @@ export default function DailyReports(): JSX.Element {
   return (
     <Card title="日報">
       <Err msg={err} />
-      <p style={{ marginTop: 0 }}>
+      {postCreateReportId ? (
+        <div
+          role="dialog"
+          aria-labelledby="shift-continue-title"
+          style={{
+            marginTop: "0.75rem",
+            padding: "0.75rem 1rem",
+            border: "1px solid #ccc",
+            borderRadius: 6,
+            background: "#fafafa",
+          }}
+        >
+          <p id="shift-continue-title" style={{ marginTop: 0, fontWeight: 600 }}>
+            本日の業務は続きますか？
+          </p>
+          <p style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
+            「はい」でこの日報に便を追加します。「いいえ」で随伴車の終了メーターを入力し、タイムカード・酒気確認の画面へ進みます。
+          </p>
+          <p style={{ marginTop: "0.5rem" }}>
+            <button
+              type="button"
+              onClick={() => {
+                const rid = postCreateReportId;
+                setPostCreateReportId(null);
+                navigate(`/daily-reports/${rid}?addTrip=1`);
+              }}
+            >
+              はい（便を追加）
+            </button>{" "}
+            <button
+              type="button"
+              onClick={() => {
+                setEndShiftReportId(postCreateReportId);
+                setPostCreateReportId(null);
+                setFinalMeterEnd("");
+              }}
+            >
+              いいえ（勤務終了へ）
+            </button>
+          </p>
+        </div>
+      ) : null}
+      {endShiftReportId ? (
+        <div
+          style={{
+            marginTop: "0.75rem",
+            padding: "0.75rem 1rem",
+            border: "1px solid #ccc",
+            borderRadius: 6,
+            background: "#fff8f0",
+          }}
+        >
+          <p style={{ marginTop: 0, fontWeight: 600 }}>随伴車のメーター終了（ODO）</p>
+          <label>
+            メーター終了
+            <input value={finalMeterEnd} onChange={(e) => setFinalMeterEnd(e.target.value)} inputMode="numeric" />
+          </label>
+          <p style={{ marginTop: "0.5rem" }}>
+            <button type="button" disabled={endShiftSubmitting} onClick={() => void applyFinalMeterAndGoToWorkflow()}>
+              タイムカード・酒気確認へ
+            </button>{" "}
+            <button
+              type="button"
+              disabled={endShiftSubmitting}
+              onClick={() => {
+                setEndShiftReportId(null);
+                setFinalMeterEnd("");
+              }}
+            >
+              キャンセル
+            </button>
+          </p>
+        </div>
+      ) : null}
+      <p style={{ marginTop: postCreateReportId || endShiftReportId ? "0.75rem" : 0 }}>
         <button type="button" onClick={() => setWizardOpen(true)}>
           日報を作成
         </button>
