@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch, apiFetchBlob, getAccessToken } from "../api";
+import { useAuth, isStaffShiftOnlyMe } from "../auth";
 import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 type Emp = { id: string; familyName: string; givenName: string };
@@ -23,6 +24,8 @@ type DR = {
 };
 
 export default function DailyReports(): JSX.Element {
+  const { me } = useAuth();
+  const staffOnly = Boolean(me && isStaffShiftOnlyMe(me.permissions));
   const [rows, setRows] = useState<DR[]>([]);
   const [emps, setEmps] = useState<Emp[]>([]);
   const [vehs, setVehs] = useState<Veh[]>([]);
@@ -60,6 +63,10 @@ export default function DailyReports(): JSX.Element {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    if (staffOnly && me?.employeeId) setMainEmployeeId(me.employeeId);
+  }, [staffOnly, me?.employeeId]);
 
   function closeWizard(): void {
     setWizardOpen(false);
@@ -129,9 +136,27 @@ export default function DailyReports(): JSX.Element {
     },
     {
       id: "drv",
-      title: "主ドライバーを選んでください",
+      title: staffOnly ? "ドライバー（本人＝主）" : "主ドライバーを選んでください",
       canProceed: empOk,
-      children: (
+      children: staffOnly && me?.employeeId ? (
+        <>
+          <p style={{ marginTop: 0 }}>
+            主ドライバー（あなた）: <strong>{emps.find((e) => e.id === me.employeeId)?.familyName ?? ""}</strong>{" "}
+            {emps.find((e) => e.id === me.employeeId)?.givenName ?? ""}
+          </p>
+          <label style={{ display: "block", marginTop: "0.75rem" }}>同乗者（任意）</label>
+          <select value={partnerEmployeeId} onChange={(e) => setPartnerEmployeeId(e.target.value)}>
+            <option value="">なし</option>
+            {emps
+              .filter((x) => x.id !== me.employeeId)
+              .map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.familyName} {x.givenName}
+                </option>
+              ))}
+          </select>
+        </>
+      ) : (
         <>
           <label>主ドライバー</label>
           <select value={mainEmployeeId} onChange={(e) => setMainEmployeeId(e.target.value)}>

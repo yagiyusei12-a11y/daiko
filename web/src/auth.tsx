@@ -13,6 +13,7 @@ export type MeUser = {
   id: string;
   email: string;
   displayName: string | null;
+  employeeId: string | null;
   tenant: { id: string; name: string; slug: string };
   roles: string[];
   permissions: string[];
@@ -116,4 +117,14 @@ export function useAuth(): AuthCtx {
   const v = useContext(Ctx);
   if (!v) throw new Error("useAuth outside AuthProvider");
   return v;
+}
+
+/** 全メニュー（`*` または `nav.full`） */
+export function isFullNavMe(permissions: string[]): boolean {
+  return permissions.includes("*") || permissions.includes("nav.full");
+}
+
+/** 勤務ウィザード中心のスタッフ */
+export function isStaffShiftOnlyMe(permissions: string[]): boolean {
+  return permissions.includes("staff.shift") && !isFullNavMe(permissions);
 }

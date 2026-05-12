@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
+import { useAuth, isStaffShiftOnlyMe } from "../auth";
 import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 type Emp = { id: string; familyName: string; givenName: string };
@@ -28,6 +29,8 @@ function datetimeLocalToIso(s: string): string | null {
 }
 
 export default function Alcohol(): JSX.Element {
+  const { me } = useAuth();
+  const staffOnly = Boolean(me && isStaffShiftOnlyMe(me.permissions));
   const [checks, setChecks] = useState<Check[]>([]);
   const [emps, setEmps] = useState<Emp[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -58,10 +61,12 @@ export default function Alcohol(): JSX.Element {
       const r = await apiFetch<{ employees: Emp[] }>("/employees");
       if (r.ok) {
         setEmps(r.data.employees);
-        if (r.data.employees[0]) setEmployeeId(r.data.employees[0].id);
+        if (staffOnly && me?.employeeId) {
+          setEmployeeId(me.employeeId);
+        } else if (r.data.employees[0]) setEmployeeId(r.data.employees[0].id);
       }
     })();
-  }, []);
+  }, [staffOnly, me?.employeeId]);
 
   useEffect(() => {
     void load();
@@ -79,7 +84,8 @@ export default function Alcohol(): JSX.Element {
     setInstructionNote("");
     setOtherNote("");
     setCheckedAtLocal("");
-    if (emps[0]) setEmployeeId(emps[0].id);
+    if (staffOnly && me?.employeeId) setEmployeeId(me.employeeId);
+    else if (emps[0]) setEmployeeId(emps[0].id);
   }
 
   async function submitCheck(): Promise<void> {
@@ -123,10 +129,15 @@ export default function Alcohol(): JSX.Element {
   const steps: StepWizardStep[] = [
     {
       id: "emp",
-      title: "従業員を選んでください",
+      title: staffOnly ? "対象者（本人）" : "従業員を選んでください",
       description: "酒気確認を記録する対象者です。",
       canProceed: empOk,
-      children: (
+      children: staffOnly && me?.employeeId ? (
+        <p style={{ marginTop: 0 }}>
+          紐づけ従業員: <strong>{emps.find((e) => e.id === me.employeeId)?.familyName ?? ""}</strong>{" "}
+          {emps.find((e) => e.id === me.employeeId)?.givenName ?? ""}
+        </p>
+      ) : (
         <>
           <label>従業員</label>
           <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} autoFocus>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
+import { useAuth, isStaffShiftOnlyMe } from "../auth";
 import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 type Emp = { id: string; familyName: string; givenName: string };
@@ -12,6 +13,8 @@ type Punch = {
 };
 
 export default function TimePunches(): JSX.Element {
+  const { me } = useAuth();
+  const staffOnly = Boolean(me && isStaffShiftOnlyMe(me.permissions));
   const [punches, setPunches] = useState<Punch[]>([]);
   const [emps, setEmps] = useState<Emp[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -32,10 +35,12 @@ export default function TimePunches(): JSX.Element {
       const r = await apiFetch<{ employees: Emp[] }>("/employees");
       if (r.ok) {
         setEmps(r.data.employees);
-        if (r.data.employees[0]) setEmployeeId(r.data.employees[0].id);
+        if (staffOnly && me?.employeeId) {
+          setEmployeeId(me.employeeId);
+        } else if (r.data.employees[0]) setEmployeeId(r.data.employees[0].id);
       }
     })();
-  }, []);
+  }, [staffOnly, me?.employeeId]);
 
   useEffect(() => {
     void load();
@@ -43,7 +48,8 @@ export default function TimePunches(): JSX.Element {
 
   function closeWizard(): void {
     setWizardOpen(false);
-    if (emps[0]) setEmployeeId(emps[0].id);
+    if (staffOnly && me?.employeeId) setEmployeeId(me.employeeId);
+    else if (emps[0]) setEmployeeId(emps[0].id);
   }
 
   async function submitClockIn(): Promise<void> {
@@ -68,10 +74,15 @@ export default function TimePunches(): JSX.Element {
   const steps: StepWizardStep[] = [
     {
       id: "emp",
-      title: "出勤する従業員を選んでください",
+      title: staffOnly ? "出勤打刻（本人）" : "出勤する従業員を選んでください",
       description: "この操作で出勤打刻が記録されます。",
       canProceed: empOk,
-      children: (
+      children: staffOnly && me?.employeeId ? (
+        <p style={{ marginTop: 0 }}>
+          紐づけ従業員: <strong>{emps.find((e) => e.id === me.employeeId)?.familyName ?? ""}</strong>{" "}
+          {emps.find((e) => e.id === me.employeeId)?.givenName ?? ""}
+        </p>
+      ) : (
         <>
           <label>従業員</label>
           <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} autoFocus>

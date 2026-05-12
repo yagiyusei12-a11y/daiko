@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { authenticate } from "../auth/pre.js";
+import { authenticate, jwtUser } from "../auth/pre.js";
+import { loadUserAccess } from "../lib/permissions.js";
 import { prisma } from "../db.js";
 import { businessDateYmdForOccurredAt } from "../lib/business-date.js";
 import { tenantIdFromReq } from "./tenant-scope.js";
@@ -7,9 +8,19 @@ import { tenantIdFromReq } from "./tenant-scope.js";
 export async function registerAlcoholRoutes(app: FastifyInstance): Promise<void> {
   app.get("/alcohol-checks", { preHandler: [authenticate] }, async (req) => {
     const tid = tenantIdFromReq(req);
+    const u = jwtUser(req);
+    const access = await loadUserAccess(u.sub, tid);
     const { businessDate } = req.query as { businessDate?: string };
+    const where: { tenantId: string; businessDate?: string; employeeId?: string } = {
+      tenantId: tid,
+      ...(businessDate ? { businessDate } : {}),
+    };
+    if (access.isStaffShiftOnly) {
+      if (!access.employeeId) return { checks: [] };
+      where.employeeId = access.employeeId;
+    }
     const rows = await prisma.alcoholCheck.findMany({
-      where: { tenantId: tid, ...(businessDate ? { businessDate } : {}) },
+      where,
       orderBy: { checkedAt: "desc" },
       take: 200,
       include: { employee: true },
@@ -34,9 +45,18 @@ export async function registerAlcoholRoutes(app: FastifyInstance): Promise<void>
     };
   }>("/alcohol-checks", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
+    const u = jwtUser(req);
+    const access = await loadUserAccess(u.sub, tid);
     const tenant = await prisma.tenant.findUnique({ where: { id: tid }, include: { settings: true } });
     if (!tenant?.settings) return reply.code(500).send({ error: "tenant settings missing" });
-    const employeeId = String(req.body?.employeeId || "");
+    let employeeId = String(req.body?.employeeId || "");
+    if (access.isStaffShiftOnly) {
+      if (!access.employeeId) return reply.code(403).send({ error: "user not linked to an employee" });
+      if (employeeId && employeeId !== access.employeeId) {
+        return reply.code(403).send({ error: "staff can only record alcohol checks for their linked employee" });
+      }
+      employeeId = access.employeeId;
+    }
     const phase = String(req.body?.phase || "").trim();
     const checkedAt = req.body?.checkedAt ? new Date(req.body.checkedAt) : new Date();
     if (!employeeId || !phase) return reply.code(400).send({ error: "employeeId, phase required" });

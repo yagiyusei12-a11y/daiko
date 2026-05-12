@@ -43,6 +43,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       const ownerRole = await tx.role.create({
         data: { tenantId: t.id, name: "owner", permissions: ["*"] },
       });
+      await tx.role.create({
+        data: { tenantId: t.id, name: "staff", permissions: ["staff.shift"] },
+      });
       const user = await tx.user.create({
         data: { tenantId: t.id, email, passwordHash, displayName },
       });
@@ -85,15 +88,23 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const u = req.user as { sub: string; tenantId: string; email: string };
     const user = await prisma.user.findUnique({
       where: { id: u.sub },
-      include: { roles: { include: { role: true } }, tenant: { select: { id: true, name: true, slug: true } } },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        employeeId: true,
+        tenant: { select: { id: true, name: true, slug: true } },
+        roles: { include: { role: true } },
+      },
     });
-    const permissions = user ? await userEffectivePermissionList(user.id, user.tenantId) : [];
+    const permissions = user ? await userEffectivePermissionList(user.id, user.tenant.id) : [];
     return {
       user: user
         ? {
             id: user.id,
             email: user.email,
             displayName: user.displayName,
+            employeeId: user.employeeId,
             tenant: user.tenant,
             roles: user.roles.map((r) => r.role.name),
             permissions,

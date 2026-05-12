@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import type { TripPassengerKind } from "@prisma/client";
-import { authenticate } from "../auth/pre.js";
+import { authenticate, jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
 import { businessDateYmdForOccurredAt } from "../lib/business-date.js";
 import { fareYenForTrip } from "../lib/pricing.js";
+import { loadUserAccess, type UserAccessContext } from "../lib/permissions.js";
 import { tenantIdFromReq } from "./tenant-scope.js";
 
 function passengerKindFromBody(raw: unknown): TripPassengerKind {
@@ -30,6 +31,15 @@ function csvCell(s: string): string {
   return `"${String(s).replace(/"/g, '""')}"`;
 }
 
+function dailyReportVisibleToStaff(
+  rep: { mainEmployeeId: string; partnerEmployeeId: string | null },
+  access: UserAccessContext,
+): boolean {
+  if (!access.isStaffShiftOnly) return true;
+  if (!access.employeeId) return false;
+  return rep.mainEmployeeId === access.employeeId || rep.partnerEmployeeId === access.employeeId;
+}
+
 const tripRel = {
   customer: { select: { id: true, displayName: true } },
   referralSource: { select: { id: true, name: true } },
@@ -38,9 +48,19 @@ const tripRel = {
 export async function registerDailyReportRoutes(app: FastifyInstance): Promise<void> {
   app.get("/daily-reports", { preHandler: [authenticate] }, async (req) => {
     const tid = tenantIdFromReq(req);
+    const u = jwtUser(req);
+    const access = await loadUserAccess(u.sub, tid);
     const { from, to } = req.query as { from?: string; to?: string };
-    const where: { tenantId: string; businessDate?: { gte: string; lte: string } } = { tenantId: tid };
+    const where: {
+      tenantId: string;
+      businessDate?: { gte: string; lte: string };
+      OR?: ({ mainEmployeeId: string } | { partnerEmployeeId: string })[];
+    } = { tenantId: tid };
     if (from && to) where.businessDate = { gte: from, lte: to };
+    if (access.isStaffShiftOnly) {
+      if (!access.employeeId) return { dailyReports: [] };
+      where.OR = [{ mainEmployeeId: access.employeeId }, { partnerEmployeeId: access.employeeId }];
+    }
     const rows = await prisma.dailyReport.findMany({
       where,
       orderBy: { businessDate: "desc" },
@@ -57,11 +77,20 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
 
   app.get("/daily-reports/export-range.csv", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
+    const u = jwtUser(req);
+    const access = await loadUserAccess(u.sub, tid);
     const { from, to, officialOnly } = req.query as { from?: string; to?: string; officialOnly?: string };
     if (!from || !to) return reply.code(400).send({ error: "from and to (YYYY-MM-DD) required" });
     const only = officialOnlyFromQuery(officialOnly);
+    const dateWhere = { tenantId: tid, businessDate: { gte: from, lte: to } };
+    const where =
+      access.isStaffShiftOnly && access.employeeId
+        ? { ...dateWhere, OR: [{ mainEmployeeId: access.employeeId }, { partnerEmployeeId: access.employeeId }] }
+        : access.isStaffShiftOnly
+          ? { tenantId: tid, id: { in: [] as string[] } }
+          : dateWhere;
     const rows = await prisma.dailyReport.findMany({
-      where: { tenantId: tid, businessDate: { gte: from, lte: to } },
+      where,
       orderBy: { businessDate: "asc" },
       include: {
         vehicle: true,
@@ -103,11 +132,20 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
 
   app.get("/daily-reports/export-range.html", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
+    const u = jwtUser(req);
+    const access = await loadUserAccess(u.sub, tid);
     const { from, to, officialOnly } = req.query as { from?: string; to?: string; officialOnly?: string };
     if (!from || !to) return reply.code(400).send({ error: "from and to (YYYY-MM-DD) required" });
     const only = officialOnlyFromQuery(officialOnly);
+    const dateWhere = { tenantId: tid, businessDate: { gte: from, lte: to } };
+    const where =
+      access.isStaffShiftOnly && access.employeeId
+        ? { ...dateWhere, OR: [{ mainEmployeeId: access.employeeId }, { partnerEmployeeId: access.employeeId }] }
+        : access.isStaffShiftOnly
+          ? { tenantId: tid, id: { in: [] as string[] } }
+          : dateWhere;
     const rows = await prisma.dailyReport.findMany({
-      where: { tenantId: tid, businessDate: { gte: from, lte: to } },
+      where,
       orderBy: { businessDate: "asc" },
       include: {
         vehicle: true,
@@ -141,6 +179,8 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
 
   app.get<{ Params: { id: string } }>("/daily-reports/:id", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
+    const u = jwtUser(req);
+    const access = await loadUserAccess(u.sub, tid);
     const row = await prisma.dailyReport.findFirst({
       where: { id: req.params.id, tenantId: tid },
       include: {
@@ -151,11 +191,14 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       },
     });
     if (!row) return reply.code(404).send({ error: "not found" });
+    if (!dailyReportVisibleToStaff(row, access)) return reply.code(404).send({ error: "not found" });
     return row;
   });
 
   app.get<{ Params: { id: string } }>("/daily-reports/:id/print", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
+    const u = jwtUser(req);
+    const access = await loadUserAccess(u.sub, tid);
     const { officialOnly } = req.query as { officialOnly?: string };
     const only = officialOnlyFromQuery(officialOnly);
     const r = await prisma.dailyReport.findFirst({
@@ -168,6 +211,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       },
     });
     if (!r) return reply.code(404).send({ error: "not found" });
+    if (!dailyReportVisibleToStaff(r, access)) return reply.code(404).send({ error: "not found" });
     const trips = only ? r.trips.filter((t) => !t.excludeFromOfficialPrint) : r.trips;
     const tripRows = trips
       .map(
@@ -209,6 +253,8 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
 
   app.get<{ Params: { id: string } }>("/daily-reports/:id/export.csv", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
+    const u = jwtUser(req);
+    const access = await loadUserAccess(u.sub, tid);
     const { officialOnly } = req.query as { officialOnly?: string };
     const only = officialOnlyFromQuery(officialOnly);
     const r = await prisma.dailyReport.findFirst({
@@ -216,6 +262,7 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
       include: { vehicle: true, mainEmployee: true, partnerEmployee: true, trips: { include: tripRel, orderBy: { departedAt: "asc" } } },
     });
     if (!r) return reply.code(404).send({ error: "not found" });
+    if (!dailyReportVisibleToStaff(r, access)) return reply.code(404).send({ error: "not found" });
     const trips = only ? r.trips.filter((t) => !t.excludeFromOfficialPrint) : r.trips;
     const lines: string[] = [
       "\uFEFFbusinessDate,vehicle,mainDriver,partnerDriver,tripClient,origin,destination,fareYen,distanceM,waitingMinutes,officialExclude,referral",
@@ -264,8 +311,11 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
     };
   }>("/daily-reports/:id", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
+    const u = jwtUser(req);
+    const access = await loadUserAccess(u.sub, tid);
     const row = await prisma.dailyReport.findFirst({ where: { id: req.params.id, tenantId: tid } });
     if (!row) return reply.code(404).send({ error: "not found" });
+    if (!dailyReportVisibleToStaff(row, access)) return reply.code(404).send({ error: "not found" });
     const b = req.body ?? {};
     const nums = {
       paymentCashYen: b.paymentCashYen !== undefined ? Math.max(0, Math.floor(Number(b.paymentCashYen))) : row.paymentCashYen,
@@ -310,6 +360,16 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
         if (!emp) return reply.code(400).send({ error: "invalid partnerEmployeeId" });
         partnerEmployeeId = pid;
       }
+    }
+
+    const nextPartnerId =
+      partnerEmployeeId !== undefined ? partnerEmployeeId : row.partnerEmployeeId;
+    if (
+      access.isStaffShiftOnly &&
+      access.employeeId &&
+      !dailyReportVisibleToStaff({ mainEmployeeId: row.mainEmployeeId, partnerEmployeeId: nextPartnerId }, access)
+    ) {
+      return reply.code(403).send({ error: "update would remove you from this daily report" });
     }
 
     const readOptIso = (v: unknown): { ok: true; v: Date | null } | { ok: false } => {
@@ -385,6 +445,8 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
     };
   }>("/daily-reports", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
+    const u = jwtUser(req);
+    const access = await loadUserAccess(u.sub, tid);
     const tenant = await prisma.tenant.findUnique({
       where: { id: tid },
       include: { settings: true },
@@ -392,10 +454,19 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
     if (!tenant?.settings) return reply.code(500).send({ error: "tenant settings missing" });
     const vehicleId = String(req.body?.vehicleId || "");
     const mainEmployeeId = String(req.body?.mainEmployeeId || "");
+    const partnerEmployeeIdForCreate = req.body?.partnerEmployeeId ? String(req.body.partnerEmployeeId) : null;
     const meterStart = Math.floor(Number(req.body?.meterStart ?? NaN));
     const meterEnd = Math.floor(Number(req.body?.meterEnd ?? NaN));
     if (!vehicleId || !mainEmployeeId || !Number.isFinite(meterStart) || !Number.isFinite(meterEnd)) {
       return reply.code(400).send({ error: "vehicleId, mainEmployeeId, meterStart, meterEnd required" });
+    }
+    if (access.isStaffShiftOnly) {
+      if (!access.employeeId) return reply.code(403).send({ error: "user not linked to an employee" });
+      const selfOk =
+        mainEmployeeId === access.employeeId || partnerEmployeeIdForCreate === access.employeeId;
+      if (!selfOk) {
+        return reply.code(403).send({ error: "staff must be main or partner on new daily report" });
+      }
     }
     const at = req.body?.occurredAt ? new Date(req.body.occurredAt) : new Date();
     if (!Number.isFinite(at.getTime())) return reply.code(400).send({ error: "invalid occurredAt" });
@@ -418,7 +489,7 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
         businessDate,
         vehicleId,
         mainEmployeeId,
-        partnerEmployeeId: req.body?.partnerEmployeeId ? String(req.body.partnerEmployeeId) : null,
+        partnerEmployeeId: partnerEmployeeIdForCreate,
         meterStart,
         meterEnd,
         dutyStartAt,
@@ -434,8 +505,11 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
 
   app.delete<{ Params: { id: string } }>("/daily-reports/:id", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
+    const u = jwtUser(req);
+    const access = await loadUserAccess(u.sub, tid);
     const row = await prisma.dailyReport.findFirst({ where: { id: req.params.id, tenantId: tid } });
     if (!row) return reply.code(404).send({ error: "not found" });
+    if (!dailyReportVisibleToStaff(row, access)) return reply.code(404).send({ error: "not found" });
     const ym = row.businessDate.slice(0, 7);
     const run = await prisma.payrollRun.findFirst({
       where: { tenantId: tid, status: "LOCKED", periodYm: ym },
@@ -476,8 +550,11 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
     };
   }>("/daily-reports/:id/trips", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
+    const u = jwtUser(req);
+    const access = await loadUserAccess(u.sub, tid);
     const rep = await prisma.dailyReport.findFirst({ where: { id: req.params.id, tenantId: tid } });
     if (!rep) return reply.code(404).send({ error: "not found" });
+    if (!dailyReportVisibleToStaff(rep, access)) return reply.code(404).send({ error: "not found" });
 
     let customerId: string | null = req.body?.customerId ? String(req.body.customerId) : null;
     let referralSourceId: string | null = req.body?.referralSourceId ? String(req.body.referralSourceId) : null;
@@ -646,8 +723,11 @@ h1{font-size:20px;} table{border-collapse:collapse;width:100%;margin-top:12px;} 
     };
   }>("/daily-reports/:id/trips/:tripId", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
+    const u = jwtUser(req);
+    const access = await loadUserAccess(u.sub, tid);
     const rep = await prisma.dailyReport.findFirst({ where: { id: req.params.id, tenantId: tid } });
     if (!rep) return reply.code(404).send({ error: "not found" });
+    if (!dailyReportVisibleToStaff(rep, access)) return reply.code(404).send({ error: "not found" });
     const trip = await prisma.tripLeg.findFirst({
       where: { id: req.params.tripId, dailyReportId: rep.id },
     });

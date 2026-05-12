@@ -53,3 +53,35 @@ export async function userEffectivePermissionList(userId: string, tenantId: stri
   }
   return [...set];
 }
+
+/** 全メニュー利用（オーナー・管理者） */
+export function isFullNavUser(permissions: string[]): boolean {
+  return permissions.includes("*") || permissions.includes("nav.full");
+}
+
+/** 勤務ウィザード中心のスタッフ（フルでない） */
+export function isStaffShiftOnly(permissions: string[]): boolean {
+  return permissions.includes("staff.shift") && !isFullNavUser(permissions);
+}
+
+export type UserAccessContext = {
+  employeeId: string | null;
+  permissions: string[];
+  isFullNav: boolean;
+  isStaffShiftOnly: boolean;
+};
+
+export async function loadUserAccess(userId: string, tenantId: string): Promise<UserAccessContext> {
+  const user = await prisma.user.findFirst({
+    where: { id: userId, tenantId },
+    select: { employeeId: true },
+  });
+  const permissions = await userEffectivePermissionList(userId, tenantId);
+  const isFullNav = isFullNavUser(permissions);
+  return {
+    employeeId: user?.employeeId ?? null,
+    permissions,
+    isFullNav,
+    isStaffShiftOnly: permissions.includes("staff.shift") && !isFullNav,
+  };
+}

@@ -4,7 +4,14 @@ import { useAuth } from "../auth";
 import { Card, Err, StepWizard, Tabs, type StepWizardStep } from "../ui";
 
 type Role = { id: string; name: string; permissions: unknown };
-type UserRow = { id: string; email: string; displayName: string | null; roles: { id: string; name: string }[] };
+type UserRow = {
+  id: string;
+  email: string;
+  displayName: string | null;
+  employeeId: string | null;
+  roles: { id: string; name: string }[];
+};
+type EmpRow = { id: string; familyName: string; givenName: string };
 
 export default function Rbac(): JSX.Element {
   const { can } = useAuth();
@@ -19,6 +26,8 @@ export default function Rbac(): JSX.Element {
   const [assignRole, setAssignRole] = useState<Record<string, string>>({});
   const [roleWizardOpen, setRoleWizardOpen] = useState(false);
   const [roleWizardSubmitting, setRoleWizardSubmitting] = useState(false);
+  const [empsRbac, setEmpsRbac] = useState<EmpRow[]>([]);
+  const [userEmpPick, setUserEmpPick] = useState<Record<string, string>>({});
 
   async function loadRoles(): Promise<void> {
     const r = await apiFetch<{ roles: Role[] }>("/roles");
@@ -36,12 +45,19 @@ export default function Rbac(): JSX.Element {
     }
     setUsersErr(null);
     setUsers(r.data.users);
+    const pick: Record<string, string> = {};
+    for (const u of r.data.users) pick[u.id] = u.employeeId ?? "";
+    setUserEmpPick(pick);
   }
 
   useEffect(() => {
     void (async () => {
       await loadRoles();
-      if (manage) await loadUsers();
+      if (manage) {
+        await loadUsers();
+        const er = await apiFetch<{ employees: EmpRow[] }>("/employees");
+        if (er.ok) setEmpsRbac(er.data.employees);
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 初回と manage 切替のみで十分
   }, [manage]);
@@ -146,6 +162,18 @@ export default function Rbac(): JSX.Element {
     else await loadUsers();
   }
 
+  async function saveUserEmployee(userId: string): Promise<void> {
+    if (!manage) return;
+    setErr(null);
+    const v = (userEmpPick[userId] ?? "").trim();
+    const r = await apiFetch(`/users/${userId}`, {
+      method: "PATCH",
+      json: { employeeId: v === "" ? null : v },
+    });
+    if (!r.ok) setErr((r as { ok: false; error: string }).error);
+    else await loadUsers();
+  }
+
   const tabItems = [
     {
       id: "roles",
@@ -195,6 +223,15 @@ export default function Rbac(): JSX.Element {
                     ロールを作成
                   </button>
                 </p>
+                <p style={{ fontSize: "0.9rem" }}>
+                  権限テンプレ:{" "}
+                  <button type="button" onClick={() => setNewPerms("staff.shift")}>
+                    スタッフ（勤務ウィザード）
+                  </button>{" "}
+                  <button type="button" onClick={() => setNewPerms("nav.full")}>
+                    管理者（全メニュー）
+                  </button>
+                </p>
                 <StepWizard
                   open={roleWizardOpen}
                   onClose={() => {
@@ -223,6 +260,7 @@ export default function Rbac(): JSX.Element {
                       <tr>
                         <th>メール</th>
                         <th>表示名</th>
+                        <th>紐づけ従業員</th>
                         <th>付与済み</th>
                         <th>追加</th>
                       </tr>
@@ -232,6 +270,22 @@ export default function Rbac(): JSX.Element {
                         <tr key={u.id}>
                           <td>{u.email}</td>
                           <td>{u.displayName ?? "—"}</td>
+                          <td>
+                            <select
+                              value={userEmpPick[u.id] ?? ""}
+                              onChange={(e) => setUserEmpPick((m) => ({ ...m, [u.id]: e.target.value }))}
+                            >
+                              <option value="">なし</option>
+                              {empsRbac.map((e) => (
+                                <option key={e.id} value={e.id}>
+                                  {e.familyName} {e.givenName}
+                                </option>
+                              ))}
+                            </select>{" "}
+                            <button type="button" onClick={() => void saveUserEmployee(u.id)}>
+                              保存
+                            </button>
+                          </td>
                           <td>
                             {u.roles.map((r) => (
                               <span key={r.id} style={{ marginRight: 6 }}>

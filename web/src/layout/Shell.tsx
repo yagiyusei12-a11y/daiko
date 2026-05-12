@@ -1,7 +1,7 @@
 import { NavLink, Outlet, Navigate } from "react-router-dom";
-import { useAuth } from "../auth";
+import { useAuth, isStaffShiftOnlyMe } from "../auth";
 
-const links: { to: string; label: string; perm?: string }[] = [
+const fullNavLinks: { to: string; label: string; perm?: string }[] = [
   { to: "/", label: "ホーム" },
   { to: "/employees", label: "従業員" },
   { to: "/vehicles", label: "車両" },
@@ -20,8 +20,20 @@ const links: { to: string; label: string; perm?: string }[] = [
   { to: "/legal", label: "法定" },
 ];
 
+const staffNavLinks: { to: string; label: string }[] = [
+  { to: "/", label: "ホーム" },
+  { to: "/workflow", label: "勤務" },
+  { to: "/time-punches", label: "勤怠" },
+  { to: "/alcohol", label: "酒気" },
+  { to: "/daily-reports", label: "日報" },
+];
+
 export default function Shell(): JSX.Element {
   const { me, loading, logout, can } = useAuth();
+  const staffOnly = Boolean(me && isStaffShiftOnlyMe(me.permissions));
+  const navLinks = staffOnly
+    ? staffNavLinks
+    : fullNavLinks.filter((l) => !l.perm || can(l.perm));
   if (loading) {
     return (
       <div className="app-loading">
@@ -45,13 +57,11 @@ export default function Shell(): JSX.Element {
           </button>
         </div>
         <nav className="app-nav-tabs" aria-label="メインメニュー">
-          {links
-            .filter((l) => !l.perm || can(l.perm))
-            .map((l) => (
-              <NavLink key={l.to} to={l.to} end={l.to === "/"} className={({ isActive }) => (isActive ? "active" : "")}>
-                {l.label}
-              </NavLink>
-            ))}
+          {navLinks.map((l) => (
+            <NavLink key={l.to} to={l.to} end={l.to === "/"} className={({ isActive }) => (isActive ? "active" : "")}>
+              {l.label}
+            </NavLink>
+          ))}
         </nav>
       </header>
       <main className="app-main">
