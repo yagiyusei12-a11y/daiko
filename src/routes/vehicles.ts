@@ -114,4 +114,24 @@ export async function registerVehicleRoutes(app: FastifyInstance): Promise<void>
       return prisma.vehicle.update({ where: { id: v.id }, data });
     },
   );
+
+  app.delete<{ Params: { id: string } }>("/vehicles/:id", { preHandler: [authenticate] }, async (req, reply) => {
+    const tid = tenantIdFromReq(req);
+    const id = req.params.id;
+    const cur = await prisma.vehicle.findFirst({ where: { id, tenantId: tid } });
+    if (!cur) return reply.code(404).send({ error: "not found" });
+
+    const reportCount = await prisma.dailyReport.count({
+      where: { tenantId: tid, vehicleId: id },
+    });
+    if (reportCount > 0) {
+      return reply.code(409).send({
+        error:
+          "この車両は運行日報に登録があるため削除できません。該当日報を削除または別の車両に変更してから再度お試しください。",
+      });
+    }
+
+    await prisma.vehicle.delete({ where: { id } });
+    return reply.code(204).send();
+  });
 }

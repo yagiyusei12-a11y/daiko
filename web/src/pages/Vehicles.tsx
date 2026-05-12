@@ -153,11 +153,22 @@ export default function Vehicles(): JSX.Element {
     else await load();
   }
 
+  async function removeVehicle(id: string, displayName: string): Promise<void> {
+    if (!window.confirm(`「${displayName}」を削除します。取り消せません。よろしいですか？`)) return;
+    setErr(null);
+    const r = await apiFetch<unknown>(`/vehicles/${id}`, { method: "DELETE" });
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    await load();
+  }
+
   return (
     <Card title="車両">
       <Err msg={err} />
       <p style={{ fontSize: "0.82rem", marginTop: 0 }}>
-        新規登録時は表示名・ナンバー・補償開始日が必須です（乗務記録簿・損害賠償措置・変更届で使う随伴車情報）。既存で未入力の車両は、次に「保存」するときに埋めてください。
+        新規登録時は表示名・ナンバー・補償開始日が必須です（乗務記録簿・損害賠償措置・変更届で使う随伴車情報）。既存で未入力の車両は、次に「保存」するときに埋めてください。削除は運行日報に登録されていない車両のみ可能です。
       </p>
       <p style={{ marginTop: "0.5rem" }}>
         <button type="button" onClick={() => setWizardOpen(true)}>
@@ -192,7 +203,13 @@ export default function Vehicles(): JSX.Element {
           </thead>
           <tbody>
             {rows.map((x) => (
-              <VehicleRow key={x.id} v={x} onSave={saveVehicle} onToggle={() => void toggleActive(x)} />
+              <VehicleRow
+                key={x.id}
+                v={x}
+                onSave={saveVehicle}
+                onToggle={() => void toggleActive(x)}
+                onDelete={() => void removeVehicle(x.id, x.label)}
+              />
             ))}
           </tbody>
         </table>
@@ -205,10 +222,12 @@ function VehicleRow({
   v,
   onSave,
   onToggle,
+  onDelete,
 }: {
   v: V;
   onSave: (v: V, plate: string, legalYmd: string) => void;
   onToggle: () => void;
+  onDelete: () => void;
 }): JSX.Element {
   const [plate, setPlate] = useState(v.plate ?? "");
   const [legalYmd, setLegalYmd] = useState(toYmd(v.legalCoverageStartOn));
@@ -234,6 +253,9 @@ function VehicleRow({
         </button>{" "}
         <button type="button" onClick={onToggle}>
           {v.active ? "無効化" : "有効化"}
+        </button>{" "}
+        <button type="button" onClick={onDelete} style={{ color: "#b00020" }}>
+          削除
         </button>
       </td>
     </tr>
