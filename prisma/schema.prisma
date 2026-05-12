@@ -75,6 +75,7 @@ model Tenant {
   dispatchReservations DispatchReservation[]
   accountsReceivableEntries AccountsReceivableEntry[]
   demoSeedBatches     DemoSeedBatch[]
+  shiftApplications   ShiftApplication[]
 }
 
 /// デモ用サンプル投入のバッチ（payload に作成した主キー一覧を保持し、削除時に利用）
@@ -86,6 +87,23 @@ model DemoSeedBatch {
   createdAt DateTime @default(now())
 
   @@index([tenantId, createdAt])
+}
+
+/// 従業員ごとの月単位シフト申請（日付キー yyyy-MM-dd → 開始・終了時刻 HH:mm）
+model ShiftApplication {
+  id         String   @id @default(cuid())
+  tenantId   String
+  employeeId String
+  yearMonth  String
+  daysJson   Json     @default("{}")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, employeeId, yearMonth])
+  @@index([tenantId, yearMonth])
 }
 
 model TenantSettings {
@@ -212,6 +230,7 @@ model Employee {
   complaintRowsAsDriver    ComplaintLedger[]
   guidanceAttendances      GuidanceAttendee[]
   linkedUsers              User[]
+  shiftApplications        ShiftApplication[]
 
   @@index([tenantId, status])
 }

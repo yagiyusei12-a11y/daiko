@@ -11,6 +11,7 @@ import { prisma } from "./db.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerDailyReportRoutes } from "./routes/daily-reports.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
+import { registerAttendanceRoutes } from "./routes/attendance.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -77,6 +78,7 @@ app.get("/web", async (_, reply) => reply.redirect("/app/", 302));
 const v1 = "/api/v1";
 await app.register(registerAuthRoutes, { prefix: v1 });
 await app.register(registerSettingsRoutes, { prefix: `${v1}/settings` });
+await app.register(registerAttendanceRoutes, { prefix: `${v1}/attendance` });
 await app.register(registerDailyReportRoutes, { prefix: v1 });
 
 app.get("/api/v1/openapi.json", async () => app.swagger());

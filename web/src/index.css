@@ -966,6 +966,106 @@ td {
   }
 }
 
+.attend-shift-root {
+  max-width: 40rem;
+}
+
+.attend-shift-section-title {
+  margin: 1rem 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.attend-shift-dialog.pricing-modal {
+  max-width: 36rem;
+}
+
+.attend-shift-ym-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.attend-shift-ym-row input[type="month"] {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+.attend-shift-copy-banner {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-sm);
+}
+
+.attend-shift-copy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.attend-cal {
+  margin: 0.75rem 0;
+}
+
+.attend-cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 0.25rem;
+  font-size: 0.72rem;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.attend-cal-wd {
+  padding: 0.2rem 0;
+}
+
+.attend-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.attend-cal-cell {
+  aspect-ratio: 1;
+  min-height: 2.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.attend-cal-cell:disabled.attend-cal-cell--empty {
+  border-color: transparent;
+  background: transparent;
+  cursor: default;
+}
+
+.attend-cal-cell:not(:disabled):hover {
+  border-color: var(--color-accent);
+}
+
+.attend-cal-cell--active {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.attend-cal-cell--copy {
+  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface));
+  font-weight: 600;
+}
+
+.attend-cal-cell--has:not(.attend-cal-cell--active) {
+  border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
+}
+
 .trip-editor {
   margin-bottom: 1rem;
 }
