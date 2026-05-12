@@ -18,6 +18,15 @@ export const WaitingRuleSchema = z.discriminatedUnion("type", [
     firstChargeYen: z.number().int().min(0),
     perMinAfterFirstYen: z.number().int().min(0),
   }),
+  /** 無料分のあと、先頭 prefix 分は定額、その超過を blockEveryMin ごとに blockYen（だるま型・ひよこ型） */
+  z.object({
+    type: z.literal("prefix_block_then_block"),
+    graceMin: z.number().int().min(0),
+    prefixMin: z.number().int().min(0),
+    prefixYen: z.number().int().min(0),
+    blockEveryMin: z.number().int().min(1),
+    blockYen: z.number().int().min(0),
+  }),
 ]);
 
 export type WaitingRule = z.infer<typeof WaitingRuleSchema>;
@@ -38,6 +47,12 @@ export function waitingFareYen(rule: WaitingRule, waitingMinutes: number): numbe
     const billable = Math.max(0, m - rule.graceMin);
     if (billable <= 0) return 0;
     return Math.ceil(billable / rule.blockEveryMin) * rule.blockYen;
+  }
+  if (rule.type === "prefix_block_then_block") {
+    if (m <= rule.graceMin) return 0;
+    if (m <= rule.graceMin + rule.prefixMin) return rule.prefixYen;
+    const over = m - rule.graceMin - rule.prefixMin;
+    return rule.prefixYen + Math.ceil(over / rule.blockEveryMin) * rule.blockYen;
   }
   const billable = Math.max(0, m - rule.graceMin);
   if (billable <= 0) return 0;

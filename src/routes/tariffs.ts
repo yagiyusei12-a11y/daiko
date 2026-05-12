@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { authenticate } from "../auth/pre.js";
 import { prisma } from "../db.js";
+import { PickupRuleJsonSchema } from "../lib/pickup-pricing.js";
 import { WaitingRuleSchema } from "../lib/tariff-waiting.js";
 import { tenantIdFromReq } from "./tenant-scope.js";
 
@@ -21,6 +22,14 @@ const versionPatchBodySchema = z
     cancellationFeeYen: z.number().int().min(0).optional(),
     nightSurchargeBps: z.number().int().optional(),
     leftHandSurchargeBps: z.number().int().optional(),
+    nightSurchargeFlatYen: z.number().int().min(0).optional(),
+    lateNightFlatYen: z.number().int().min(0).optional(),
+    earlyMorningFlatYen: z.number().int().min(0).optional(),
+    earlyRushFlatYen: z.number().int().min(0).optional(),
+    pickupRuleJson: z.unknown().optional(),
+    distanceDiscountFromM: z.number().int().min(0).nullable().optional(),
+    distanceDiscountBps: z.number().int().optional(),
+    notes: z.union([z.string(), z.null()]).optional(),
   })
   .strict();
 
@@ -149,6 +158,14 @@ export async function registerTariffRoutes(app: FastifyInstance): Promise<void> 
         cancellationFeeYen: last?.cancellationFeeYen ?? 0,
         nightSurchargeBps: last?.nightSurchargeBps ?? 0,
         leftHandSurchargeBps: last?.leftHandSurchargeBps ?? 0,
+        nightSurchargeFlatYen: last?.nightSurchargeFlatYen ?? 0,
+        lateNightFlatYen: last?.lateNightFlatYen ?? 0,
+        earlyMorningFlatYen: last?.earlyMorningFlatYen ?? 0,
+        earlyRushFlatYen: last?.earlyRushFlatYen ?? 0,
+        pickupRuleJson: (last?.pickupRuleJson as Prisma.InputJsonValue) ?? [],
+        distanceDiscountFromM: last?.distanceDiscountFromM ?? null,
+        distanceDiscountBps: last?.distanceDiscountBps ?? 0,
+        notes: last?.notes ?? null,
       },
     });
 
@@ -218,6 +235,15 @@ export async function registerTariffRoutes(app: FastifyInstance): Promise<void> 
       }
     }
 
+    let pickupRuleJson: Prisma.InputJsonValue | undefined;
+    if (b.pickupRuleJson !== undefined) {
+      const pr = PickupRuleJsonSchema.safeParse(b.pickupRuleJson);
+      if (!pr.success) {
+        return reply.code(400).send({ error: "invalid pickupRuleJson", details: pr.error.flatten() });
+      }
+      pickupRuleJson = pr.data as unknown as Prisma.InputJsonValue;
+    }
+
     const updated = await prisma.tariffPlanVersion.update({
       where: { id: ver.id },
       data: {
@@ -232,6 +258,14 @@ export async function registerTariffRoutes(app: FastifyInstance): Promise<void> 
         ...(b.cancellationFeeYen !== undefined ? { cancellationFeeYen: b.cancellationFeeYen } : {}),
         ...(b.nightSurchargeBps !== undefined ? { nightSurchargeBps: b.nightSurchargeBps } : {}),
         ...(b.leftHandSurchargeBps !== undefined ? { leftHandSurchargeBps: b.leftHandSurchargeBps } : {}),
+        ...(b.nightSurchargeFlatYen !== undefined ? { nightSurchargeFlatYen: b.nightSurchargeFlatYen } : {}),
+        ...(b.lateNightFlatYen !== undefined ? { lateNightFlatYen: b.lateNightFlatYen } : {}),
+        ...(b.earlyMorningFlatYen !== undefined ? { earlyMorningFlatYen: b.earlyMorningFlatYen } : {}),
+        ...(b.earlyRushFlatYen !== undefined ? { earlyRushFlatYen: b.earlyRushFlatYen } : {}),
+        ...(pickupRuleJson !== undefined ? { pickupRuleJson } : {}),
+        ...(b.distanceDiscountFromM !== undefined ? { distanceDiscountFromM: b.distanceDiscountFromM } : {}),
+        ...(b.distanceDiscountBps !== undefined ? { distanceDiscountBps: b.distanceDiscountBps } : {}),
+        ...(b.notes !== undefined ? { notes: b.notes } : {}),
       },
       include: { segments: true, distanceTiers: { orderBy: { sortOrder: "asc" } } },
     });

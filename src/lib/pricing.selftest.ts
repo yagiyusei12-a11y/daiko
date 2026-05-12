@@ -5,6 +5,7 @@ import {
   fareYenTieredAdd,
   segmentFareYen,
 } from "./pricing.js";
+import { pickupFareYen } from "./pickup-pricing.js";
 import { waitingFareYen } from "./tariff-waiting.js";
 
 // linear waiting
@@ -13,6 +14,29 @@ assert.equal(waitingFareYen({ type: "linear", graceMin: 10, perMinYen: 100 }, 10
 
 // block waiting (5 min / 500 yen after 10 min grace) — 11 billable minutes -> ceil(11/5)*500
 assert.equal(waitingFareYen({ type: "block", graceMin: 10, blockEveryMin: 5, blockYen: 500 }, 21), 1500);
+
+// prefix_block_then_block (だるま型: 15分まで500円、その後5分ごと500円)
+const darumaWait = {
+  type: "prefix_block_then_block" as const,
+  graceMin: 0,
+  prefixMin: 15,
+  prefixYen: 500,
+  blockEveryMin: 5,
+  blockYen: 500,
+};
+assert.equal(waitingFareYen(darumaWait, 0), 0);
+assert.equal(waitingFareYen(darumaWait, 15), 500);
+assert.equal(waitingFareYen(darumaWait, 16), 1000);
+
+// 迎車帯
+const pickupJson = [
+  { fromM: 0, toM: 5000, yen: 0 },
+  { fromM: 5001, toM: 10000, yen: 500 },
+  { fromM: 10001, toM: null, yen: 1000 },
+];
+assert.equal(pickupFareYen(pickupJson, 3000), 0);
+assert.equal(pickupFareYen(pickupJson, 8000), 500);
+assert.equal(pickupFareYen(pickupJson, 12000), 1000);
 
 // segment member
 const segs = [
@@ -42,5 +66,21 @@ const ver = {
 };
 const trip = fareYenForTrip(ver, 2500, 2, [], [], { viaStopCount: 1 });
 assert.equal(trip, fareYenForDistance(ver, 2500, [], [], false)! + 2 * 50 + 300);
+
+// 距離割引 + 迎車 + 定額深夜
+const ver2 = {
+  ...ver,
+  distanceDiscountFromM: 2000,
+  distanceDiscountBps: -1000,
+  nightSurchargeFlatYen: 500,
+  pickupRuleJson: pickupJson,
+};
+const trip2 = fareYenForTrip(ver2, 3000, 0, [], [], {
+  pickupFromBaseM: 6000,
+  applyNightSurchargeFlat: true,
+});
+const baseDist = fareYenForDistance(ver2, 3000, [], [], false)!;
+const discounted = Math.round((baseDist * 9000) / 10000);
+assert.equal(trip2, discounted + 500 + pickupFareYen(pickupJson, 6000));
 
 console.log("pricing.selftest ok");

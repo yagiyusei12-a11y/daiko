@@ -1,4 +1,5 @@
 import type { TariffDistanceMode } from "@prisma/client";
+import { pickupFareYen } from "./pickup-pricing.js";
 import { parseWaitingRule, waitingFareYen, type WaitingRule } from "./tariff-waiting.js";
 
 export type SegmentPick = {
@@ -27,6 +28,13 @@ export type VersionPricingInput = {
   perViaStopYen?: number | null;
   nightSurchargeBps?: number | null;
   leftHandSurchargeBps?: number | null;
+  pickupRuleJson?: unknown;
+  distanceDiscountFromM?: number | null;
+  distanceDiscountBps?: number | null;
+  nightSurchargeFlatYen?: number | null;
+  lateNightFlatYen?: number | null;
+  earlyMorningFlatYen?: number | null;
+  earlyRushFlatYen?: number | null;
 };
 
 export type TripPricingOpts = {
@@ -34,6 +42,11 @@ export type TripPricingOpts = {
   viaStopCount?: number;
   applyNightSurcharge?: boolean;
   applyLeftHandSurcharge?: boolean;
+  pickupFromBaseM?: number | null;
+  applyNightSurchargeFlat?: boolean;
+  applyLateNightFlatYen?: boolean;
+  applyEarlyMorningFlatYen?: boolean;
+  applyEarlyRushFlatYen?: boolean;
 };
 
 function modeOf(v: VersionPricingInput): string {
@@ -141,7 +154,7 @@ function applyBps(amount: number, bps: number): number {
 }
 
 /**
- * 距離運賃（割増は距離部分のみ）＋待機＋経由ストップ。
+ * 距離運賃（割引・％割増は距離部分のみ）＋定額割増＋待機＋経由＋迎車。
  */
 export function fareYenForTrip(
   version: VersionPricingInput,
@@ -153,7 +166,11 @@ export function fareYenForTrip(
 ): number {
   const rawDistance = fareYenForDistance(version, distanceM, segments, tiers, opts.isMember ?? false);
   let distanceFare = rawDistance === null ? 0 : rawDistance;
-
+  const dist = Math.max(0, Math.floor(distanceM));
+  const fromM = version.distanceDiscountFromM;
+  if (fromM != null && dist >= fromM) {
+    distanceFare = applyBps(distanceFare, version.distanceDiscountBps ?? 0);
+  }
   if (opts.applyNightSurcharge) {
     const bps = version.nightSurchargeBps ?? 0;
     distanceFare = applyBps(distanceFare, bps);
@@ -163,8 +180,15 @@ export function fareYenForTrip(
     distanceFare = applyBps(distanceFare, bps);
   }
 
+  let total = distanceFare;
+  if (opts.applyNightSurchargeFlat) total += Math.max(0, version.nightSurchargeFlatYen ?? 0);
+  if (opts.applyLateNightFlatYen) total += Math.max(0, version.lateNightFlatYen ?? 0);
+  if (opts.applyEarlyMorningFlatYen) total += Math.max(0, version.earlyMorningFlatYen ?? 0);
+  if (opts.applyEarlyRushFlatYen) total += Math.max(0, version.earlyRushFlatYen ?? 0);
+
   const rule: WaitingRule = parseWaitingRule(version.waitingRuleJson, version.waitingFareYenPerMin);
   const wait = waitingFareYen(rule, waitingMinutes);
   const via = Math.max(0, Math.floor(opts.viaStopCount ?? 0)) * Math.max(0, version.perViaStopYen ?? 0);
-  return Math.max(0, distanceFare + wait + via);
+  const pickup = pickupFareYen(version.pickupRuleJson, opts.pickupFromBaseM);
+  return Math.max(0, total + wait + via + pickup);
 }

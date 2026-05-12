@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
-import { fareYenForTrip, type TierPick, type VersionPricingInput } from "../lib/tariffPricing";
+import {
+  fareYenForTrip,
+  pickupFareYen,
+  type TierPick,
+  type VersionPricingInput,
+} from "../lib/tariffPricing";
 import { Card, Err, StepWizard, type StepWizardStep } from "../ui";
 
 const TARIFF_PLANS_QUERY = "?versionsLimit=30";
@@ -28,10 +33,20 @@ type Ver = {
   cancellationFeeYen: number;
   nightSurchargeBps: number;
   leftHandSurchargeBps: number;
+  nightSurchargeFlatYen?: number;
+  lateNightFlatYen?: number;
+  earlyMorningFlatYen?: number;
+  earlyRushFlatYen?: number;
+  pickupRuleJson?: unknown;
+  distanceDiscountFromM?: number | null;
+  distanceDiscountBps?: number;
+  notes?: string | null;
   segments: Seg[];
   distanceTiers?: Tier[];
 };
 type Plan = { id: string; name: string; versions: Ver[] };
+
+type TabId = "plans" | "distance" | "waiting" | "extras" | "simulator";
 
 function findVerLabel(plans: Plan[], verId: string | null): string {
   if (!verId) return "（未選択）";
@@ -65,6 +80,13 @@ function versionToPricingInput(v: Ver): VersionPricingInput {
     perViaStopYen: v.perViaStopYen ?? 0,
     nightSurchargeBps: v.nightSurchargeBps ?? 0,
     leftHandSurchargeBps: v.leftHandSurchargeBps ?? 0,
+    pickupRuleJson: v.pickupRuleJson,
+    distanceDiscountFromM: v.distanceDiscountFromM ?? null,
+    distanceDiscountBps: v.distanceDiscountBps ?? 0,
+    nightSurchargeFlatYen: v.nightSurchargeFlatYen ?? 0,
+    lateNightFlatYen: v.lateNightFlatYen ?? 0,
+    earlyMorningFlatYen: v.earlyMorningFlatYen ?? 0,
+    earlyRushFlatYen: v.earlyRushFlatYen ?? 0,
   };
 }
 
@@ -80,16 +102,63 @@ function tiersToPick(ts: Tier[] | undefined): TierPick[] {
 
 const WAITING_PRESETS: { id: string; label: string; json: unknown }[] = [
   { id: "linear0", label: "シンプル（分×円）", json: { type: "linear", graceMin: 0, perMinYen: 0 } },
-  { id: "block_as", label: "ブロック（例: 無料10分→5分ごと500円）", json: { type: "block", graceMin: 10, blockEveryMin: 5, blockYen: 500 } },
-  { id: "grace_plus", label: "PLUS型（例: 3分無料→200円→100円/分）", json: { type: "grace_flat_then_linear", graceMin: 3, firstChargeYen: 200, perMinAfterFirstYen: 100 } },
+  { id: "block_kece", label: "KECE型（10分無料→10分ごと1000円）", json: { type: "block", graceMin: 10, blockEveryMin: 10, blockYen: 1000 } },
+  { id: "block_as", label: "5分ブロック（例: 無料10分→5分ごと500円）", json: { type: "block", graceMin: 10, blockEveryMin: 5, blockYen: 500 } },
+  { id: "grace_plus", label: "PLUS型（3分無料→200円→100円/分）", json: { type: "grace_flat_then_linear", graceMin: 3, firstChargeYen: 200, perMinAfterFirstYen: 100 } },
+  {
+    id: "daruma_wait",
+    label: "だるま型（先15分500円→以降5分ごと500円）",
+    json: { type: "prefix_block_then_block", graceMin: 0, prefixMin: 15, prefixYen: 500, blockEveryMin: 5, blockYen: 500 },
+  },
+  {
+    id: "hiyoko_wait",
+    label: "ひよこ型（先20分1000円→以降10分ごと1000円）",
+    json: { type: "prefix_block_then_block", graceMin: 0, prefixMin: 20, prefixYen: 1000, blockEveryMin: 10, blockYen: 1000 },
+  },
+];
+
+const PICKUP_TEMPLATE = `[
+  { "fromM": 0, "toM": 5000, "yen": 0 },
+  { "fromM": 5001, "toM": 10000, "yen": 500 },
+  { "fromM": 10001, "toM": null, "yen": 1000 }
+]`;
+
+const TAB_LABELS: { id: TabId; label: string }[] = [
+  { id: "plans", label: "プランと版" },
+  { id: "distance", label: "距離" },
+  { id: "waiting", label: "待機・経由" },
+  { id: "extras", label: "割増・迎車・その他" },
+  { id: "simulator", label: "試算" },
 ];
 
 export default function Tariffs(): JSX.Element {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabId>("plans");
+
   const [name, setName] = useState("");
   const [planWizardOpen, setPlanWizardOpen] = useState(false);
   const [planSubmitting, setPlanSubmitting] = useState(false);
+  const [nwDistanceMode, setNwDistanceMode] = useState("INITIAL_ADD");
+  const [nwInitialDistanceM, setNwInitialDistanceM] = useState("2000");
+  const [nwInitialFareYen, setNwInitialFareYen] = useState("800");
+  const [nwAddUnitDistanceM, setNwAddUnitDistanceM] = useState("200");
+  const [nwAddFareYen, setNwAddFareYen] = useState("100");
+  const [nwWaitingFareYenPerMin, setNwWaitingFareYenPerMin] = useState("0");
+  const [nwWaitingRuleJson, setNwWaitingRuleJson] = useState(JSON.stringify({ type: "linear", graceMin: 0, perMinYen: 0 }, null, 2));
+  const [nwPerViaStopYen, setNwPerViaStopYen] = useState("0");
+  const [nwCancellationFeeYen, setNwCancellationFeeYen] = useState("0");
+  const [nwNightSurchargeBps, setNwNightSurchargeBps] = useState("0");
+  const [nwLeftHandSurchargeBps, setNwLeftHandSurchargeBps] = useState("0");
+  const [nwNightSurchargeFlatYen, setNwNightSurchargeFlatYen] = useState("0");
+  const [nwLateNightFlatYen, setNwLateNightFlatYen] = useState("0");
+  const [nwEarlyMorningFlatYen, setNwEarlyMorningFlatYen] = useState("0");
+  const [nwEarlyRushFlatYen, setNwEarlyRushFlatYen] = useState("0");
+  const [nwDistanceDiscountFromM, setNwDistanceDiscountFromM] = useState("");
+  const [nwDistanceDiscountBps, setNwDistanceDiscountBps] = useState("0");
+  const [nwPickupRuleJson, setNwPickupRuleJson] = useState("[]");
+  const [nwNotes, setNwNotes] = useState("");
+
   const [segWizardOpen, setSegWizardOpen] = useState(false);
   const [segSubmitting, setSegSubmitting] = useState(false);
   const [verSaveSubmitting, setVerSaveSubmitting] = useState(false);
@@ -110,6 +179,14 @@ export default function Tariffs(): JSX.Element {
   const [editCancellationFeeYen, setEditCancellationFeeYen] = useState("0");
   const [editNightSurchargeBps, setEditNightSurchargeBps] = useState("0");
   const [editLeftHandSurchargeBps, setEditLeftHandSurchargeBps] = useState("0");
+  const [editNightSurchargeFlatYen, setEditNightSurchargeFlatYen] = useState("0");
+  const [editLateNightFlatYen, setEditLateNightFlatYen] = useState("0");
+  const [editEarlyMorningFlatYen, setEditEarlyMorningFlatYen] = useState("0");
+  const [editEarlyRushFlatYen, setEditEarlyRushFlatYen] = useState("0");
+  const [editPickupRuleJson, setEditPickupRuleJson] = useState("[]");
+  const [editDistanceDiscountFromM, setEditDistanceDiscountFromM] = useState("");
+  const [editDistanceDiscountBps, setEditDistanceDiscountBps] = useState("0");
+  const [editNotes, setEditNotes] = useState("");
 
   const [simDistanceKm, setSimDistanceKm] = useState("");
   const [simWaitMin, setSimWaitMin] = useState("0");
@@ -117,6 +194,11 @@ export default function Tariffs(): JSX.Element {
   const [simViaStops, setSimViaStops] = useState("0");
   const [simNight, setSimNight] = useState(false);
   const [simLeftHand, setSimLeftHand] = useState(false);
+  const [simPickupFromBaseM, setSimPickupFromBaseM] = useState("");
+  const [simNightFlat, setSimNightFlat] = useState(false);
+  const [simLateFlat, setSimLateFlat] = useState(false);
+  const [simEarlyFlat, setSimEarlyFlat] = useState(false);
+  const [simRushFlat, setSimRushFlat] = useState(false);
 
   const [tierFromM, setTierFromM] = useState("");
   const [tierUntilM, setTierUntilM] = useState("");
@@ -131,7 +213,10 @@ export default function Tariffs(): JSX.Element {
     const km = Number(simDistanceKm);
     const wait = Number(simWaitMin);
     const via = Number(simViaStops);
+    const pickupRaw = simPickupFromBaseM.trim();
+    const pickupFromBaseM = pickupRaw === "" ? null : Math.floor(Number(pickupRaw));
     if (!Number.isFinite(km) || km < 0 || !Number.isFinite(wait) || wait < 0 || !Number.isFinite(via) || via < 0) return null;
+    if (pickupRaw !== "" && !Number.isFinite(pickupFromBaseM as number)) return null;
     const distanceM = Math.round(km * 1000);
     const segs = selectedVersion.segments.map((s) => ({
       fromM: s.fromM,
@@ -150,9 +235,44 @@ export default function Tariffs(): JSX.Element {
         viaStopCount: Math.floor(via),
         applyNightSurcharge: simNight,
         applyLeftHandSurcharge: simLeftHand,
+        pickupFromBaseM,
+        applyNightSurchargeFlat: simNightFlat,
+        applyLateNightFlatYen: simLateFlat,
+        applyEarlyMorningFlatYen: simEarlyFlat,
+        applyEarlyRushFlatYen: simRushFlat,
       },
     );
-  }, [selectedVersion, simDistanceKm, simWaitMin, simMember, simViaStops, simNight, simLeftHand]);
+  }, [
+    selectedVersion,
+    simDistanceKm,
+    simWaitMin,
+    simMember,
+    simViaStops,
+    simNight,
+    simLeftHand,
+    simPickupFromBaseM,
+    simNightFlat,
+    simLateFlat,
+    simEarlyFlat,
+    simRushFlat,
+  ]);
+
+  const simCancelHint = useMemo(() => {
+    if (!selectedVersion) return null;
+    const km = Number(simDistanceKm);
+    const pickupRaw = simPickupFromBaseM.trim();
+    const pickupFromBaseM = pickupRaw === "" ? null : Math.floor(Number(pickupRaw));
+    if (!Number.isFinite(km) || km < 0) return null;
+    if (pickupRaw !== "" && !Number.isFinite(pickupFromBaseM as number)) return null;
+    const distanceM = Math.round(km * 1000);
+    const v = selectedVersion;
+    if (v.distanceMode !== "INITIAL_ADD" || v.segments.length) return null;
+    const totalNoSurchargeWait = fareYenForTrip(versionToPricingInput(v), distanceM, 0, [], [], {
+      pickupFromBaseM,
+    });
+    const pk = pickupFareYen(v.pickupRuleJson, pickupFromBaseM);
+    return { totalNoSurchargeWait, pickup: pk, cancelMeta: v.cancellationFeeYen };
+  }, [selectedVersion, simDistanceKm, simPickupFromBaseM]);
 
   async function load(): Promise<void> {
     const r = await apiFetch<{ plans: Plan[] }>(`/tariff-plans${TARIFF_PLANS_QUERY}`);
@@ -184,9 +304,43 @@ export default function Tariffs(): JSX.Element {
     setEditCancellationFeeYen(String(v.cancellationFeeYen ?? 0));
     setEditNightSurchargeBps(String(v.nightSurchargeBps ?? 0));
     setEditLeftHandSurchargeBps(String(v.leftHandSurchargeBps ?? 0));
+    setEditNightSurchargeFlatYen(String(v.nightSurchargeFlatYen ?? 0));
+    setEditLateNightFlatYen(String(v.lateNightFlatYen ?? 0));
+    setEditEarlyMorningFlatYen(String(v.earlyMorningFlatYen ?? 0));
+    setEditEarlyRushFlatYen(String(v.earlyRushFlatYen ?? 0));
+    try {
+      setEditPickupRuleJson(JSON.stringify(v.pickupRuleJson ?? [], null, 2));
+    } catch {
+      setEditPickupRuleJson("[]");
+    }
+    setEditDistanceDiscountFromM(v.distanceDiscountFromM == null ? "" : String(v.distanceDiscountFromM));
+    setEditDistanceDiscountBps(String(v.distanceDiscountBps ?? 0));
+    setEditNotes(v.notes ?? "");
   }, [selVer, plans]);
 
-  async function submitPlan(): Promise<void> {
+  function resetNewWizardDraft(): void {
+    setNwDistanceMode("INITIAL_ADD");
+    setNwInitialDistanceM("2000");
+    setNwInitialFareYen("800");
+    setNwAddUnitDistanceM("200");
+    setNwAddFareYen("100");
+    setNwWaitingFareYenPerMin("0");
+    setNwWaitingRuleJson(JSON.stringify({ type: "linear", graceMin: 0, perMinYen: 0 }, null, 2));
+    setNwPerViaStopYen("0");
+    setNwCancellationFeeYen("0");
+    setNwNightSurchargeBps("0");
+    setNwLeftHandSurchargeBps("0");
+    setNwNightSurchargeFlatYen("0");
+    setNwLateNightFlatYen("0");
+    setNwEarlyMorningFlatYen("0");
+    setNwEarlyRushFlatYen("0");
+    setNwDistanceDiscountFromM("");
+    setNwDistanceDiscountBps("0");
+    setNwPickupRuleJson("[]");
+    setNwNotes("");
+  }
+
+  async function submitNewPlanWizard(): Promise<void> {
     setErr(null);
     setPlanSubmitting(true);
     try {
@@ -195,10 +349,74 @@ export default function Tariffs(): JSX.Element {
         setErr(r.error);
         return;
       }
+      const vid = r.data.version.id;
+      let waitingRuleJson: unknown;
+      let pickupRuleJson: unknown;
+      try {
+        waitingRuleJson = JSON.parse(nwWaitingRuleJson || "{}");
+      } catch {
+        setErr("新規プラン: 待機 JSON が不正です。");
+        return;
+      }
+      try {
+        pickupRuleJson = JSON.parse(nwPickupRuleJson || "[]");
+      } catch {
+        setErr("新規プラン: 迎車 JSON が不正です。");
+        return;
+      }
+      const initialDistanceM = Math.floor(Number(nwInitialDistanceM));
+      const initialFareYen = Math.floor(Number(nwInitialFareYen));
+      const addUnitDistanceM = Math.floor(Number(nwAddUnitDistanceM));
+      const addFareYen = Math.floor(Number(nwAddFareYen));
+      const waitingFareYenPerMin = Math.floor(Number(nwWaitingFareYenPerMin));
+      const patch = {
+        initialDistanceM,
+        initialFareYen,
+        addUnitDistanceM,
+        addFareYen,
+        waitingFareYenPerMin,
+        distanceMode: nwDistanceMode,
+        waitingRuleJson,
+        perViaStopYen: Math.floor(Number(nwPerViaStopYen)),
+        cancellationFeeYen: Math.floor(Number(nwCancellationFeeYen)),
+        nightSurchargeBps: Math.floor(Number(nwNightSurchargeBps)),
+        leftHandSurchargeBps: Math.floor(Number(nwLeftHandSurchargeBps)),
+        nightSurchargeFlatYen: Math.floor(Number(nwNightSurchargeFlatYen)),
+        lateNightFlatYen: Math.floor(Number(nwLateNightFlatYen)),
+        earlyMorningFlatYen: Math.floor(Number(nwEarlyMorningFlatYen)),
+        earlyRushFlatYen: Math.floor(Number(nwEarlyRushFlatYen)),
+        pickupRuleJson,
+        distanceDiscountFromM:
+          nwDistanceDiscountFromM.trim() === "" ? null : Math.floor(Number(nwDistanceDiscountFromM)),
+        distanceDiscountBps: Math.floor(Number(nwDistanceDiscountBps)),
+        notes: nwNotes.trim() || null,
+      };
+      if (
+        !Number.isFinite(patch.initialDistanceM) ||
+        !Number.isFinite(patch.initialFareYen) ||
+        !Number.isFinite(patch.addUnitDistanceM) ||
+        patch.addUnitDistanceM < 1 ||
+        !Number.isFinite(patch.addFareYen) ||
+        !Number.isFinite(patch.waitingFareYenPerMin)
+      ) {
+        setErr("新規プラン: 距離・待機の数値を確認してください。");
+        return;
+      }
+      if (patch.distanceDiscountFromM != null && !Number.isFinite(patch.distanceDiscountFromM)) {
+        setErr("新規プラン: 距離割引の閾値が不正です。");
+        return;
+      }
+      const pr = await apiFetch<Ver>(`/tariff-versions/${vid}`, { method: "PATCH", json: patch });
+      if (!pr.ok) {
+        setErr(pr.error);
+        return;
+      }
       setName("");
+      resetNewWizardDraft();
       setPlanWizardOpen(false);
       await load();
-      setSelVer(r.data.version.id);
+      setSelVer(vid);
+      setActiveTab("distance");
     } finally {
       setPlanSubmitting(false);
     }
@@ -243,17 +461,41 @@ export default function Tariffs(): JSX.Element {
       setErr("待機ルール JSON の形式が不正です。");
       return;
     }
+    let pickupRuleJson: unknown;
+    try {
+      pickupRuleJson = JSON.parse(editPickupRuleJson || "[]");
+    } catch {
+      setErr("迎車ルール JSON の形式が不正です。");
+      return;
+    }
     const perViaStopYen = Math.floor(Number(editPerViaStopYen));
     const cancellationFeeYen = Math.floor(Number(editCancellationFeeYen));
     const nightSurchargeBps = Math.floor(Number(editNightSurchargeBps));
     const leftHandSurchargeBps = Math.floor(Number(editLeftHandSurchargeBps));
+    const nightSurchargeFlatYen = Math.floor(Number(editNightSurchargeFlatYen));
+    const lateNightFlatYen = Math.floor(Number(editLateNightFlatYen));
+    const earlyMorningFlatYen = Math.floor(Number(editEarlyMorningFlatYen));
+    const earlyRushFlatYen = Math.floor(Number(editEarlyRushFlatYen));
+    const distanceDiscountBps = Math.floor(Number(editDistanceDiscountBps));
+    const distanceDiscountFromM =
+      editDistanceDiscountFromM.trim() === "" ? null : Math.floor(Number(editDistanceDiscountFromM));
     if (
       !Number.isFinite(perViaStopYen) ||
       perViaStopYen < 0 ||
       !Number.isFinite(cancellationFeeYen) ||
       cancellationFeeYen < 0 ||
       !Number.isFinite(nightSurchargeBps) ||
-      !Number.isFinite(leftHandSurchargeBps)
+      !Number.isFinite(leftHandSurchargeBps) ||
+      !Number.isFinite(nightSurchargeFlatYen) ||
+      nightSurchargeFlatYen < 0 ||
+      !Number.isFinite(lateNightFlatYen) ||
+      lateNightFlatYen < 0 ||
+      !Number.isFinite(earlyMorningFlatYen) ||
+      earlyMorningFlatYen < 0 ||
+      !Number.isFinite(earlyRushFlatYen) ||
+      earlyRushFlatYen < 0 ||
+      !Number.isFinite(distanceDiscountBps) ||
+      (distanceDiscountFromM != null && !Number.isFinite(distanceDiscountFromM))
     ) {
       setErr("版メタの数値は整数で入力してください。");
       return;
@@ -274,6 +516,14 @@ export default function Tariffs(): JSX.Element {
           cancellationFeeYen,
           nightSurchargeBps,
           leftHandSurchargeBps,
+          nightSurchargeFlatYen,
+          lateNightFlatYen,
+          earlyMorningFlatYen,
+          earlyRushFlatYen,
+          pickupRuleJson,
+          distanceDiscountFromM,
+          distanceDiscountBps,
+          notes: editNotes.trim() || null,
         },
       });
       if (!r.ok) {
@@ -293,6 +543,15 @@ export default function Tariffs(): JSX.Element {
       setEditWaitingFareYenPerMin(String(pm));
     }
     setEditWaitingRuleJson(JSON.stringify(presetJson, null, 2));
+  }
+
+  function applyNwWaitingPreset(presetJson: unknown): void {
+    const o = presetJson as Record<string, unknown>;
+    if (o?.type === "linear") {
+      const pm = Math.max(0, Math.floor(Number(o.perMinYen ?? 0)));
+      setNwWaitingFareYenPerMin(String(pm));
+    }
+    setNwWaitingRuleJson(JSON.stringify(presetJson, null, 2));
   }
 
   function closeSegWizard(): void {
@@ -390,11 +649,11 @@ export default function Tariffs(): JSX.Element {
   const fareOk = fareYen.trim() !== "" && !Number.isNaN(Number(fareYen));
   const segNumsOk = fromOk && toOk && fareOk && Number(fromM) < Number(toM);
 
-  const planSteps: StepWizardStep[] = [
+  const newPlanSteps: StepWizardStep[] = [
     {
-      id: "plan-name",
-      title: "プラン名を入力してください",
-      description: "初版の料金版が自動で作成されます。",
+      id: "nw-name",
+      title: "プラン名",
+      description: "このプランの表示名です。作成後に初版の全項目を一度に保存します。",
       canProceed: nameOk,
       children: (
         <>
@@ -404,13 +663,103 @@ export default function Tariffs(): JSX.Element {
       ),
     },
     {
-      id: "plan-confirm",
-      title: "作成内容の確認",
+      id: "nw-distance",
+      title: "距離モードと初乗り・加算",
+      canProceed: true,
+      children: (
+        <>
+          <label>距離モード</label>
+          <select value={nwDistanceMode} onChange={(e) => setNwDistanceMode(e.target.value)}>
+            <option value="INITIAL_ADD">初乗り＋単一加算</option>
+            <option value="SEGMENTS_ONLY">セグメント表のみ</option>
+            <option value="TIERED_ADD">初乗り＋多段距離加算</option>
+          </select>
+          <label>初乗り距離（m）</label>
+          <input value={nwInitialDistanceM} onChange={(e) => setNwInitialDistanceM(e.target.value)} inputMode="numeric" />
+          <label>初乗り運賃（円）</label>
+          <input value={nwInitialFareYen} onChange={(e) => setNwInitialFareYen(e.target.value)} inputMode="numeric" />
+          <label>加算距離単位（m）</label>
+          <input value={nwAddUnitDistanceM} onChange={(e) => setNwAddUnitDistanceM(e.target.value)} inputMode="numeric" />
+          <label>加算運賃（円／単位）</label>
+          <input value={nwAddFareYen} onChange={(e) => setNwAddFareYen(e.target.value)} inputMode="numeric" />
+        </>
+      ),
+    },
+    {
+      id: "nw-wait",
+      title: "待機・経由",
+      canProceed: true,
+      children: (
+        <>
+          <label>待機（互換・円／分）</label>
+          <input value={nwWaitingFareYenPerMin} onChange={(e) => setNwWaitingFareYenPerMin(e.target.value)} inputMode="numeric" />
+          <p style={{ fontSize: "0.8rem" }}>プリセット</p>
+          <p>
+            {WAITING_PRESETS.map((p) => (
+              <button key={p.id} type="button" style={{ marginRight: 6, marginBottom: 6 }} onClick={() => applyNwWaitingPreset(p.json)}>
+                {p.label}
+              </button>
+            ))}
+          </p>
+          <label>待機ルール JSON</label>
+          <textarea value={nwWaitingRuleJson} onChange={(e) => setNwWaitingRuleJson(e.target.value)} rows={5} style={{ width: "100%", fontFamily: "monospace", fontSize: "0.85rem" }} />
+          <label>経由1回あたり（円）</label>
+          <input value={nwPerViaStopYen} onChange={(e) => setNwPerViaStopYen(e.target.value)} inputMode="numeric" />
+        </>
+      ),
+    },
+    {
+      id: "nw-extra",
+      title: "割増・迎車・割引・キャンセル",
+      canProceed: true,
+      children: (
+        <>
+          <label>夜間割増（bps）</label>
+          <input value={nwNightSurchargeBps} onChange={(e) => setNwNightSurchargeBps(e.target.value)} inputMode="numeric" />
+          <label>左ハンドル割増（bps）</label>
+          <input value={nwLeftHandSurchargeBps} onChange={(e) => setNwLeftHandSurchargeBps(e.target.value)} inputMode="numeric" />
+          <label>深夜定額（円・便で「深夜定額」ON）</label>
+          <input value={nwNightSurchargeFlatYen} onChange={(e) => setNwNightSurchargeFlatYen(e.target.value)} inputMode="numeric" />
+          <label>さらに遅い時間帯の定額（円）</label>
+          <input value={nwLateNightFlatYen} onChange={(e) => setNwLateNightFlatYen(e.target.value)} inputMode="numeric" />
+          <label>早朝帯1 定額（円）</label>
+          <input value={nwEarlyMorningFlatYen} onChange={(e) => setNwEarlyMorningFlatYen(e.target.value)} inputMode="numeric" />
+          <label>早朝帯2 定額（円）</label>
+          <input value={nwEarlyRushFlatYen} onChange={(e) => setNwEarlyRushFlatYen(e.target.value)} inputMode="numeric" />
+          <label>距離割引をかける距離（m・空で無効）</label>
+          <input value={nwDistanceDiscountFromM} onChange={(e) => setNwDistanceDiscountFromM(e.target.value)} inputMode="numeric" placeholder="例: 11000" />
+          <label>距離割引 bps（負数で割引、例 -1000 で約10%）</label>
+          <input value={nwDistanceDiscountBps} onChange={(e) => setNwDistanceDiscountBps(e.target.value)} inputMode="numeric" />
+          <label>迎車ルール JSON（帯の配列）</label>
+          <button type="button" style={{ marginBottom: 6 }} onClick={() => setNwPickupRuleJson(PICKUP_TEMPLATE)}>
+            かもたく例を挿入
+          </button>
+          <textarea value={nwPickupRuleJson} onChange={(e) => setNwPickupRuleJson(e.target.value)} rows={6} style={{ width: "100%", fontFamily: "monospace", fontSize: "0.85rem" }} />
+          <label>キャンセル料（円・メタ）</label>
+          <input value={nwCancellationFeeYen} onChange={(e) => setNwCancellationFeeYen(e.target.value)} inputMode="numeric" />
+          <label>備考</label>
+          <textarea value={nwNotes} onChange={(e) => setNwNotes(e.target.value)} rows={2} style={{ width: "100%" }} />
+        </>
+      ),
+    },
+    {
+      id: "nw-confirm",
+      title: "確認",
       canProceed: nameOk,
       children: (
         <dl className="step-wizard-summary">
           <dt>プラン名</dt>
           <dd>{name.trim()}</dd>
+          <dt>距離モード</dt>
+          <dd>{nwDistanceMode}</dd>
+          <dt>初乗り</dt>
+          <dd>
+            {nwInitialDistanceM}m / {nwInitialFareYen}円
+          </dd>
+          <dt>加算</dt>
+          <dd>
+            {nwAddUnitDistanceM}m ごと {nwAddFareYen}円
+          </dd>
         </dl>
       ),
     },
@@ -489,26 +838,52 @@ export default function Tariffs(): JSX.Element {
     <Card title="料金プラン">
       <Err msg={err} />
       <p style={{ fontSize: "0.82rem", marginTop: 0 }}>
-        料金版一覧は直近30版まで表示します（URL <code>?versionsLimit=1〜100</code> で API から変更可能）。「新版追加」は直前の版の数値・セグメント・距離ティア・待機ルールをコピーします。
+        料金版は直近30版まで表示（<code>?versionsLimit=1〜100</code>）。新版追加で前版からコピーします。タブで入力を整理し、下部の「版を保存」で距離・待機・割増などを一括 PATCH します。
       </p>
       <p style={{ marginTop: 0 }}>
-        <button type="button" onClick={() => setPlanWizardOpen(true)}>
-          新規プランを作成
+        <button type="button" onClick={() => { setPlanWizardOpen(true); resetNewWizardDraft(); }}>
+          新規プランを作成（全項目ウィザード）
         </button>{" "}
         <button type="button" onClick={() => setSegWizardOpen(true)} disabled={!selVer}>
           距離帯セグメントを追加
         </button>
       </p>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: "0.75rem", borderBottom: "1px solid #ccc", paddingBottom: 8 }}>
+        {TAB_LABELS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setActiveTab(t.id)}
+            style={{
+              fontWeight: activeTab === t.id ? 700 : 400,
+              borderBottom: activeTab === t.id ? "2px solid #333" : "2px solid transparent",
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {selVer && selectedVersion ? (
+        <p style={{ marginTop: "0.75rem" }}>
+          <button type="button" disabled={verSaveSubmitting} onClick={() => void saveVersionParams()}>
+            {verSaveSubmitting ? "保存中…" : "版を保存（全タブの入力を反映）"}
+          </button>
+        </p>
+      ) : null}
+
       <StepWizard
         open={planWizardOpen}
         onClose={() => {
           setPlanWizardOpen(false);
           setName("");
+          resetNewWizardDraft();
         }}
-        title="料金プランを作成"
-        steps={planSteps}
-        finishLabel="プラン作成（初版付き）"
-        onFinish={submitPlan}
+        title="新規プラン（初版の全項目）"
+        steps={newPlanSteps}
+        finishLabel="プラン作成して初版を保存"
+        onFinish={submitNewPlanWizard}
         isSubmitting={planSubmitting}
       />
       <StepWizard
@@ -521,36 +896,45 @@ export default function Tariffs(): JSX.Element {
         isSubmitting={segSubmitting}
       />
 
-      {selVer && selectedVersion ? (
-        <section style={{ marginTop: "1rem", padding: "0.75rem", border: "1px solid #ccc", borderRadius: 4, maxWidth: 640 }}>
-          <h3 style={{ marginTop: 0, fontSize: "1rem" }}>運賃シミュレータ（{findVerLabel(plans, selVer)}）</h3>
-          <p style={{ fontSize: "0.8rem", marginTop: 0 }}>
-            距離モードに応じて試算します（SEGMENTS_ONLY は表のヒットのみ、TIERED_ADD はティア加算）。待機は JSON ルール、経由は版の「経由1回あたり」×回数。夜間・左ハンドルは距離運賃部分に Bps を乗算します。
-          </p>
-          <label>走行距離（km）</label>
-          <input value={simDistanceKm} onChange={(e) => setSimDistanceKm(e.target.value)} inputMode="decimal" placeholder="例: 5.2" />
-          <label>待機（分）</label>
-          <input value={simWaitMin} onChange={(e) => setSimWaitMin(e.target.value)} inputMode="numeric" />
-          <label>
-            <input type="checkbox" checked={simMember} onChange={(e) => setSimMember(e.target.checked)} /> 会員（会員運賃列ありのとき）
-          </label>
-          <label>経由ストップ回数（試算）</label>
-          <input value={simViaStops} onChange={(e) => setSimViaStops(e.target.value)} inputMode="numeric" />
-          <label>
-            <input type="checkbox" checked={simNight} onChange={(e) => setSimNight(e.target.checked)} /> 夜間割増を距離運賃に適用
-          </label>
-          <label>
-            <input type="checkbox" checked={simLeftHand} onChange={(e) => setSimLeftHand(e.target.checked)} /> 左ハンドル割増を距離運賃に適用
-          </label>
-          <p style={{ marginTop: "0.5rem", fontWeight: 600 }}>
-            試算運賃: {simResultYen === null ? "—" : `${simResultYen.toLocaleString("ja-JP")} 円`}
-          </p>
+      {activeTab === "plans" && (
+        <section style={{ marginTop: "1rem" }}>
+          {plans.map((p) => (
+            <div key={p.id} style={{ marginTop: "1rem" }}>
+              <strong>{p.name}</strong>{" "}
+              <button type="button" onClick={() => void addVersion(p.id)}>
+                新版追加（前版からコピー）
+              </button>
+              <ul>
+                {p.versions.map((v) => (
+                  <li key={v.id}>
+                    <label>
+                      <input type="radio" name="ver" checked={selVer === v.id} onChange={() => setSelVer(v.id)} /> v{v.version}{" "}
+                      [{v.distanceMode ?? "INITIAL_ADD"}] 初乗り{v.initialDistanceM}m/{v.initialFareYen}円
+                    </label>
+                    <ul>
+                      {[...v.segments]
+                        .sort((a, b) => a.fromM - b.fromM)
+                        .map((s) => (
+                          <li key={s.id}>
+                            {s.fromM}–{s.toM}m → 一般{s.fareYen}円
+                            {s.fareMemberYen != null ? ` / 会員${s.fareMemberYen}円` : ""}{" "}
+                            <button type="button" onClick={() => void delSegment(s.id)}>
+                              削除
+                            </button>
+                          </li>
+                        ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </section>
-      ) : null}
+      )}
 
-      {selVer && selectedVersion ? (
+      {activeTab === "distance" && selVer && selectedVersion && (
         <section style={{ marginTop: "1rem", padding: "0.75rem", border: "1px solid #ccc", borderRadius: 4, maxWidth: 640 }}>
-          <h3 style={{ marginTop: 0, fontSize: "1rem" }}>選択中の料金版を編集</h3>
+          <h3 style={{ marginTop: 0, fontSize: "1rem" }}>距離（{findVerLabel(plans, selVer)}）</h3>
           <label>距離モード</label>
           <select value={editDistanceMode} onChange={(e) => setEditDistanceMode(e.target.value)}>
             <option value="INITIAL_ADD">初乗り＋単一加算（従来）</option>
@@ -565,9 +949,48 @@ export default function Tariffs(): JSX.Element {
           <input value={editAddUnitDistanceM} onChange={(e) => setEditAddUnitDistanceM(e.target.value)} inputMode="numeric" />
           <label>加算運賃（円／単位）</label>
           <input value={editAddFareYen} onChange={(e) => setEditAddFareYen(e.target.value)} inputMode="numeric" />
-          <label>待機（互換・円／分・線形プリセット時は JSON と同期）</label>
+          <p style={{ fontSize: "0.8rem" }}>
+            セグメントは「距離帯セグメントを追加」から。TIERED_ADD のときは下のティアを編集（モード切替後は保存してください）。
+          </p>
+          {(editDistanceMode === "TIERED_ADD" || (selectedVersion.distanceTiers?.length ?? 0) > 0) && (
+            <>
+              <h4 style={{ marginBottom: "0.25rem" }}>距離加算ティア</h4>
+              <ul>
+                {[...(selectedVersion.distanceTiers ?? [])]
+                  .sort((a, b) => a.sortOrder - b.sortOrder)
+                  .map((t) => (
+                    <li key={t.id}>
+                      {t.fromM}m–{t.untilM == null ? "∞" : `${t.untilM}m`} / {t.stepM}m ごと +{t.addYenPerStep}円{" "}
+                      <button type="button" onClick={() => void delTier(t.id)}>
+                        削除
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+              <label>fromM（m）</label>
+              <input value={tierFromM} onChange={(e) => setTierFromM(e.target.value)} inputMode="numeric" />
+              <label>untilM（空=最後まで）</label>
+              <input value={tierUntilM} onChange={(e) => setTierUntilM(e.target.value)} inputMode="numeric" />
+              <label>stepM</label>
+              <input value={tierStepM} onChange={(e) => setTierStepM(e.target.value)} inputMode="numeric" />
+              <label>加算（円/step）</label>
+              <input value={tierAddYen} onChange={(e) => setTierAddYen(e.target.value)} inputMode="numeric" />
+              <p>
+                <button type="button" disabled={tierSubmitting} onClick={() => void addTier()}>
+                  {tierSubmitting ? "追加中…" : "ティアを追加"}
+                </button>
+              </p>
+            </>
+          )}
+        </section>
+      )}
+
+      {activeTab === "waiting" && selVer && selectedVersion && (
+        <section style={{ marginTop: "1rem", padding: "0.75rem", border: "1px solid #ccc", borderRadius: 4, maxWidth: 640 }}>
+          <h3 style={{ marginTop: 0, fontSize: "1rem" }}>待機・経由</h3>
+          <label>待機（互換・円／分）</label>
           <input value={editWaitingFareYenPerMin} onChange={(e) => setEditWaitingFareYenPerMin(e.target.value)} inputMode="numeric" />
-          <p style={{ fontSize: "0.8rem", marginTop: "0.5rem" }}>待機プリセット（適用後に必要なら JSON を直接編集）</p>
+          <p style={{ fontSize: "0.8rem" }}>プリセット</p>
           <p>
             {WAITING_PRESETS.map((p) => (
               <button key={p.id} type="button" style={{ marginRight: 6, marginBottom: 6 }} onClick={() => applyWaitingPreset(p.json)}>
@@ -576,89 +999,91 @@ export default function Tariffs(): JSX.Element {
             ))}
           </p>
           <label>待機ルール JSON</label>
-          <textarea value={editWaitingRuleJson} onChange={(e) => setEditWaitingRuleJson(e.target.value)} rows={6} style={{ width: "100%", fontFamily: "monospace", fontSize: "0.85rem" }} />
-          <label>経由1回あたり（円・試算・将来の便入力用）</label>
+          <textarea value={editWaitingRuleJson} onChange={(e) => setEditWaitingRuleJson(e.target.value)} rows={8} style={{ width: "100%", fontFamily: "monospace", fontSize: "0.85rem" }} />
+          <label>経由1回あたり（円）</label>
           <input value={editPerViaStopYen} onChange={(e) => setEditPerViaStopYen(e.target.value)} inputMode="numeric" />
-          <label>キャンセル料（円・帳票用メタ）</label>
-          <input value={editCancellationFeeYen} onChange={(e) => setEditCancellationFeeYen(e.target.value)} inputMode="numeric" />
-          <label>夜間割増（bps、10000=100%）</label>
+        </section>
+      )}
+
+      {activeTab === "extras" && selVer && selectedVersion && (
+        <section style={{ marginTop: "1rem", padding: "0.75rem", border: "1px solid #ccc", borderRadius: 4, maxWidth: 640 }}>
+          <h3 style={{ marginTop: 0, fontSize: "1rem" }}>割増・迎車・距離割引・キャンセル・備考</h3>
+          <label>夜間割増（bps・距離運賃に乗算、便で「夜間％」ON）</label>
           <input value={editNightSurchargeBps} onChange={(e) => setEditNightSurchargeBps(e.target.value)} inputMode="numeric" />
           <label>左ハンドル割増（bps）</label>
           <input value={editLeftHandSurchargeBps} onChange={(e) => setEditLeftHandSurchargeBps(e.target.value)} inputMode="numeric" />
-          <p style={{ marginTop: "0.75rem" }}>
-            <button type="button" disabled={verSaveSubmitting} onClick={() => void saveVersionParams()}>
-              {verSaveSubmitting ? "保存中…" : "料金版を保存"}
-            </button>
-          </p>
-        </section>
-      ) : null}
-
-      {selVer && selectedVersion && (editDistanceMode === "TIERED_ADD" || (selectedVersion.distanceTiers?.length ?? 0) > 0) ? (
-        <section style={{ marginTop: "1rem", padding: "0.75rem", border: "1px solid #ccc", borderRadius: 4, maxWidth: 640 }}>
-          <h3 style={{ marginTop: 0, fontSize: "1rem" }}>距離加算ティア（TIERED_ADD）</h3>
-          <p style={{ fontSize: "0.8rem", marginTop: 0 }}>
-            初乗り終端からの距離を、fromM 以上・untilM 未満の区間で stepM ごとに加算します。untilM を空にすると最後まで続きます。
-          </p>
-          <ul>
-            {[...(selectedVersion.distanceTiers ?? [])]
-              .sort((a, b) => a.sortOrder - b.sortOrder)
-              .map((t) => (
-                <li key={t.id}>
-                  order {t.sortOrder}: {t.fromM}m–{t.untilM == null ? "∞" : `${t.untilM}m`} / {t.stepM}m ごと +{t.addYenPerStep}円{" "}
-                  <button type="button" onClick={() => void delTier(t.id)}>
-                    削除
-                  </button>
-                </li>
-              ))}
-          </ul>
-          <label>fromM（m）</label>
-          <input value={tierFromM} onChange={(e) => setTierFromM(e.target.value)} inputMode="numeric" placeholder="例: 2000" />
-          <label>untilM（空=最後まで）</label>
-          <input value={tierUntilM} onChange={(e) => setTierUntilM(e.target.value)} inputMode="numeric" />
-          <label>stepM</label>
-          <input value={tierStepM} onChange={(e) => setTierStepM(e.target.value)} inputMode="numeric" />
-          <label>加算（円/step）</label>
-          <input value={tierAddYen} onChange={(e) => setTierAddYen(e.target.value)} inputMode="numeric" />
-          <p style={{ marginTop: "0.5rem" }}>
-            <button type="button" disabled={tierSubmitting} onClick={() => void addTier()}>
-              {tierSubmitting ? "追加中…" : "ティアを追加"}
-            </button>
-          </p>
-        </section>
-      ) : null}
-
-      {plans.map((p) => (
-        <div key={p.id} style={{ marginTop: "1rem" }}>
-          <strong>{p.name}</strong>{" "}
-          <button type="button" onClick={() => void addVersion(p.id)}>
-            新版追加（前版からコピー）
+          <label>深夜定額（円・便で ON）</label>
+          <input value={editNightSurchargeFlatYen} onChange={(e) => setEditNightSurchargeFlatYen(e.target.value)} inputMode="numeric" />
+          <label>さらに遅い時間帯の定額（円）</label>
+          <input value={editLateNightFlatYen} onChange={(e) => setEditLateNightFlatYen(e.target.value)} inputMode="numeric" />
+          <label>早朝帯1 定額（円）</label>
+          <input value={editEarlyMorningFlatYen} onChange={(e) => setEditEarlyMorningFlatYen(e.target.value)} inputMode="numeric" />
+          <label>早朝帯2 定額（円）</label>
+          <input value={editEarlyRushFlatYen} onChange={(e) => setEditEarlyRushFlatYen(e.target.value)} inputMode="numeric" />
+          <label>距離割引をかける距離（m・空で無効）</label>
+          <input value={editDistanceDiscountFromM} onChange={(e) => setEditDistanceDiscountFromM(e.target.value)} inputMode="numeric" />
+          <label>距離割引 bps（負数で割引）</label>
+          <input value={editDistanceDiscountBps} onChange={(e) => setEditDistanceDiscountBps(e.target.value)} inputMode="numeric" />
+          <label>迎車ルール JSON</label>
+          <button type="button" style={{ marginBottom: 6 }} onClick={() => setEditPickupRuleJson(PICKUP_TEMPLATE)}>
+            例テンプレを挿入
           </button>
-          <ul>
-            {p.versions.map((v) => (
-              <li key={v.id}>
-                <label>
-                  <input type="radio" name="ver" checked={selVer === v.id} onChange={() => setSelVer(v.id)} /> v{v.version}{" "}
-                  [{v.distanceMode ?? "INITIAL_ADD"}] 初乗り{v.initialDistanceM}m/{v.initialFareYen}円 加算{v.addUnitDistanceM}m/{v.addFareYen}円 待機
-                  {v.waitingFareYenPerMin}円/分
-                </label>
-                <ul>
-                  {[...v.segments]
-                    .sort((a, b) => a.fromM - b.fromM)
-                    .map((s) => (
-                      <li key={s.id}>
-                        {s.fromM}–{s.toM}m → 一般{s.fareYen}円
-                        {s.fareMemberYen != null ? ` / 会員${s.fareMemberYen}円` : ""}{" "}
-                        <button type="button" onClick={() => void delSegment(s.id)}>
-                          削除
-                        </button>
-                      </li>
-                    ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
+          <textarea value={editPickupRuleJson} onChange={(e) => setEditPickupRuleJson(e.target.value)} rows={8} style={{ width: "100%", fontFamily: "monospace", fontSize: "0.85rem" }} />
+          <label>キャンセル料（円・帳票メタ、運賃合計には含めません）</label>
+          <input value={editCancellationFeeYen} onChange={(e) => setEditCancellationFeeYen(e.target.value)} inputMode="numeric" />
+          <label>備考</label>
+          <textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={3} style={{ width: "100%" }} />
+        </section>
+      )}
+
+      {activeTab === "simulator" && selVer && selectedVersion && (
+        <section style={{ marginTop: "1rem", padding: "0.75rem", border: "1px solid #ccc", borderRadius: 4, maxWidth: 640 }}>
+          <h3 style={{ marginTop: 0, fontSize: "1rem" }}>試算（{findVerLabel(plans, selVer)}）</h3>
+          <p style={{ fontSize: "0.8rem", marginTop: 0 }}>
+            距離割引は閾値以上の走行距離で距離運賃に1回適用。その後％割増、続いて各定額、待機、経由、迎車の順です。
+          </p>
+          <label>走行距離（km）</label>
+          <input value={simDistanceKm} onChange={(e) => setSimDistanceKm(e.target.value)} inputMode="decimal" placeholder="例: 5.2" />
+          <label>待機（分）</label>
+          <input value={simWaitMin} onChange={(e) => setSimWaitMin(e.target.value)} inputMode="numeric" />
+          <label>迎車距離（基準地点から m・空で無し）</label>
+          <input value={simPickupFromBaseM} onChange={(e) => setSimPickupFromBaseM(e.target.value)} inputMode="numeric" />
+          <label>
+            <input type="checkbox" checked={simMember} onChange={(e) => setSimMember(e.target.checked)} /> 会員
+          </label>
+          <label>経由ストップ回数</label>
+          <input value={simViaStops} onChange={(e) => setSimViaStops(e.target.value)} inputMode="numeric" />
+          <label>
+            <input type="checkbox" checked={simNight} onChange={(e) => setSimNight(e.target.checked)} /> 夜間％割増（距離運賃）
+          </label>
+          <label>
+            <input type="checkbox" checked={simLeftHand} onChange={(e) => setSimLeftHand(e.target.checked)} /> 左ハンドル％割増
+          </label>
+          <label>
+            <input type="checkbox" checked={simNightFlat} onChange={(e) => setSimNightFlat(e.target.checked)} /> 深夜定額
+          </label>
+          <label>
+            <input type="checkbox" checked={simLateFlat} onChange={(e) => setSimLateFlat(e.target.checked)} /> 遅番定額
+          </label>
+          <label>
+            <input type="checkbox" checked={simEarlyFlat} onChange={(e) => setSimEarlyFlat(e.target.checked)} /> 早朝1 定額
+          </label>
+          <label>
+            <input type="checkbox" checked={simRushFlat} onChange={(e) => setSimRushFlat(e.target.checked)} /> 早朝2 定額
+          </label>
+          <p style={{ marginTop: "0.5rem", fontWeight: 600 }}>
+            試算運賃: {simResultYen === null ? "—" : `${simResultYen.toLocaleString("ja-JP")} 円`}
+          </p>
+          {simCancelHint ? (
+            <p style={{ fontSize: "0.82rem", color: "#444" }}>
+              参考（INITIAL_ADD・セグメントなし・待機0・定額OFF）: 合計 {simCancelHint.totalNoSurchargeWait.toLocaleString("ja-JP")} 円（内迎車{" "}
+              {simCancelHint.pickup.toLocaleString("ja-JP")} 円）。登録キャンセルメタ {simCancelHint.cancelMeta.toLocaleString("ja-JP")} 円。
+            </p>
+          ) : null}
+        </section>
+      )}
+
+      {!selVer && activeTab !== "plans" ? <p style={{ marginTop: "1rem" }}>料金版を選択してください（プランと版タブ）。</p> : null}
     </Card>
   );
 }

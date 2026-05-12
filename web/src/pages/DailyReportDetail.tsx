@@ -16,6 +16,11 @@ type Trip = {
   viaStopCount: number;
   applyNightSurcharge: boolean;
   applyLeftHandSurcharge: boolean;
+  pickupFromBaseM: number | null;
+  applyNightSurchargeFlat: boolean;
+  applyLateNightFlatYen: boolean;
+  applyEarlyMorningFlatYen: boolean;
+  applyEarlyRushFlatYen: boolean;
 };
 type DR = {
   id: string;
@@ -44,6 +49,11 @@ export default function DailyReportDetail(): JSX.Element {
   const [viaStopCount, setViaStopCount] = useState("0");
   const [applyNightSurcharge, setApplyNightSurcharge] = useState(false);
   const [applyLeftHandSurcharge, setApplyLeftHandSurcharge] = useState(false);
+  const [pickupFromBaseM, setPickupFromBaseM] = useState("");
+  const [applyNightSurchargeFlat, setApplyNightSurchargeFlat] = useState(false);
+  const [applyLateNightFlatYen, setApplyLateNightFlatYen] = useState(false);
+  const [applyEarlyMorningFlatYen, setApplyEarlyMorningFlatYen] = useState(false);
+  const [applyEarlyRushFlatYen, setApplyEarlyRushFlatYen] = useState(false);
 
   async function load(): Promise<void> {
     if (!id) return;
@@ -77,6 +87,11 @@ export default function DailyReportDetail(): JSX.Element {
     setViaStopCount("0");
     setApplyNightSurcharge(false);
     setApplyLeftHandSurcharge(false);
+    setPickupFromBaseM("");
+    setApplyNightSurchargeFlat(false);
+    setApplyLateNightFlatYen(false);
+    setApplyEarlyMorningFlatYen(false);
+    setApplyEarlyRushFlatYen(false);
   }
 
   async function submitTrip(): Promise<void> {
@@ -84,22 +99,30 @@ export default function DailyReportDetail(): JSX.Element {
     setErr(null);
     setTripSubmitting(true);
     try {
+      const json: Record<string, unknown> = {
+        clientName,
+        origin,
+        destination,
+        departedAt: new Date().toISOString(),
+        arrivedAt: new Date().toISOString(),
+        distanceM: Number(distanceM),
+        waitingMinutes: Number(waitingMinutes || 0),
+        tariffVersionId: tariffVersionId || null,
+        passengerKind,
+        viaStopCount: Number(viaStopCount || 0),
+        applyNightSurcharge,
+        applyLeftHandSurcharge,
+        applyNightSurchargeFlat,
+        applyLateNightFlatYen,
+        applyEarlyMorningFlatYen,
+        applyEarlyRushFlatYen,
+      };
+      if (pickupFromBaseM.trim() !== "") {
+        json.pickupFromBaseM = Math.max(0, Math.floor(Number(pickupFromBaseM)));
+      }
       const r = await apiFetch<Trip>(`/daily-reports/${id}/trips`, {
         method: "POST",
-        json: {
-          clientName,
-          origin,
-          destination,
-          departedAt: new Date().toISOString(),
-          arrivedAt: new Date().toISOString(),
-          distanceM: Number(distanceM),
-          waitingMinutes: Number(waitingMinutes || 0),
-          tariffVersionId: tariffVersionId || null,
-          passengerKind,
-          viaStopCount: Number(viaStopCount || 0),
-          applyNightSurcharge,
-          applyLeftHandSurcharge,
-        },
+        json,
       });
       if (!r.ok) {
         setErr(r.error);
@@ -116,6 +139,7 @@ export default function DailyReportDetail(): JSX.Element {
   const distOk = distanceM.trim() !== "" && !Number.isNaN(Number(distanceM));
   const waitOk = waitingMinutes.trim() === "" || !Number.isNaN(Number(waitingMinutes));
   const viaOk = viaStopCount.trim() === "" || (!Number.isNaN(Number(viaStopCount)) && Number(viaStopCount) >= 0);
+  const pickupOk = pickupFromBaseM.trim() === "" || (!Number.isNaN(Number(pickupFromBaseM)) && Number(pickupFromBaseM) >= 0);
 
   const steps: StepWizardStep[] = [
     {
@@ -138,7 +162,7 @@ export default function DailyReportDetail(): JSX.Element {
       id: "metrics",
       title: "距離・待機・料金版",
       description: "距離はメートル単位です。料金版は任意です。",
-      canProceed: distOk && waitOk && viaOk,
+      canProceed: distOk && waitOk && viaOk && pickupOk,
       children: (
         <>
           <label>距離 (m)</label>
@@ -167,13 +191,27 @@ export default function DailyReportDetail(): JSX.Element {
           <label>
             <input type="checkbox" checked={applyLeftHandSurcharge} onChange={(e) => setApplyLeftHandSurcharge(e.target.checked)} /> 左ハンドル割増
           </label>
+          <label>迎車距離（基準地点から m・空でなし）</label>
+          <input value={pickupFromBaseM} onChange={(e) => setPickupFromBaseM(e.target.value)} inputMode="numeric" />
+          <label>
+            <input type="checkbox" checked={applyNightSurchargeFlat} onChange={(e) => setApplyNightSurchargeFlat(e.target.checked)} /> 深夜定額
+          </label>
+          <label>
+            <input type="checkbox" checked={applyLateNightFlatYen} onChange={(e) => setApplyLateNightFlatYen(e.target.checked)} /> 遅番定額
+          </label>
+          <label>
+            <input type="checkbox" checked={applyEarlyMorningFlatYen} onChange={(e) => setApplyEarlyMorningFlatYen(e.target.checked)} /> 早朝1定額
+          </label>
+          <label>
+            <input type="checkbox" checked={applyEarlyRushFlatYen} onChange={(e) => setApplyEarlyRushFlatYen(e.target.checked)} /> 早朝2定額
+          </label>
         </>
       ),
     },
     {
       id: "confirm",
       title: "運行追加の確認",
-      canProceed: routeOk && distOk && waitOk && viaOk,
+      canProceed: routeOk && distOk && waitOk && viaOk && pickupOk,
       children: (
         <dl className="step-wizard-summary">
           <dt>顧客</dt>
@@ -191,8 +229,13 @@ export default function DailyReportDetail(): JSX.Element {
           <dt>会員／経由／割増</dt>
           <dd>
             {passengerKind === "MEMBER" ? "会員" : "一般"} / 経由{viaStopCount || "0"}回
-            {applyNightSurcharge ? "・夜間" : ""}
-            {applyLeftHandSurcharge ? "・左H" : ""}
+            {applyNightSurcharge ? "・夜間%" : ""}
+            {applyLeftHandSurcharge ? "・左H%" : ""}
+            {pickupFromBaseM.trim() !== "" ? `・迎車${pickupFromBaseM}m` : ""}
+            {applyNightSurchargeFlat ? "・深夜定" : ""}
+            {applyLateNightFlatYen ? "・遅番定" : ""}
+            {applyEarlyMorningFlatYen ? "・早1" : ""}
+            {applyEarlyRushFlatYen ? "・早2" : ""}
           </dd>
         </dl>
       ),
@@ -247,6 +290,8 @@ export default function DailyReportDetail(): JSX.Element {
                 <th>会員</th>
                 <th>経由</th>
                 <th>割増</th>
+                <th>迎車m</th>
+                <th>定額</th>
               </tr>
             </thead>
             <tbody>
@@ -262,7 +307,18 @@ export default function DailyReportDetail(): JSX.Element {
                   <td>{t.passengerKind === "MEMBER" ? "会員" : "一般"}</td>
                   <td>{t.viaStopCount}</td>
                   <td>
-                    {[t.applyNightSurcharge && "夜", t.applyLeftHandSurcharge && "左"].filter(Boolean).join("・") || "—"}
+                    {[t.applyNightSurcharge && "夜%", t.applyLeftHandSurcharge && "左%"].filter(Boolean).join("・") || "—"}
+                  </td>
+                  <td>{t.pickupFromBaseM ?? "—"}</td>
+                  <td>
+                    {[
+                      t.applyNightSurchargeFlat && "深",
+                      t.applyLateNightFlatYen && "遅",
+                      t.applyEarlyMorningFlatYen && "早1",
+                      t.applyEarlyRushFlatYen && "早2",
+                    ]
+                      .filter(Boolean)
+                      .join("・") || "—"}
                   </td>
                 </tr>
               ))}

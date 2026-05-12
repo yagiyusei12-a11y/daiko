@@ -120,6 +120,11 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       viaStopCount?: number;
       applyNightSurcharge?: boolean;
       applyLeftHandSurcharge?: boolean;
+      pickupFromBaseM?: number | null;
+      applyNightSurchargeFlat?: boolean;
+      applyLateNightFlatYen?: boolean;
+      applyEarlyMorningFlatYen?: boolean;
+      applyEarlyRushFlatYen?: boolean;
     };
   }>("/daily-reports/:id/trips", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
@@ -141,6 +146,20 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     const viaStopCount = Math.max(0, Math.floor(Number(req.body?.viaStopCount ?? 0)));
     const applyNightSurcharge = Boolean(req.body?.applyNightSurcharge);
     const applyLeftHandSurcharge = Boolean(req.body?.applyLeftHandSurcharge);
+    const rawPickup = req.body?.pickupFromBaseM;
+    let pickupFromBaseM: number | null = null;
+    if (rawPickup !== undefined) {
+      if (rawPickup === null) pickupFromBaseM = null;
+      else {
+        const p = Math.floor(Number(rawPickup));
+        if (!Number.isFinite(p) || p < 0) return reply.code(400).send({ error: "invalid pickupFromBaseM" });
+        pickupFromBaseM = p;
+      }
+    }
+    const applyNightSurchargeFlat = Boolean(req.body?.applyNightSurchargeFlat);
+    const applyLateNightFlatYen = Boolean(req.body?.applyLateNightFlatYen);
+    const applyEarlyMorningFlatYen = Boolean(req.body?.applyEarlyMorningFlatYen);
+    const applyEarlyRushFlatYen = Boolean(req.body?.applyEarlyRushFlatYen);
     if (tariffVersionId) {
       const ver = await prisma.tariffPlanVersion.findFirst({
         where: { id: tariffVersionId, plan: { tenantId: tid } },
@@ -152,6 +171,11 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         viaStopCount,
         applyNightSurcharge,
         applyLeftHandSurcharge,
+        pickupFromBaseM,
+        applyNightSurchargeFlat,
+        applyLateNightFlatYen,
+        applyEarlyMorningFlatYen,
+        applyEarlyRushFlatYen,
       });
     }
     const role = req.body?.role === "PARTNER_DRIVER" ? "PARTNER_DRIVER" : "MAIN_DRIVER";
@@ -174,6 +198,11 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         viaStopCount,
         applyNightSurcharge,
         applyLeftHandSurcharge,
+        pickupFromBaseM,
+        applyNightSurchargeFlat,
+        applyLateNightFlatYen,
+        applyEarlyMorningFlatYen,
+        applyEarlyRushFlatYen,
       },
     });
     return trip;
@@ -192,6 +221,11 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       viaStopCount?: number;
       applyNightSurcharge?: boolean;
       applyLeftHandSurcharge?: boolean;
+      pickupFromBaseM?: number | null;
+      applyNightSurchargeFlat?: boolean;
+      applyLateNightFlatYen?: boolean;
+      applyEarlyMorningFlatYen?: boolean;
+      applyEarlyRushFlatYen?: boolean;
     };
   }>("/daily-reports/:id/trips/:tripId", { preHandler: [authenticate] }, async (req, reply) => {
     const tid = tenantIdFromReq(req);
@@ -230,6 +264,34 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         ? Boolean(req.body.applyLeftHandSurcharge)
         : trip.applyLeftHandSurcharge;
 
+    const rawPickupPatch = req.body?.pickupFromBaseM;
+    let pickupFromBaseM =
+      rawPickupPatch !== undefined
+        ? rawPickupPatch === null
+          ? null
+          : (() => {
+              const p = Math.floor(Number(rawPickupPatch));
+              return Number.isFinite(p) && p >= 0 ? p : NaN;
+            })()
+        : trip.pickupFromBaseM;
+    if (rawPickupPatch !== undefined && rawPickupPatch !== null && !Number.isFinite(pickupFromBaseM as number)) {
+      return reply.code(400).send({ error: "invalid pickupFromBaseM" });
+    }
+    if (rawPickupPatch === null) pickupFromBaseM = null;
+
+    const applyNightSurchargeFlat =
+      req.body?.applyNightSurchargeFlat !== undefined
+        ? Boolean(req.body.applyNightSurchargeFlat)
+        : trip.applyNightSurchargeFlat;
+    const applyLateNightFlatYen =
+      req.body?.applyLateNightFlatYen !== undefined ? Boolean(req.body.applyLateNightFlatYen) : trip.applyLateNightFlatYen;
+    const applyEarlyMorningFlatYen =
+      req.body?.applyEarlyMorningFlatYen !== undefined
+        ? Boolean(req.body.applyEarlyMorningFlatYen)
+        : trip.applyEarlyMorningFlatYen;
+    const applyEarlyRushFlatYen =
+      req.body?.applyEarlyRushFlatYen !== undefined ? Boolean(req.body.applyEarlyRushFlatYen) : trip.applyEarlyRushFlatYen;
+
     let fareYen = trip.fareYen;
     if (tariffVersionId) {
       const ver = await prisma.tariffPlanVersion.findFirst({
@@ -242,6 +304,11 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         viaStopCount,
         applyNightSurcharge,
         applyLeftHandSurcharge,
+        pickupFromBaseM: pickupFromBaseM ?? undefined,
+        applyNightSurchargeFlat,
+        applyLateNightFlatYen,
+        applyEarlyMorningFlatYen,
+        applyEarlyRushFlatYen,
       });
     } else {
       fareYen = 0;
@@ -262,6 +329,11 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         viaStopCount,
         applyNightSurcharge,
         applyLeftHandSurcharge,
+        pickupFromBaseM,
+        applyNightSurchargeFlat,
+        applyLateNightFlatYen,
+        applyEarlyMorningFlatYen,
+        applyEarlyRushFlatYen,
       },
     });
     return updated;
