@@ -4,15 +4,6 @@ import { TimeCardPunchKind } from "@prisma/client";
 import { prisma } from "../db.js";
 import type { JommuKirokuboModel, JommuTripRow } from "./jommu-kirokubo-html.js";
 
-function extStr(registerExtension: unknown, key: string): string {
-  const o =
-    registerExtension !== null && typeof registerExtension === "object" && !Array.isArray(registerExtension)
-      ? (registerExtension as Record<string, unknown>)
-      : {};
-  const v = o[key];
-  return typeof v === "string" ? v.trim() : "";
-}
-
 export function hmTokyo(d: Date): string {
   if (Number.isNaN(d.getTime())) return "";
   return new Intl.DateTimeFormat("ja-JP", {
@@ -39,12 +30,6 @@ export function viaTextFromTripRow(t: { viaStopsJson: unknown; viaNote: string |
   return "";
 }
 
-function verifierFromAlcoholJson(j: unknown): string | null {
-  if (!j || typeof j !== "object" || Array.isArray(j)) return null;
-  const v = (j as Record<string, unknown>).verifierName;
-  return typeof v === "string" && v.trim() ? v.trim() : null;
-}
-
 export function formatKmFromMeters(m: number): string {
   if (!Number.isFinite(m) || m < 0) return "";
   const km = m / 1000;
@@ -60,7 +45,7 @@ export async function loadJommuKirokuboModelForDailyReport(
     where: { id: reportId, tenantId },
     include: {
       trips: { orderBy: { id: "asc" } },
-      mainEmployee: { select: { familyName: true, givenName: true, registerExtension: true } },
+      mainEmployee: { select: { familyName: true, givenName: true } },
       partnerEmployee: { select: { familyName: true, givenName: true } },
       escortVehicle: { select: { label: true, plate: true } },
       tenant: { select: { name: true } },
@@ -78,19 +63,6 @@ export async function loadJommuKirokuboModelForDailyReport(
   const clockInAt = punches.find((p) => p.kind === TimeCardPunchKind.CLOCK_IN)?.punchedAt ?? null;
   const clockOutPunches = punches.filter((p) => p.kind === TimeCardPunchKind.CLOCK_OUT);
   const clockOutAt = clockOutPunches.length ? clockOutPunches[clockOutPunches.length - 1]!.punchedAt : null;
-
-  let safetyManagerName = "";
-  for (const p of punches) {
-    if (p.kind !== TimeCardPunchKind.CLOCK_IN) continue;
-    const n = verifierFromAlcoholJson(p.alcoholCheckJson);
-    if (n) {
-      safetyManagerName = n;
-      break;
-    }
-  }
-  if (!safetyManagerName) {
-    safetyManagerName = settings?.legalSafetyManagerName?.trim() || "";
-  }
 
   const vid = report.escortVehicleId;
   let odoStartKm: string | null = null;
@@ -117,7 +89,6 @@ export async function loadJommuKirokuboModelForDailyReport(
     if (Number.isFinite(a) && Number.isFinite(b) && b >= a) totalOdoKm = String(b - a);
   }
 
-  const licenseSerialNo = extStr(report.mainEmployee.registerExtension, "licenseNumber");
   const partnerCrewName = report.partnerEmployee
     ? `${report.partnerEmployee.familyName} ${report.partnerEmployee.givenName}`.trim()
     : "";
@@ -148,9 +119,7 @@ export async function loadJommuKirokuboModelForDailyReport(
     crewName: `${report.mainEmployee.familyName} ${report.mainEmployee.givenName}`.trim(),
     clockInHm: clockInAt ? hmTokyo(clockInAt) : null,
     clockOutHm: clockOutAt ? hmTokyo(clockOutAt) : null,
-    licenseSerialNo,
     officeName: operatorName,
-    safetyManagerStampName: safetyManagerName,
     partnerCrewName,
     trips: tripRows,
     odoStartKm,

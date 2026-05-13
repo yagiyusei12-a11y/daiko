@@ -26,11 +26,8 @@ export type JommuKirokuboModel = {
   crewName: string;
   clockInHm: string | null;
   clockOutHm: string | null;
-  /** 免許証通し番号（登録の免許番号を流用。未登録は空欄） */
-  licenseSerialNo: string;
   /** 事業所名（帳票表記。法定事業者名を使用） */
   officeName: string;
-  safetyManagerStampName: string;
   /** 同伴従事者（ペア乗務員）。未設定は空欄 */
   partnerCrewName: string;
   trips: JommuTripRow[];
@@ -70,11 +67,12 @@ const PRINT_CSS = `
   .jommu-sheet {
     box-shadow: none !important;
     border-radius: 0 !important;
+    border-color: #cbd5e1 !important;
   }
 }
 @media screen {
   body {
-    background: linear-gradient(160deg, #e9eef5 0%, #dfe6f0 45%, #e8ecf3 100%);
+    background: linear-gradient(165deg, #f1f5f9 0%, #e2e8f0 50%, #f8fafc 100%);
     min-height: 100vh;
     padding: 14px 16px 24px;
   }
@@ -82,53 +80,54 @@ const PRINT_CSS = `
 body {
   font-family: "MS PMincho","ＭＳ Ｐ明朝","MS P Gothic","MS PGothic","Yu Mincho","Yu Gothic","Meiryo",sans-serif;
   font-size: 10.5pt;
-  color: #1a1f28;
+  color: #334155;
   margin: 0;
   box-sizing: border-box;
 }
+*, *::before, *::after { box-sizing: inherit; }
 .toolbar { margin-bottom: 12px; }
 .toolbar button {
   padding: 8px 18px;
   font-size: 12px;
   cursor: pointer;
   font-family: inherit;
-  border: none;
-  border-radius: 6px;
-  background: linear-gradient(180deg, #3d5a80 0%, #2c4766 100%);
-  color: #fff;
-  box-shadow: 0 2px 6px rgba(44,71,102,.35);
+  border: 1px solid #334155;
+  border-radius: 4px;
+  background: #1e293b;
+  color: #f8fafc;
+  box-shadow: 0 1px 2px rgba(15,23,42,.12);
 }
-.toolbar button:hover { filter: brightness(1.06); }
+.toolbar button:hover { background: #334155; }
 .jommu-sheet {
   width: 100%;
   max-width: 266mm;
   margin: 0 auto 14px;
   page-break-after: always;
   break-after: page;
-  padding: 10px 12px 12px;
+  padding: 12px 14px 14px;
   box-sizing: border-box;
-  background: #fffef9;
-  border: 1px solid #b8b2a8;
-  border-radius: 3px;
-  box-shadow: 0 4px 24px rgba(26,31,40,.1);
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.04);
 }
 .jommu-sheet:last-of-type { page-break-after: auto; break-after: auto; }
 .jommu-retention {
   text-align: right;
-  font-size: 9pt;
-  margin-bottom: 4px;
-  padding-right: 4px;
-  color: #4a5568;
-  letter-spacing: 0.02em;
+  font-size: 8.5pt;
+  margin-bottom: 6px;
+  padding-right: 2px;
+  color: #64748b;
+  letter-spacing: 0.03em;
 }
 .jommu-title {
   text-align: center;
-  font-size: 17pt;
-  font-weight: 700;
-  margin: 4px 0 12px;
-  letter-spacing: 0.28em;
-  text-indent: 0.28em;
-  color: #1e2a3a;
+  font-size: 16pt;
+  font-weight: 600;
+  margin: 2px 0 14px;
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  color: #0f172a;
   font-feature-settings: "palt";
 }
 .jommu-meta {
@@ -136,133 +135,125 @@ body {
   border-collapse: collapse;
   table-layout: fixed;
   margin-bottom: 0;
-  border: 1.5px solid #2a2a2a;
+  border: 1px solid #64748b;
   border-bottom: none;
 }
 .jommu-meta td, .jommu-meta th {
-  border: 1px solid #2a2a2a;
-  padding: 5px 6px;
+  border: 1px solid #cbd5e1;
+  padding: 7px 8px;
   vertical-align: middle;
   font-size: 9.5pt;
 }
 .jommu-meta .hdr {
-  background: linear-gradient(180deg, #faf6f1 0%, #e8dcc8 100%);
-  font-weight: bold;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  font-weight: 600;
   text-align: center;
-  color: #2c241c;
+  color: #0f172a;
 }
 .jommu-meta .lbl {
-  background: linear-gradient(180deg, #faf6f1 0%, #e8dcc8 100%);
-  font-weight: bold;
+  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+  font-weight: 600;
   text-align: center;
   width: 7.5em;
-  color: #2c241c;
+  color: #1e293b;
+  border-right-color: #94a3b8;
 }
 .jommu-meta .val { min-height: 2.2em; }
 .jommu-meta .t-colon { padding: 0 2px; }
 .jommu-meta .t-blank { letter-spacing: 0.1em; }
-.jommu-meta .crew { font-size: 11pt; min-height: 3.2em; vertical-align: top; }
-.jommu-meta .office { font-size: 11pt; vertical-align: top; }
-.jommu-meta .office .safety { margin-top: 10px; font-size: 9pt; color: #333; }
-.jommu-meta .hdr-i {
-  background: linear-gradient(180deg, #f5efe6 0%, #dccfb8 100%);
-  font-weight: bold;
-  text-align: center;
-  margin: -5px -6px 6px;
-  padding: 5px 6px;
-  border-bottom: 1px solid #2a2a2a;
-  color: #2c241c;
-}
+.jommu-meta .crew { font-size: 11pt; min-height: 3em; vertical-align: top; line-height: 1.45; }
+.jommu-meta .office { font-size: 11pt; vertical-align: top; line-height: 1.45; color: #0f172a; }
 .jommu-meta .time { font-size: 9.5pt; }
 .jommu-meta .t-center { text-align: center; }
-.jommu-meta .safety-inkan {
-  float: right;
-  width: 2.45em;
-  height: 2.45em;
-  border: 1.5px double #3d3d3d;
-  border-radius: 50%;
-  text-align: center;
-  line-height: 2.15em;
-  font-size: 8pt;
-  margin-left: 8px;
-  color: #2a2a2a;
-  background: radial-gradient(circle at 35% 30%, #fff 0%, #f3eee6 55%, #e5dfd4 100%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
-}
 .jommu-main {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
   margin-top: 0;
-  border: 1.5px solid #2a2a2a;
-  border-top: 1px solid #2a2a2a;
+  border: 1px solid #64748b;
+  border-top: 1px solid #94a3b8;
 }
 .jommu-main th, .jommu-main td {
-  border: 1px solid #2a2a2a;
-  padding: 4px 3px;
+  border: 1px solid #cbd5e1;
+  padding: 6px 5px;
   vertical-align: middle;
   font-size: 8.5pt;
 }
 .jommu-main thead th {
-  background: linear-gradient(180deg, #faf6f1 0%, #e3d5c4 100%);
-  font-weight: bold;
+  background: linear-gradient(180deg, #f8fafc 0%, #e8edf3 100%);
+  font-weight: 600;
   text-align: center;
-  line-height: 1.25;
-  color: #2c241c;
+  line-height: 1.3;
+  color: #0f172a;
+  border-bottom-color: #94a3b8;
 }
-.jommu-main .c-no { width: 2em; text-align: center; color: #4a5568; font-weight: 600; }
-.jommu-main .c-num { text-align: right; padding-right: 6px; }
-.jommu-main .u { font-size: 7.5pt; font-weight: normal; color: #4a5568; }
-.jommu-main tbody td { min-height: 1.35em; }
-.jommu-main tbody tr:nth-child(even) td { background: rgba(250,248,244,.55); }
-.jommu-main .col-daiko { text-align: center; font-weight: 600; color: #3d4f66; }
+.jommu-main .c-no { width: 2em; text-align: center; color: #64748b; font-weight: 600; }
+.jommu-main .c-num { text-align: right; }
+.jommu-main .u { font-size: 7.5pt; font-weight: normal; color: #64748b; }
+.jommu-main tbody td { min-height: 1.4em; }
+.jommu-main tbody tr:nth-child(even) td { background: #f8fafc; }
+.jommu-main .col-daiko { text-align: center; font-weight: 600; color: #475569; }
 .jommu-main .t-center { text-align: center; }
-.jommu-main .unit-cell { position: relative; padding-bottom: 10px; padding-right: 4px; }
-.jommu-main .unit-text {
-  position: absolute;
-  right: 4px;
-  bottom: 2px;
+.jommu-main .num-with-unit { text-align: right; padding: 6px 7px; }
+.jommu-main .nwu {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0.15em;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.jommu-main .nwu-val { font-variant-numeric: tabular-nums; }
+.jommu-main .nwu-suf {
   font-size: 8pt;
-  color: #5c6573;
+  color: #64748b;
   font-weight: normal;
+  flex-shrink: 0;
 }
 .jommu-footer {
   width: 100%;
   border-collapse: collapse;
   margin-top: 0;
-  border: 1.5px solid #2a2a2a;
-  border-top: 1px solid #2a2a2a;
+  border: 1px solid #64748b;
+  border-top: 1px solid #94a3b8;
 }
 .jommu-footer td, .jommu-footer th {
-  border: 1px solid #2a2a2a;
-  padding: 5px 4px;
+  border: 1px solid #cbd5e1;
+  padding: 7px 6px;
   font-size: 9pt;
   text-align: center;
   vertical-align: middle;
 }
 .jommu-footer .vm {
-  background: linear-gradient(180deg, #faf6f1 0%, #e3d5c4 100%);
-  font-weight: bold;
+  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+  font-weight: 600;
   width: 2.2em;
   writing-mode: vertical-rl;
   text-orientation: upright;
   letter-spacing: 0.12em;
-  padding: 6px 2px;
-  color: #2c241c;
+  padding: 8px 3px;
+  color: #1e293b;
+  border-right-color: #94a3b8;
 }
 .jommu-footer .fh {
-  background: linear-gradient(180deg, #faf6f1 0%, #e3d5c4 100%);
-  font-weight: bold;
-  color: #2c241c;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  font-weight: 600;
+  color: #0f172a;
 }
-.jommu-footer .fd { text-align: right; min-height: 1.5em; padding-right: 8px; }
+.jommu-footer .fd {
+  text-align: right;
+  min-height: 1.55em;
+  padding: 7px 10px;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
 .jommu-formno {
   text-align: right;
-  font-size: 9pt;
-  margin-top: 6px;
-  padding-right: 4px;
-  color: #6b7280;
-  letter-spacing: 0.08em;
+  font-size: 8.5pt;
+  margin-top: 8px;
+  padding-right: 2px;
+  color: #94a3b8;
+  letter-spacing: 0.06em;
 }
 `;
 
@@ -272,6 +263,10 @@ function renderJommuTripRows(model: JommuKirokuboModel): string {
   const rows: string[] = [];
   for (let i = 0; i < rowCount; i++) {
     const t = model.trips[i];
+    const dist = t ? esc(t.distanceKm) : "";
+    const fare = t ? esc(t.fareYen) : "";
+    const distSuf = t && String(t.distanceKm).trim() ? `<span class="nwu-suf">km</span>` : "";
+    const fareSuf = t && String(t.fareYen).trim() ? `<span class="nwu-suf">円</span>` : "";
     rows.push(`<tr>
   <td class="c-no">${i + 1}</td>
   <td>${t ? esc(t.clientName) : ""}</td>
@@ -281,8 +276,8 @@ function renderJommuTripRows(model: JommuKirokuboModel): string {
   <td>${t ? esc(t.viaText) : ""}</td>
   <td>${t ? esc(t.destination) : ""}</td>
   <td class="t-center">${t ? esc(t.arrivedHm) : ""}</td>
-  <td class="c-num unit-cell">${t ? esc(t.distanceKm) : ""}<span class="unit-text">km</span></td>
-  <td class="c-num unit-cell">${t ? esc(t.fareYen) : ""}<span class="unit-text">円</span></td>
+  <td class="c-num num-with-unit"><span class="nwu"><span class="nwu-val">${dist}</span>${distSuf}</span></td>
+  <td class="c-num num-with-unit"><span class="nwu"><span class="nwu-val">${fare}</span>${fareSuf}</span></td>
   <td class="col-daiko">代行</td>
   <td>${partner}</td>
 </tr>`);
@@ -293,10 +288,8 @@ function renderJommuTripRows(model: JommuKirokuboModel): string {
 function renderJommuSheet(model: JommuKirokuboModel): string {
   const { yParts } = model;
   const rows = renderJommuTripRows(model);
-  const lic = esc(model.licenseSerialNo);
   const office = esc(model.officeName);
   const crew = esc(model.crewName);
-  const safety = esc(model.safetyManagerStampName);
 
   return `<div class="jommu-sheet">
 <div class="jommu-retention">〈保存期間：最後に記載した日から3年間〉</div>
@@ -305,7 +298,7 @@ function renderJommuSheet(model: JommuKirokuboModel): string {
 <table class="jommu-meta">
   <colgroup><col style="width:6.5em"/><col style="width:47%"/><col style="width:47%"/></colgroup>
   <tr>
-    <td class="lbl" rowspan="5">乗務員<br/>氏名</td>
+    <td class="lbl" rowspan="4">乗務員<br/>氏名</td>
     <td colspan="2" class="val crew">${crew}</td>
   </tr>
   <tr>
@@ -314,10 +307,7 @@ function renderJommuSheet(model: JommuKirokuboModel): string {
   </tr>
   <tr>
     <td class="val t-center">${esc(yParts.y)}　年　${esc(yParts.m)}　月　${esc(yParts.d)}　日</td>
-    <td class="val office" rowspan="3">${office}<div class="safety"><span class="safety-inkan">印</span>　<strong>安全運転</strong><br/><strong>管理者</strong><br/><span style="font-weight:normal">${safety}</span></div></td>
-  </tr>
-  <tr>
-    <td class="val"><div class="hdr-i">免許証　通し番号</div>${lic}</td>
+    <td class="val office" rowspan="2">${office}</td>
   </tr>
   <tr>
     <td class="val time"><strong>始業</strong>　${timeCells(model.clockInHm)}　　<strong>終業</strong>　${timeCells(model.clockOutHm)}</td>
