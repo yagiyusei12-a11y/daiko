@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# VPS 上の daiko ルートで実行する想定。乗務記録簿 PDF 用に LibreOffice（soffice）を用意し、.env に LIBREOFFICE_SOFFICE を追記・更新する。
+# VPS 上の daiko ルートで実行する想定。乗務記録簿 PDF 用に LibreOffice（soffice）を用意し、.env に
+# LIBREOFFICE_SOFFICE と SAL_USE_VCLPLUGIN（ヘッドレスで gen が安定しやすい）を追記・更新する。
 # パスワードなし sudo（apt）が無い場合は警告のみで終了（デプロイは続行できるように exit 0）。
 set -euo pipefail
 
@@ -53,7 +54,8 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 tmp="$(mktemp)"
-(grep -v '^LIBREOFFICE_SOFFICE=' "$ENV_FILE" 2>/dev/null || true) >"$tmp"
+(grep -Ev '^(LIBREOFFICE_SOFFICE|SAL_USE_VCLPLUGIN)=' "$ENV_FILE" 2>/dev/null || true) >"$tmp"
 mv "$tmp" "$ENV_FILE"
 printf '%s\n' "LIBREOFFICE_SOFFICE=$soffice_path" >>"$ENV_FILE"
-log "設定しました: LIBREOFFICE_SOFFICE=$soffice_path（$ENV_FILE）"
+printf '%s\n' "SAL_USE_VCLPLUGIN=gen" >>"$ENV_FILE"
+log "設定しました: LIBREOFFICE_SOFFICE=$soffice_path / SAL_USE_VCLPLUGIN=gen（$ENV_FILE）"

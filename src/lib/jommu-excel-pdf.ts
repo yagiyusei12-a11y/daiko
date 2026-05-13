@@ -82,8 +82,8 @@ async function xlsxBufferToPdf(xlsxBuffer: Buffer): Promise<Buffer> {
     TMPDIR: dir,
     TMP: dir,
     TEMP: dir,
-    /** 実サーバーではディスプレイ無し。headless 用 VCL プラグインを明示する。 */
-    SAL_USE_VCLPLUGIN: process.env.SAL_USE_VCLPLUGIN ?? "headless",
+    /** 実サーバーではディスプレイ無し。Ubuntu の LibreOffice は gen の方が通りやすいことが多い。 */
+    SAL_USE_VCLPLUGIN: process.env.SAL_USE_VCLPLUGIN ?? "gen",
   };
 
   try {
