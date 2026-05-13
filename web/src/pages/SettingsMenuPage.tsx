@@ -75,6 +75,7 @@ type EmployeeRow = {
   id: string;
   familyName: string;
   givenName: string;
+  furigana: string | null;
   address: string | null;
   status: string;
   retiredAt: string | null;
@@ -157,6 +158,7 @@ export default function SettingsMenuPage(): JSX.Element {
     password: "",
     familyName: "",
     givenName: "",
+    furigana: "",
     birthDate: "",
     address: "",
     phone: "",
@@ -317,6 +319,7 @@ export default function SettingsMenuPage(): JSX.Element {
         password: "",
         familyName: "",
         givenName: "",
+        furigana: "",
         birthDate: "",
         address: "",
         phone: "",
@@ -353,6 +356,7 @@ export default function SettingsMenuPage(): JSX.Element {
       password: "",
       familyName: e.familyName,
       givenName: e.givenName,
+      furigana: e.furigana ?? "",
       birthDate: extStr(ex, "birthDate"),
       address: e.address ?? "",
       phone: extStr(ex, "phone"),
@@ -712,6 +716,13 @@ export default function SettingsMenuPage(): JSX.Element {
             <input value={empForm.familyName} onChange={(e) => setEmpForm({ ...empForm, familyName: e.target.value })} />
             <label>氏名（名）</label>
             <input value={empForm.givenName} onChange={(e) => setEmpForm({ ...empForm, givenName: e.target.value })} />
+            <label>ふりがな（カタカナ推奨）</label>
+            <input
+              value={empForm.furigana}
+              onChange={(e) => setEmpForm({ ...empForm, furigana: e.target.value })}
+              placeholder="例: ヤギ ユウセイ"
+              autoComplete="off"
+            />
             <label>生年月日</label>
             <input type="date" value={empForm.birthDate} onChange={(e) => setEmpForm({ ...empForm, birthDate: e.target.value })} />
             <label>住所</label>

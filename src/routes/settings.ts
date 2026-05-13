@@ -301,6 +301,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
         id: e.id,
         familyName: e.familyName,
         givenName: e.givenName,
+        furigana: e.furigana,
         address: e.address,
         status: e.status,
         retiredAt: e.retiredAt ? e.retiredAt.toISOString() : null,
@@ -319,6 +320,8 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const familyName = String(b.familyName || "").trim();
     const givenName = String(b.givenName || "").trim();
     if (!familyName || !givenName) return reply.code(400).send({ error: "familyName, givenName required" });
+
+    const furigana = b.furigana !== undefined ? String(b.furigana).trim() || null : null;
 
     const loginEmail = String(b.loginEmail || "").trim().toLowerCase();
     const password = String(b.password || "");
@@ -350,6 +353,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
             tenantId,
             familyName,
             givenName,
+            furigana,
             address,
             adminMaster,
             safetyDrivingManager,
@@ -372,6 +376,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
         tenantId,
         familyName,
         givenName,
+        furigana,
         address,
         adminMaster,
         safetyDrivingManager,
@@ -392,6 +397,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const b = req.body || {};
     const familyName = b.familyName !== undefined ? String(b.familyName).trim() : undefined;
     const givenName = b.givenName !== undefined ? String(b.givenName).trim() : undefined;
+    const furigana = b.furigana !== undefined ? String(b.furigana).trim() || null : undefined;
     const address = b.address !== undefined ? (String(b.address).trim() || null) : undefined;
 
     const ext = buildRegisterExtension(emp.registerExtension, b as Parameters<typeof buildRegisterExtension>[1]);
@@ -416,6 +422,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
       data: {
         ...(familyName !== undefined ? { familyName } : {}),
         ...(givenName !== undefined ? { givenName } : {}),
+        ...(furigana !== undefined ? { furigana } : {}),
         ...(address !== undefined ? { address } : {}),
         ...(b.adminMaster !== undefined ? { adminMaster: Boolean(b.adminMaster) } : {}),
         ...(b.safetyDrivingManager !== undefined ? { safetyDrivingManager: Boolean(b.safetyDrivingManager) } : {}),

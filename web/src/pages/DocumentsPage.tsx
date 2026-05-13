@@ -199,7 +199,7 @@ function DailyReportJommuPrintBlock(): JSX.Element {
   );
 }
 
-type EmpRosterRow = { id: string; familyName: string; givenName: string; status: string };
+type EmpRosterRow = { id: string; familyName: string; givenName: string; furigana?: string | null; status: string };
 
 function EmployeeRosterPrintBlock(): JSX.Element {
   const [allEmployees, setAllEmployees] = useState<EmpRosterRow[]>([]);

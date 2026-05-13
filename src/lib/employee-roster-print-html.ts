@@ -231,20 +231,37 @@ body {
   color: #1e293b;
   border-right-color: #94a3b8;
 }
-.rf .fg {
-  font-size: 9pt;
+.cell-nameblock { padding: 0 !important; vertical-align: middle; }
+.fg-wrap {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.45em;
+  padding: 6px 8px 4px;
   border-bottom: 1px dashed #cbd5e1;
-  min-height: 1.4em;
-  padding: 4px 6px 5px;
-  color: #475569;
+}
+.fg-lbl {
+  font-size: 8.5pt;
+  color: #64748b;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.fg-line {
+  flex: 1;
+  min-width: 0;
+  min-height: 1.35em;
+  font-size: 9pt;
+  color: #334155;
+  line-height: 1.35;
 }
 .rf .nm {
   font-size: 11pt;
-  min-height: 1.5em;
-  padding: 6px 6px 5px;
+  min-height: 1.45em;
+  padding: 6px 8px 7px;
   color: #0f172a;
+  line-height: 1.4;
 }
-.cell-nameblock { padding: 0 !important; vertical-align: top; }
 .cell-spacer { min-height: 0.5em; background: #fafafa; }
 .cell-gender {
   white-space: nowrap;
@@ -261,18 +278,33 @@ body {
 .cell-tel { padding: 7px 10px !important; white-space: nowrap; color: #0f172a; }
 .cell-emergency {
   padding: 8px 10px !important;
-  line-height: 1.55;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5em 1.25em;
+  vertical-align: middle;
   color: #0f172a;
 }
-.em-part { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0.2em; max-width: 100%; }
-.em-lbl { font-weight: 600; color: #475569; flex-shrink: 0; }
-.em-paren { color: #94a3b8; }
-.cell-lic, .cell-lic-cond { line-height: 1.5; padding: 8px 10px !important; vertical-align: top; }
-.cell-lic-cond { word-break: break-word; overflow-wrap: break-word; }
+.em-stacked { display: flex; flex-direction: column; gap: 6px; }
+.em-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: nowrap;
+  gap: 0.2em;
+  line-height: 1.45;
+}
+.em-lbl { font-weight: 600; color: #475569; flex-shrink: 0; white-space: nowrap; }
+.em-parens { color: #94a3b8; flex-shrink: 0; }
+.em-body { flex: 1; min-width: 0; word-break: break-word; overflow-wrap: anywhere; }
+.cell-lic {
+  line-height: 1.45;
+  padding: 8px 10px !important;
+  vertical-align: middle;
+  text-align: left;
+}
+.cell-lic-cond {
+  line-height: 1.5;
+  padding: 8px 10px !important;
+  vertical-align: middle;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
 .rf .cen { text-align: center; }
 .rf .photo { height: 128px; vertical-align: top; padding: 6px; }
 .rf .photobox {
@@ -327,7 +359,6 @@ function buildOneSheet(emp: Employee, ctx: { createdYmd: string; operatorName: s
   const phone = extStr(ext, "phone");
   const mobile = extStr(ext, "mobile");
   const emName = extStr(ext, "emergencyName");
-  const emRel = extStr(ext, "emergencyRelation");
   const emTel = extStr(ext, "emergencyTel");
   const licKind = extStr(ext, "licenseKind");
   const licExp = extStr(ext, "licenseExpiresOn");
@@ -357,7 +388,10 @@ ${ctx.operatorName ? `<p class="r-subtitle cen">${esc(ctx.operatorName)}</p>` : 
   <tr>
     <td class="L" rowspan="2">氏名</td>
     <td colspan="3" class="cell-nameblock">
-      <div class="fg">${furigana ? esc(furigana) : "（ふりがな）"}</div>
+      <div class="fg-wrap">
+        <span class="fg-lbl">ふりがな</span>
+        <div class="fg-line">${furigana ? esc(furigana) : "　"}</div>
+      </div>
       <div class="nm">${esc(fullName)}</div>
     </td>
     <td class="L">性別</td>
@@ -390,9 +424,16 @@ ${ctx.operatorName ? `<p class="r-subtitle cen">${esc(ctx.operatorName)}</p>` : 
   <tr>
     <td class="L">緊急<br/>連絡先</td>
     <td colspan="7" class="cell-emergency">
-      <span class="em-part"><span class="em-lbl">氏名</span><span class="em-paren">（</span>${esc(emName)}<span class="em-paren">）</span></span>
-      <span class="em-part"><span class="em-lbl">続柄</span><span class="em-paren">（</span>${esc(emRel)}<span class="em-paren">）</span></span>
-      <span class="em-part"><span class="em-lbl">電話番号</span><span class="em-paren">（</span>${esc(emTel)}<span class="em-paren">）</span></span>
+      <div class="em-stacked">
+        <div class="em-line">
+          <span class="em-lbl">氏名</span>
+          <span class="em-parens">（</span><span class="em-body">${esc(emName)}</span><span class="em-parens">）</span>
+        </div>
+        <div class="em-line">
+          <span class="em-lbl">電話番号</span>
+          <span class="em-parens">（</span><span class="em-body">${esc(emTel)}</span><span class="em-parens">）</span>
+        </div>
+      </div>
     </td>
   </tr>
   <tr>
