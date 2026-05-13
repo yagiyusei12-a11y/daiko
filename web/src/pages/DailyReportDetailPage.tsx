@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { apiFetch } from "../api";
+import { apiFetch, apiFetchText } from "../api";
 import { Card, Err } from "../ui";
 import { useSavedToast } from "../saved-toast";
 import { reverseGeocodeTownJa } from "../lib/nominatim";
@@ -798,6 +798,24 @@ export default function DailyReportDetailPage(): JSX.Element {
     }
   }
 
+  async function openJommuPrint(): Promise<void> {
+    if (!reportId) return;
+    setErr(null);
+    const r = await apiFetchText(`/daily-reports/${reportId}/jommu-print.html`);
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    const w = window.open("", "_blank", "noopener,noreferrer");
+    if (!w) {
+      setErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
+      return;
+    }
+    w.document.open();
+    w.document.write(r.text);
+    w.document.close();
+  }
+
   const dialogTrip = useMemo(() => {
     if (!report || !addTripOpen || !dialogTripId) return null;
     return report.trips.find((t) => t.id === dialogTripId) ?? null;
@@ -832,11 +850,16 @@ export default function DailyReportDetailPage(): JSX.Element {
   return (
     <Card title={`日報 ${report.businessDate}`}>
       <Err msg={err} />
-      <p className="settings-hint" style={{ marginTop: 0 }}>
+      <p className="settings-hint" style={{ marginTop: 0, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem" }}>
         <Link to="/daily-reports">一覧へ</Link>
+        <button type="button" className="settings-secondary" onClick={() => void openJommuPrint()}>
+          乗務記録簿を印刷
+        </button>
+        <span>
         {" · "}
         客車担当: {report.mainEmployee.familyName} {report.mainEmployee.givenName}
         {report.escortVehicle ? ` / 随伴: ${report.escortVehicle.label}` : " / 随伴: 未設定"} / メーター {report.meterStart}→{report.meterEnd}
+        </span>
       </p>
 
       <div className="settings-section-panel" style={{ marginBottom: "1rem" }}>

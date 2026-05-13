@@ -16,7 +16,7 @@ export default function DocumentsPage(): JSX.Element {
       children: (
         <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
           <PanelHint>
-            アプリ内の運行・売上の日報は「日報」メニューで作成・編集します。印刷が必要な場合は、各日報詳細からブラウザの印刷機能を利用してください。
+            アプリ内の運行・売上の日報は「日報」メニューで作成・編集します。乗務記録簿形式の印刷は、各日報の詳細画面の「乗務記録簿を印刷」から開いてください（出勤・退勤打刻と随伴車の ODO ログが揃うとフッターの距離が埋まります）。
           </PanelHint>
           <p style={{ marginTop: "0.75rem" }}>
             <Link to="/daily-reports">日報一覧へ</Link>
