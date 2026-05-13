@@ -1,4 +1,4 @@
-/** 乗務記録簿（印刷用 HTML）。日報データを法定様式に近いレイアウトで出力。 */
+/** 乗務記録簿（印刷用 HTML）。A4 横向き・業務様式に沿った枠付きレイアウト。 */
 
 import { PRINT_BUSINESS_BASE_CSS } from "./print-business-theme.js";
 
@@ -20,16 +20,23 @@ export type JommuTripRow = {
   arrivedHm: string;
   distanceKm: string;
   fareYen: string;
+  /** 苦情・意見等備考（任意） */
+  remarks: string;
 };
 
 export type JommuKirokuboModel = {
   businessDateYmd: string;
   yParts: { y: string; m: string; d: string };
+  /** 受託者（運転者）氏名 */
   crewName: string;
   clockInHm: string | null;
   clockOutHm: string | null;
+  /** 事業所名 */
   officeName: string;
-  partnerCrewName: string;
+  /** 自社車（随伴車）登録番号 */
+  companyCarRegNo: string;
+  /** 安全運転管理者（設定の法定情報） */
+  safetyManagerName: string;
   trips: JommuTripRow[];
   odoStartKm: string | null;
   odoEndKm: string | null;
@@ -50,200 +57,361 @@ function timeCells(hm: string | null): string {
   const { h, m } = splitHm(hm);
   const hb = h ? esc(h) : '<span class="jm-blank">　　</span>';
   const mb = m ? esc(m) : '<span class="jm-blank">　　</span>';
-  return `${hb}<span class="jm-colon">：</span>${mb}`;
+  return `<span class="jm-time-pair">${hb}<span class="jm-colon">：</span>${mb}</span>`;
+}
+
+function timeCellsInline(hm: string): string {
+  return timeCells(hm.trim() ? hm : null);
 }
 
 const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
-.jm-doc .jm-meta { margin-top: 0; border-top: 2px solid var(--pd-accent); }
-.jm-doc .jm-meta td { font-size: 9.5pt; }
-.jm-doc .jm-crew-name {
-  font-size: 12pt;
-  font-weight: 700;
+@page { size: A4 landscape; margin: 8mm 10mm; }
+.jm-doc {
+  width: 277mm;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 2mm 0 0;
   color: var(--pd-ink);
-  padding: 12px 14px;
+  font-size: 8.5pt;
+}
+.jm-doc .jm-topline {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1mm;
+}
+.jm-doc .jm-retention {
+  margin: 0;
+  font-size: 7.5pt;
+  color: var(--pd-muted);
   letter-spacing: 0.02em;
 }
-.jm-doc .jm-subhdr {
-  background: var(--pd-fill);
-  font-weight: 600;
+.jm-doc .jm-title {
+  margin: 0 0 2mm;
   text-align: center;
-  font-size: 9pt;
+  font-size: 16pt;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  text-indent: 0.35em;
   color: var(--pd-ink);
-  padding: 8px 10px;
 }
-.jm-doc .jm-date-val {
-  text-align: center;
-  font-size: 10pt;
-  color: var(--pd-ink);
-  font-variant-numeric: tabular-nums;
-  padding: 9px 10px;
+.jm-doc table.jm-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  border: 1.5px solid var(--pd-line-strong);
+  margin: 0 0 2mm;
+  background: var(--pd-paper);
 }
-.jm-doc .jm-office {
-  font-size: 10pt;
-  color: var(--pd-ink);
-  line-height: 1.5;
-  padding: 10px 12px;
+.jm-doc .jm-tbl th,
+.jm-doc .jm-tbl td {
+  border: 1px solid var(--pd-line-strong);
+  padding: 2px 4px;
   vertical-align: middle;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
 }
-.jm-doc .jm-time-row {
-  font-size: 9.5pt;
+.jm-doc .jm-lbl {
+  background: var(--pd-fill-label);
+  font-weight: 600;
+  text-align: center;
   color: var(--pd-ink);
-  padding: 9px 12px;
-  line-height: 1.55;
-}
-.jm-blank { letter-spacing: 0.08em; }
-.jm-colon { padding: 0 1px; }
-.jm-trips { margin-top: -1px; border-top: none; }
-.jm-trips thead th { font-size: 8.1pt; padding: 7px 3px; }
-.jm-trips tbody td {
-  font-size: 8.5pt;
-  padding: 5px 5px;
-  vertical-align: middle;
-}
-.jm-trips tbody tr:nth-child(even) td { background: #fafbfc; }
-.jm-trips .jm-no {
-  width: 1.85em;
-  text-align: center;
-  font-weight: 600;
-  color: var(--pd-muted);
-  font-variant-numeric: tabular-nums;
-}
-.jm-trips .jm-daiko {
-  text-align: center;
-  font-weight: 600;
-  font-size: 8.5pt;
-  color: var(--pd-muted);
-}
-.jm-trips .jm-numcell { text-align: right; font-variant-numeric: tabular-nums; padding-right: 8px; }
-.jm-trips .jm-numcell .jm-suf {
-  margin-left: 0.2em;
   font-size: 8pt;
-  font-weight: 500;
-  color: var(--pd-muted);
+  line-height: 1.25;
 }
-.jm-foot { margin-top: -1px; border-top: none; }
-.jm-foot thead th { font-size: 8.2pt; padding: 8px 4px; line-height: 1.35; }
-.jm-foot tbody td {
-  font-size: 10pt;
-  font-weight: 600;
-  padding: 10px 8px;
+.jm-doc .jm-val {
+  background: #fff;
+  min-height: 1.35em;
   color: var(--pd-ink);
 }
+.jm-doc .jm-meta-outer { margin-bottom: 2mm; }
+.jm-doc .jm-meta-outer > tbody > tr > td {
+  border: 1.5px solid var(--pd-line-strong);
+  padding: 0;
+  vertical-align: top;
+  width: 33.33%;
+}
+.jm-doc .jm-box-inner {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.jm-doc .jm-box-inner td {
+  border: 1px solid var(--pd-line-strong);
+}
+.jm-doc .jm-crew-line {
+  font-size: 10pt;
+  font-weight: 700;
+  padding: 4px 6px !important;
+}
+.jm-doc .jm-sub2 {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+.jm-doc .jm-sub2 > div {
+  display: table-cell;
+  width: 50%;
+  padding: 3px 4px;
+  vertical-align: middle;
+  font-size: 8pt;
+}
+.jm-doc .jm-sub2 > div:first-child {
+  border-right: 1px solid var(--pd-line-strong);
+}
+.jm-doc .jm-ymd {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  padding: 4px !important;
+  font-size: 9pt;
+}
+.jm-doc .jm-plate {
+  padding: 4px 6px !important;
+  font-size: 9pt;
+}
+.jm-doc .jm-office-block {
+  padding: 4px 6px !important;
+  min-height: 2.6em;
+  font-size: 9pt;
+}
+.jm-doc .jm-mgr-inner {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.jm-doc .jm-mgr-inner td {
+  border: 1px solid var(--pd-line-strong);
+}
+.jm-doc .jm-mgr-inner .jm-mgr-lbl {
+  width: 38%;
+}
+.jm-doc .jm-mgr-inner .jm-mgr-val {
+  padding: 3px 4px !important;
+  font-size: 9pt;
+}
+.jm-doc .jm-in {
+  width: 2.2rem;
+  text-align: center;
+  font-size: 7.5pt;
+  font-weight: 700;
+  background: var(--pd-fill-label);
+  vertical-align: middle !important;
+}
+.jm-doc .jm-section-h {
+  background: var(--pd-fill-label);
+  font-weight: 700;
+  text-align: center;
+  font-size: 8.5pt;
+  padding: 3px !important;
+  letter-spacing: 0.15em;
+}
+.jm-doc .jm-work thead th {
+  background: var(--pd-fill-label);
+  font-weight: 600;
+  text-align: center;
+  font-size: 7.2pt;
+  line-height: 1.2;
+  padding: 3px 1px !important;
+  color: var(--pd-ink);
+}
+.jm-doc .jm-work tbody td {
+  font-size: 7.5pt;
+  padding: 2px 2px !important;
+  height: 1.35rem;
+  vertical-align: middle;
+}
+.jm-doc .jm-no {
+  width: 1.6em;
+  text-align: center;
+  font-weight: 600;
+  color: var(--pd-muted);
+  font-variant-numeric: tabular-nums;
+  background: #fafafa;
+}
+.jm-doc .jm-c {
+  text-align: center;
+}
+.jm-doc .jm-r {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  position: relative;
+  padding-right: 14px !important;
+}
+.jm-doc .jm-unit {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  font-size: 6.5pt;
+  font-weight: 600;
+  color: var(--pd-muted);
+}
+.jm-doc .jm-daiko {
+  text-align: center;
+  font-weight: 600;
+  font-size: 7.5pt;
+}
+.jm-doc .jm-foot-v {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  width: 1.5rem;
+  min-width: 1.4rem;
+  letter-spacing: 0.08em;
+  padding: 4px 1px !important;
+  font-size: 7.5pt;
+}
+.jm-doc .jm-foot thead th {
+  background: var(--pd-fill-label);
+  font-weight: 600;
+  text-align: center;
+  font-size: 7.5pt;
+  padding: 4px 2px !important;
+  line-height: 1.2;
+}
+.jm-doc .jm-foot tbody td {
+  font-size: 9pt;
+  font-weight: 600;
+  text-align: right;
+  padding: 5px 6px !important;
+  font-variant-numeric: tabular-nums;
+}
+.jm-doc .jm-footnote {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  margin-top: 1mm;
+  font-size: 7.5pt;
+  color: var(--pd-muted);
+}
+.jm-doc .jm-fn-box {
+  border: 1px solid var(--pd-line-strong);
+  padding: 1px 8px;
+  min-width: 2.2em;
+  text-align: center;
+  font-size: 8pt;
+}
+.jm-blank { letter-spacing: 0.06em; }
+.jm-colon { padding: 0 1px; }
+.jm-time-pair { white-space: nowrap; }
 `;
 
 function renderJommuTripRows(model: JommuKirokuboModel): string {
   const rowCount = Math.max(10, model.trips.length);
-  const partner = esc(model.partnerCrewName);
   const rows: string[] = [];
   for (let i = 0; i < rowCount; i++) {
     const t = model.trips[i];
-    const dist = t ? esc(t.distanceKm) : "";
-    const fare = t ? esc(t.fareYen) : "";
-    const distSuf = t && String(t.distanceKm).trim() ? `<span class="jm-suf">km</span>` : "";
-    const fareSuf = t && String(t.fareYen).trim() ? `<span class="jm-suf">円</span>` : "";
     rows.push(`<tr>
   <td class="jm-no">${i + 1}</td>
-  <td>${t ? esc(t.clientName) : ""}</td>
-  <td>${t ? esc(t.charterVehicleNo) : ""}</td>
-  <td>${t ? esc(t.origin) : ""}</td>
-  <td class="pd-center">${t ? esc(t.departedHm) : ""}</td>
-  <td>${t ? esc(t.viaText) : ""}</td>
-  <td>${t ? esc(t.destination) : ""}</td>
-  <td class="pd-center">${t ? esc(t.arrivedHm) : ""}</td>
-  <td class="jm-numcell">${dist}${distSuf}</td>
-  <td class="jm-numcell">${fare}${fareSuf}</td>
-  <td class="jm-daiko">代行</td>
-  <td>${partner}</td>
+  <td class="jm-val">${t ? esc(t.clientName) : ""}</td>
+  <td class="jm-val">${t ? esc(t.charterVehicleNo) : ""}</td>
+  <td class="jm-val">${t ? esc(t.origin) : ""}</td>
+  <td class="jm-val jm-c">${t ? timeCellsInline(t.departedHm) : ""}</td>
+  <td class="jm-val">${t ? esc(t.viaText) : ""}</td>
+  <td class="jm-val">${t ? esc(t.destination) : ""}</td>
+  <td class="jm-val jm-c">${t ? timeCellsInline(t.arrivedHm) : ""}</td>
+  <td class="jm-val jm-r">${t && String(t.distanceKm).trim() ? `${esc(t.distanceKm)}<span class="jm-unit">km</span>` : `<span class="jm-unit">km</span>`}</td>
+  <td class="jm-val jm-r">${t && String(t.fareYen).trim() ? `${esc(t.fareYen)}<span class="jm-unit">円</span>` : `<span class="jm-unit">円</span>`}</td>
+  <td class="jm-val jm-daiko">代行</td>
+  <td class="jm-val">${t ? esc(t.remarks) : ""}</td>
 </tr>`);
   }
   return rows.join("\n");
 }
 
-function renderJommuSheet(model: JommuKirokuboModel): string {
+function renderHeaderMeta(model: JommuKirokuboModel): string {
   const { yParts } = model;
-  const rows = renderJommuTripRows(model);
-  const office = esc(model.officeName);
   const crew = esc(model.crewName);
+  const office = esc(model.officeName);
+  const plate = esc(model.companyCarRegNo);
+  const mgr = esc(model.safetyManagerName);
+
+  return `<table class="jm-tbl jm-meta-outer" role="presentation">
+<tbody><tr>
+  <td>
+    <table class="jm-box-inner">
+      <tr><td class="jm-lbl">受託者氏名</td></tr>
+      <tr><td class="jm-val jm-crew-line">${crew}</td></tr>
+      <tr><td class="jm-sub2"><div>始業時刻　${timeCells(model.clockInHm)}</div><div>終業時刻　${timeCells(model.clockOutHm)}</div></td></tr>
+    </table>
+  </td>
+  <td>
+    <table class="jm-box-inner">
+      <tr><td class="jm-lbl">乗務年月日</td></tr>
+      <tr><td class="jm-val jm-ymd">${esc(yParts.y)}　年　${esc(yParts.m)}　月　${esc(yParts.d)}　日</td></tr>
+      <tr><td class="jm-lbl">自社車　登録番号</td></tr>
+      <tr><td class="jm-val jm-plate">${plate}</td></tr>
+    </table>
+  </td>
+  <td>
+    <table class="jm-box-inner">
+      <tr><td class="jm-lbl">事業所名</td></tr>
+      <tr><td class="jm-val jm-office-block">${office}</td></tr>
+      <tr><td style="padding:0;border:none">
+        <table class="jm-mgr-inner" role="presentation"><tr>
+        <td class="jm-lbl jm-mgr-lbl">安全運転<br/>管理者</td>
+        <td class="jm-val jm-mgr-val">${mgr}</td>
+        <td class="jm-in">印</td>
+        </tr></table>
+      </td></tr>
+    </table>
+  </td>
+</tr></tbody>
+</table>`;
+}
+
+function renderJommuSheet(model: JommuKirokuboModel): string {
+  const tripBody = renderJommuTripRows(model);
 
   return `<article class="pd-doc jm-doc">
-<header class="pd-doc-head">
-  <p class="pd-retention">〈保存期間：最後に記載した日から3年間〉</p>
-</header>
-<div class="pd-title-wrap">
-  <h1 class="pd-title">乗務記録簿</h1>
-  <div class="pd-title-rule" aria-hidden="true"></div>
+<div class="jm-topline"><p class="jm-retention">〈保存期間：最後に記載した日から1年間〉</p></div>
+<h1 class="jm-title">乗務記録簿</h1>
+${renderHeaderMeta(model)}
+<table class="jm-tbl jm-work">
+  <thead>
+    <tr><th class="jm-section-h" colspan="12">業務記録</th></tr>
+    <tr>
+      <th style="width:2%">　</th>
+      <th style="width:9%">依頼者</th>
+      <th style="width:8%">客車の<br/>車両番号</th>
+      <th style="width:9%">依頼場所</th>
+      <th style="width:6.5%">開始時刻</th>
+      <th style="width:8%">経由地</th>
+      <th style="width:9%">到着場所</th>
+      <th style="width:6.5%">到着時刻</th>
+      <th style="width:7%">走行距離</th>
+      <th style="width:7%">料金</th>
+      <th style="width:6%">同乗した<br/>車両</th>
+      <th style="width:12%">苦情　意見等備考</th>
+    </tr>
+  </thead>
+  <tbody>
+${tripBody}
+  </tbody>
+</table>
+<table class="jm-tbl jm-foot">
+  <thead>
+    <tr>
+      <th class="jm-lbl jm-foot-v" rowspan="2">メーター・距離等</th>
+      <th>始業時<br/><span style="font-size:6.5pt;font-weight:500">（km）</span></th>
+      <th>終業時<br/><span style="font-size:6.5pt;font-weight:500">（km）</span></th>
+      <th>走行距離合計<br/><span style="font-size:6.5pt;font-weight:500">（km）</span></th>
+      <th>実車走行距離<br/><span style="font-size:6.5pt;font-weight:500">（km）</span></th>
+      <th>売上合計<br/><span style="font-size:6.5pt;font-weight:500">（円）</span></th>
+    </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>${model.odoStartKm != null ? esc(model.odoStartKm) : ""}</td>
+    <td>${model.odoEndKm != null ? esc(model.odoEndKm) : ""}</td>
+    <td>${model.totalOdoKm != null ? esc(model.totalOdoKm) : ""}</td>
+    <td>${esc(model.actualDistanceKmSum)}</td>
+    <td>${esc(model.salesTotalYen)}</td>
+  </tr>
+  </tbody>
+</table>
+<div class="jm-footnote">
+  <span>様式番号　0000-0000</span>
+  <span class="jm-fn-box">日</span>
 </div>
-
-<table class="pd-table jm-meta">
-  <colgroup><col style="width:6.25rem"/><col style="width:50%"/><col style="width:50%"/></colgroup>
-  <tbody>
-  <tr>
-    <td class="pd-label-cell" rowspan="4">乗務員<br/>氏名</td>
-    <td colspan="2" class="jm-crew-name">${crew}</td>
-  </tr>
-  <tr>
-    <td class="jm-subhdr">乗務年月日</td>
-    <td class="jm-subhdr">事業所名</td>
-  </tr>
-  <tr>
-    <td class="jm-date-val">${esc(yParts.y)}　年　${esc(yParts.m)}　月　${esc(yParts.d)}　日</td>
-    <td class="jm-office" rowspan="2">${office}</td>
-  </tr>
-  <tr>
-    <td class="jm-time-row"><strong>始業</strong>　${timeCells(model.clockInHm)}　　<strong>終業</strong>　${timeCells(model.clockOutHm)}</td>
-  </tr>
-  </tbody>
-</table>
-
-<table class="pd-table jm-trips">
-  <colgroup>
-    <col style="width:2.2%"/><col style="width:9%"/><col style="width:8%"/><col style="width:9%"/><col style="width:6%"/>
-    <col style="width:8%"/><col style="width:9%"/><col style="width:6%"/><col style="width:7.5%"/><col style="width:8%"/>
-    <col style="width:5.5%"/><col style="width:12%"/>
-  </colgroup>
-  <thead>
-    <tr>
-      <th>No.</th>
-      <th>依頼者</th>
-      <th>客車の車両番号</th>
-      <th>出庫場所</th>
-      <th>開始時刻</th>
-      <th>経由地</th>
-      <th>到着場所</th>
-      <th>到着時刻</th>
-      <th>走行距離<span class="pd-unit">km</span></th>
-      <th>料金<span class="pd-unit">円</span></th>
-      <th>運転した車両</th>
-      <th>同伴従事者氏名</th>
-    </tr>
-  </thead>
-  <tbody>
-${rows}
-  </tbody>
-</table>
-
-<table class="pd-table jm-foot">
-  <thead>
-    <tr>
-      <th class="pd-label-cell pd-vertical" rowspan="2">メーター・距離等</th>
-      <th>始業時<span class="pd-unit">km</span></th>
-      <th>終業時<span class="pd-unit">km</span></th>
-      <th>走行距離合計<span class="pd-unit">km</span></th>
-      <th>実車走行距離<span class="pd-unit">km</span></th>
-      <th>売上合計<span class="pd-unit">円</span></th>
-    </tr>
-  </thead>
-  <tbody>
-  <tr>
-    <td class="pd-num">${model.odoStartKm != null ? esc(model.odoStartKm) : ""}</td>
-    <td class="pd-num">${model.odoEndKm != null ? esc(model.odoEndKm) : ""}</td>
-    <td class="pd-num">${model.totalOdoKm != null ? esc(model.totalOdoKm) : ""}</td>
-    <td class="pd-num">${esc(model.actualDistanceKmSum)}</td>
-    <td class="pd-num">${esc(model.salesTotalYen)}</td>
-  </tr>
-  </tbody>
-</table>
-<p class="pd-formno">様式番号　日　0000-0000</p>
 </article>`;
 }
 
@@ -257,13 +425,12 @@ ${innerBody}
 </body></html>`;
 }
 
-/** 複数日報分を 1 つの HTML にまとめる（各日報が 1 枚の用紙相当）。 */
 export function buildJommuKirokuboHtmlBundle(models: JommuKirokuboModel[], documentTitle: string): string {
   if (models.length === 0) {
     return wrapHtml(
       documentTitle,
       `<div class="pd-toolbar no-print"><button type="button" onclick="window.print()">印刷</button></div>
-<p style="padding:12px 16px;margin:0 auto;max-width:190mm">条件に一致する日報がありません。</p>
+<p style="padding:12px 16px;margin:0 auto;max-width:277mm">条件に一致する日報がありません。</p>
 <p class="pd-hint no-print">ブラウザの印刷ダイアログから PDF 保存できます。</p>`,
     );
   }

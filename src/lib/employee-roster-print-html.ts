@@ -1,4 +1,4 @@
-/** 従事者名簿（印刷用 HTML）。従業員マスタの内容を帳票レイアウトで出力。 */
+/** 従事者名簿（印刷用 HTML）。A4 縦向き・枠付きビジネス様式。 */
 
 import type { Employee } from "@prisma/client";
 import { PRINT_BUSINESS_BASE_CSS } from "./print-business-theme.js";
@@ -88,73 +88,169 @@ function safeDataUrlImg(src: string): string {
 }
 
 const ROSTER_CSS = `${PRINT_BUSINESS_BASE_CSS}
-.rs-doc .rs-top { margin-bottom: 4px; }
-.rs-doc .rs-grid { margin-top: 0; border-top: 2px solid var(--pd-accent); }
-.rs-doc .rs-grid td { font-size: 9.8pt; }
-.rs-doc .rs-label-narrow { width: 4.25rem; min-width: 3.5rem; }
-.rs-doc .rs-name-block { padding: 0 !important; vertical-align: middle; }
-.rs-doc .rs-furi-row {
+@page { size: A4 portrait; margin: 12mm 14mm; }
+.er-doc {
+  width: 182mm;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  color: var(--pd-ink);
+}
+.er-doc .er-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 3mm;
+}
+.er-doc .er-retention {
+  margin: 0;
+  font-size: 7.5pt;
+  color: var(--pd-muted);
+  flex: 1;
+  min-width: 0;
+}
+.er-doc .er-dates {
+  border-collapse: collapse;
+  font-size: 8.5pt;
+  border: 1px solid var(--pd-line-strong);
+  flex-shrink: 0;
+}
+.er-doc .er-dates td {
+  border: 1px solid var(--pd-line-strong);
+  padding: 4px 8px;
+  vertical-align: middle;
+}
+.er-doc .er-dates .er-dl {
+  background: var(--pd-fill-label);
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+.er-doc .er-dates .er-dv {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.er-doc .er-title {
+  margin: 0 0 4mm;
+  text-align: center;
+  font-size: 18pt;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-indent: 0.28em;
+}
+.er-doc .er-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  border: 1.5px solid var(--pd-line-strong);
+  margin: 0;
+}
+.er-doc .er-tbl th,
+.er-doc .er-tbl td {
+  border: 1px solid var(--pd-line-strong);
+  padding: 4px 6px;
+  vertical-align: middle;
+  font-size: 9pt;
+}
+.er-doc .er-lbl {
+  background: var(--pd-fill-label);
+  font-weight: 700;
+  text-align: center;
+  color: var(--pd-ink);
+  font-size: 8.5pt;
+  line-height: 1.3;
+}
+.er-doc .er-val {
+  background: #fff;
+  color: var(--pd-ink);
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+.er-doc .er-v {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  width: 1.55rem;
+  min-width: 1.45rem;
+  letter-spacing: 0.12em;
+  padding: 6px 2px !important;
+  font-size: 8.5pt;
+}
+.er-doc .er-narrow { width: 3.6rem; }
+.er-doc .er-name-wrap { padding: 0 !important; vertical-align: top; }
+.er-doc .er-furi {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
-  padding: 8px 10px 5px;
-  border-bottom: 1px dashed var(--pd-line-strong);
+  gap: 6px;
+  padding: 6px 8px 4px;
+  border-bottom: 1px dashed var(--pd-line);
 }
-.rs-doc .rs-furi-lbl {
-  font-size: 8.5pt;
-  font-weight: 600;
+.er-doc .er-furi-l {
+  font-size: 8pt;
+  font-weight: 700;
   color: var(--pd-muted);
   white-space: nowrap;
 }
-.rs-doc .rs-furi-val {
-  flex: 1;
-  min-width: 0;
-  font-size: 9.5pt;
-  color: var(--pd-ink);
-  line-height: 1.4;
-}
-.rs-doc .rs-name-main {
-  padding: 8px 10px 10px;
-  font-size: 12pt;
+.er-doc .er-furi-v { flex: 1; min-width: 0; font-size: 9pt; }
+.er-doc .er-name-big {
+  padding: 6px 8px 8px;
+  font-size: 13pt;
   font-weight: 700;
-  color: var(--pd-ink);
   letter-spacing: 0.02em;
 }
-.rs-doc .rs-spacer { height: 6px; background: var(--pd-fill); }
-.rs-doc .rs-gender { white-space: nowrap; text-align: center; padding: 6px 4px !important; }
-.rs-doc .rs-g-line { display: inline-flex; align-items: baseline; gap: 0.06em; }
-.rs-doc .rs-g-sep { margin: 0 0.3em; color: var(--pd-line-strong); }
-.rs-doc .rs-date { white-space: nowrap; text-align: center; font-variant-numeric: tabular-nums; color: var(--pd-ink); }
-.rs-doc .rs-address { line-height: 1.55; padding: 9px 11px !important; color: var(--pd-ink); }
-.rs-doc .rs-tel { padding: 8px 10px !important; white-space: nowrap; color: var(--pd-ink); }
-.rs-doc .rs-em-wrap { padding: 10px 11px !important; vertical-align: middle; }
-.rs-doc .rs-em-stack { display: table; width: 100%; }
-.rs-doc .rs-em-row { display: table-row; }
-.rs-doc .rs-em-cell { display: table-cell; padding: 3px 0; vertical-align: baseline; }
-.rs-doc .rs-em-cell:first-child { width: 5.2em; font-weight: 600; color: var(--pd-muted); font-size: 9pt; }
-.rs-doc .rs-em-val { color: var(--pd-ink); padding-left: 0.35rem; }
-.rs-doc .rs-lic { text-align: left; vertical-align: middle; padding: 9px 11px !important; line-height: 1.45; color: var(--pd-ink); }
-.rs-doc .rs-lic-cond { word-break: break-word; overflow-wrap: anywhere; }
-.rs-doc .rs-photo { height: 124px; vertical-align: middle; padding: 8px; }
-.rs-doc .rs-photo-box {
-  height: 108px;
+.er-doc .er-spacer { height: 5px; background: #f9fafb; }
+.er-doc .er-c { text-align: center; }
+.er-doc .er-g {
+  font-size: 8.5pt;
+  white-space: nowrap;
+  text-align: center;
+}
+.er-doc .er-date {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-size: 9pt;
+}
+.er-doc .er-em {
+  padding: 6px 8px !important;
+}
+.er-doc .er-em table { width: 100%; border-collapse: collapse; }
+.er-doc .er-em td { border: none; padding: 3px 0; vertical-align: baseline; }
+.er-doc .er-em .er-em-l { width: 5em; font-weight: 700; font-size: 8.5pt; color: var(--pd-muted); }
+.er-doc .er-photo-cap {
+  background: var(--pd-fill-label);
+  font-weight: 700;
+  text-align: center;
+  font-size: 8.5pt;
+  padding: 5px !important;
+}
+.er-doc .er-photo-cell {
+  height: 118px;
+  vertical-align: middle;
+  padding: 6px !important;
+}
+.er-doc .er-photo-box {
+  height: 104px;
   border: 1px dashed var(--pd-line-strong);
-  border-radius: 6px;
-  background: var(--pd-fill);
+  background: #fafafa;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-.rs-doc .rs-photo-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.rs-doc .rs-photo-cap {
-  background: var(--pd-fill);
-  font-weight: 600;
   text-align: center;
-  font-size: 9pt;
-  color: var(--pd-ink);
-  padding: 7px;
+  font-size: 8pt;
+  color: var(--pd-muted);
+  line-height: 1.5;
 }
-.rs-empty { padding: 28px; text-align: center; color: var(--pd-muted); }
+.er-doc .er-photo-box img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.er-empty {
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--pd-muted);
+  border: 1px solid var(--pd-line-strong);
+}
 `;
 
 function ymdCells(ymd: string): string {
@@ -167,7 +263,7 @@ function ymdCellsBlank(): string {
   return "＿＿＿＿年　　月　　日";
 }
 
-function buildOneSheet(emp: Employee, ctx: { createdYmd: string; operatorName: string }): string {
+function buildOneSheet(emp: Employee, ctx: { createdYmd: string }): string {
   const ext = asExt(emp.registerExtension);
   const furigana = emp.furigana?.trim() ?? "";
   const fullName = `${emp.familyName}　${emp.givenName}`.trim();
@@ -189,6 +285,7 @@ function buildOneSheet(emp: Employee, ctx: { createdYmd: string; operatorName: s
   const emName = extStr(ext, "emergencyName");
   const emTel = extStr(ext, "emergencyTel");
   const licKind = extStr(ext, "licenseKind");
+  const licNum = extStr(ext, "licenseNumber");
   const licExp = extStr(ext, "licenseExpiresOn");
   const licCond = licenseConditionsText(ext);
   const hasCond = licCond.length > 0;
@@ -197,103 +294,96 @@ function buildOneSheet(emp: Employee, ctx: { createdYmd: string; operatorName: s
 
   const mark = (which: "男" | "女") => (gender === which ? "（●）" : "（　）");
 
-  return `<article class="pd-doc rs-doc">
-<div class="pd-doc-head rs-top">
-  <p class="pd-retention">〈保存期間：退職日から2年間〉</p>
-  <table class="pd-meta-dates" role="presentation">
+  return `<article class="pd-doc er-doc">
+<div class="er-head">
+  <p class="er-retention">〈保存期間：退職日から2年間〉</p>
+  <table class="er-dates" role="presentation">
     <tr>
-      <td class="pd-md-lbl">作成日</td>
-      <td class="pd-md-val">${ymdCells(ctx.createdYmd)}</td>
-      <td class="pd-md-lbl">修正日</td>
-      <td class="pd-md-val">${ymdCellsBlank()}</td>
+      <td class="er-dl">作成日</td>
+      <td class="er-dv">${ymdCells(ctx.createdYmd)}</td>
+      <td class="er-dl">修正日</td>
+      <td class="er-dv">${ymdCellsBlank()}</td>
     </tr>
   </table>
 </div>
-<div class="pd-title-wrap">
-  <h1 class="pd-title">従事者名簿</h1>
-  <div class="pd-title-rule" aria-hidden="true"></div>
-</div>
-${ctx.operatorName ? `<p class="pd-subtitle">${esc(ctx.operatorName)}</p>` : ""}
+<h1 class="er-title">従事者名簿</h1>
 
-<table class="pd-table rs-grid">
+<table class="er-tbl">
   <tbody>
   <tr>
-    <td class="pd-label-cell" rowspan="2">氏名</td>
-    <td colspan="3" class="rs-name-block">
-      <div class="rs-furi-row">
-        <span class="rs-furi-lbl">ふりがな</span>
-        <div class="rs-furi-val">${furigana ? esc(furigana) : "　"}</div>
-      </div>
-      <div class="rs-name-main">${esc(fullName)}</div>
+    <td class="er-lbl" rowspan="2">氏名</td>
+    <td colspan="3" class="er-val er-name-wrap">
+      <div class="er-furi"><span class="er-furi-l">フリガナ</span><div class="er-furi-v">${furigana ? esc(furigana) : "　"}</div></div>
+      <div class="er-name-big">${esc(fullName)}</div>
     </td>
-    <td class="pd-label-cell">性別</td>
-    <td class="pd-center rs-gender">
-      <span class="rs-g-line"><span>${mark("男")}</span>男</span>
-      <span class="rs-g-sep">・</span>
-      <span class="rs-g-line"><span>${mark("女")}</span>女</span>
+    <td class="er-lbl">男女</td>
+    <td class="er-val er-g">
+      <span>${mark("男")}</span>男　<span>${mark("女")}</span>女
     </td>
-    <td class="pd-label-cell">生年月日</td>
-    <td class="rs-date">${ymdCells(birth)}</td>
+    <td class="er-lbl">生年月日</td>
+    <td class="er-val er-date">${ymdCells(birth)}</td>
   </tr>
   <tr>
-    <td colspan="3" class="rs-spacer"></td>
-    <td class="pd-label-cell" colspan="2">採用時年齢</td>
-    <td colspan="2" class="pd-center rs-date">満　${esc(ageHire || "　　")}　歳</td>
+    <td colspan="3" class="er-spacer"></td>
+    <td class="er-lbl" colspan="2">採用時年齢</td>
+    <td class="er-val er-c er-date" colspan="2">満　${esc(ageHire || "　　")}　歳</td>
   </tr>
   <tr>
-    <td class="pd-label-cell">住所</td>
-    <td colspan="7" class="rs-address">〒　${esc(zip)}　${esc(body)}</td>
+    <td class="er-lbl">住所</td>
+    <td class="er-val" colspan="7">〒　${esc(zip)}　${esc(body)}</td>
   </tr>
   <tr>
-    <td class="pd-label-cell" rowspan="2">連絡先</td>
-    <td class="pd-label-cell rs-label-narrow">自宅</td>
-    <td colspan="6" class="rs-tel">（　${esc(phone)}　）</td>
+    <td class="er-lbl" rowspan="2">連絡先</td>
+    <td class="er-lbl er-narrow">自宅</td>
+    <td class="er-val" colspan="6">（　${esc(phone)}　）</td>
   </tr>
   <tr>
-    <td class="pd-label-cell rs-label-narrow">携帯</td>
-    <td colspan="6" class="rs-tel">（　${esc(mobile)}　）</td>
+    <td class="er-lbl er-narrow">携帯</td>
+    <td class="er-val" colspan="6">（　${esc(mobile)}　）</td>
   </tr>
   <tr>
-    <td class="pd-label-cell">緊急<br/>連絡先</td>
-    <td colspan="7" class="rs-em-wrap">
-      <div class="rs-em-stack">
-        <div class="rs-em-row">
-          <div class="rs-em-cell">氏名</div>
-          <div class="rs-em-cell rs-em-val">（${esc(emName)}）</div>
-        </div>
-        <div class="rs-em-row">
-          <div class="rs-em-cell">電話番号</div>
-          <div class="rs-em-cell rs-em-val">（${esc(emTel)}）</div>
-        </div>
-      </div>
+    <td class="er-lbl">緊急<br/>連絡先</td>
+    <td class="er-val er-em" colspan="7">
+      <table role="presentation">
+        <tr><td class="er-em-l">氏名</td><td>（　${esc(emName)}　）</td></tr>
+        <tr><td class="er-em-l">電話番号</td><td>（　${esc(emTel)}　）</td></tr>
+      </table>
     </td>
   </tr>
   <tr>
-    <td class="pd-label-cell">採用<br/>年月日</td>
-    <td colspan="3" class="pd-center rs-date">${ymdCells(hired)}</td>
-    <td class="pd-label-cell">退職<br/>年月日</td>
-    <td colspan="3" class="pd-center rs-date">${ymdCells(retiredYmd)}</td>
+    <td class="er-lbl">採用<br/>年月日</td>
+    <td class="er-val er-date" colspan="3">${ymdCells(hired)}</td>
+    <td class="er-lbl">退職<br/>年月日</td>
+    <td class="er-val er-date" colspan="3">${ymdCells(retiredYmd)}</td>
   </tr>
   <tr>
-    <td class="pd-label-cell pd-vertical" rowspan="3">運転免許</td>
-    <td class="pd-label-cell" colspan="2">種類</td>
-    <td colspan="5" class="rs-lic">${esc(licKind)}</td>
+    <td class="er-lbl er-v" rowspan="4">運転免許</td>
+    <td class="er-lbl" colspan="2">種類</td>
+    <td class="er-val" colspan="5">${esc(licKind)}</td>
   </tr>
   <tr>
-    <td class="pd-label-cell" colspan="2">有効期限</td>
-    <td colspan="6" class="pd-center rs-date">${ymdCells(licExp)}</td>
+    <td class="er-lbl" colspan="2">番号</td>
+    <td class="er-val" colspan="5">第　${esc(licNum)}　号</td>
   </tr>
   <tr>
-    <td class="pd-label-cell" colspan="2">免許条件<br/>・限定等</td>
-    <td colspan="6" class="rs-lic rs-lic-cond">${hasCond ? `あり（ ${esc(licCond)} ）・なし（　　）` : "あり（　　　　　　　）・なし（　●　）"}</td>
+    <td class="er-lbl" colspan="2">有効期限</td>
+    <td class="er-val er-date" colspan="5">${ymdCells(licExp)}</td>
   </tr>
   <tr>
-    <td class="rs-photo-cap" colspan="4">運転免許証（表）</td>
-    <td class="rs-photo-cap" colspan="4">運転免許証（裏）</td>
+    <td class="er-lbl" colspan="2">免許条件<br/>・限定等</td>
+    <td class="er-val" colspan="5">${hasCond ? `あり（ ${esc(licCond)} ）・なし（　　）` : "あり（　　　　　　　）・なし（　●　）"}</td>
   </tr>
   <tr>
-    <td class="rs-photo" colspan="4"><div class="rs-photo-box">${front ? `<img src="${escAttr(front)}" alt=""/>` : ""}</div></td>
-    <td class="rs-photo" colspan="4"><div class="rs-photo-box">${back ? `<img src="${escAttr(back)}" alt=""/>` : ""}</div></td>
+    <td class="er-photo-cap" colspan="4">運転免許証　表</td>
+    <td class="er-photo-cap" colspan="4">運転免許証　裏</td>
+  </tr>
+  <tr>
+    <td class="er-photo-cell" colspan="4">
+      <div class="er-photo-box">${front ? `<img src="${escAttr(front)}" alt="免許証表面"/>` : "運転免許証　表<br/>（写しを貼付）"}</div>
+    </td>
+    <td class="er-photo-cell" colspan="4">
+      <div class="er-photo-box">${back ? `<img src="${escAttr(back)}" alt="免許証裏面"/>` : "運転免許証　裏<br/>（写しを貼付）"}</div>
+    </td>
   </tr>
   </tbody>
 </table>
@@ -306,11 +396,10 @@ export function buildEmployeeRosterPrintHtml(args: {
   operatorName?: string | null;
 }): string {
   const createdYmd = ymdTokyo(args.printedAt);
-  const op = (args.operatorName ?? "").trim();
   const sheets =
     args.employees.length === 0
-      ? `<article class="pd-doc rs-doc"><p class="rs-empty">印刷対象の従業員がありません。</p></article>`
-      : args.employees.map((e) => buildOneSheet(e, { createdYmd, operatorName: op })).join("\n");
+      ? `<article class="pd-doc er-doc"><p class="er-empty">印刷対象の従業員がありません。</p></article>`
+      : args.employees.map((e) => buildOneSheet(e, { createdYmd })).join("\n");
 
   return `<!DOCTYPE html><html lang="ja"><head>
 <meta charset="utf-8"/>

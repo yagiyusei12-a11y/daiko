@@ -46,7 +46,6 @@ export async function loadJommuKirokuboModelForDailyReport(
     include: {
       trips: { orderBy: { id: "asc" } },
       mainEmployee: { select: { familyName: true, givenName: true } },
-      partnerEmployee: { select: { familyName: true, givenName: true } },
       escortVehicle: { select: { label: true, plate: true } },
       tenant: { select: { name: true } },
     },
@@ -54,7 +53,9 @@ export async function loadJommuKirokuboModelForDailyReport(
   if (!report) return null;
 
   const settings = await prisma.tenantSettings.findUnique({ where: { tenantId } });
-  const operatorName = (settings?.legalTradeName?.trim() || report.tenant.name).trim();
+  const tradeName = (settings?.legalTradeName?.trim() || report.tenant.name).trim();
+  const officeName = (settings?.legalMainOfficeName?.trim() || tradeName).trim();
+  const safetyManagerName = settings?.legalSafetyManagerName?.trim() ?? "";
 
   const punches = await prisma.timeCardPunch.findMany({
     where: { tenantId, employeeId: report.mainEmployeeId, businessDate: report.businessDate },
@@ -89,9 +90,10 @@ export async function loadJommuKirokuboModelForDailyReport(
     if (Number.isFinite(a) && Number.isFinite(b) && b >= a) totalOdoKm = String(b - a);
   }
 
-  const partnerCrewName = report.partnerEmployee
-    ? `${report.partnerEmployee.familyName} ${report.partnerEmployee.givenName}`.trim()
-    : "";
+  const companyCarRegNo =
+    report.escortVehicle?.plate?.trim() ||
+    report.escortVehicle?.label?.trim() ||
+    "";
 
   let sumDistanceM = 0;
   let sumFare = 0;
@@ -109,6 +111,7 @@ export async function loadJommuKirokuboModelForDailyReport(
       arrivedHm: hmTokyo(t.arrivedAt),
       distanceKm: formatKmFromMeters(t.distanceM),
       fareYen: fare.toLocaleString("ja-JP"),
+      remarks: "",
     };
   });
 
@@ -119,8 +122,9 @@ export async function loadJommuKirokuboModelForDailyReport(
     crewName: `${report.mainEmployee.familyName} ${report.mainEmployee.givenName}`.trim(),
     clockInHm: clockInAt ? hmTokyo(clockInAt) : null,
     clockOutHm: clockOutAt ? hmTokyo(clockOutAt) : null,
-    officeName: operatorName,
-    partnerCrewName,
+    officeName,
+    companyCarRegNo,
+    safetyManagerName,
     trips: tripRows,
     odoStartKm,
     odoEndKm,
