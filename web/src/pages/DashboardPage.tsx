@@ -46,7 +46,7 @@ export default function DashboardPage(): JSX.Element {
       ) : (
         <>
           <p className="settings-hint">
-            事業日（東京）{data.asOfBusinessDateTokyo} 時点。運行区間の運賃（手動上書きがあればその金額）を日報のメイン担当者に紐づけて集計しています。
+            事業日（東京）{data.asOfBusinessDateTokyo} 時点。運行区間の運賃（手動上書きがあればその金額）を日報の客車担当者に紐づけて集計しています。
           </p>
           <h3 className="settings-subtitle">全体</h3>
           <ul className="settings-sf-list">
@@ -65,7 +65,7 @@ export default function DashboardPage(): JSX.Element {
           </ul>
 
           <h3 className="settings-subtitle" style={{ marginTop: "1.25rem" }}>
-            メイン担当者別
+            客車担当者別
           </h3>
           {data.byMainDriver.length === 0 ? (
             <p className="settings-hint">該当する運行データはまだありません。</p>
@@ -74,7 +74,7 @@ export default function DashboardPage(): JSX.Element {
               <table className="dash-driver-table">
                 <thead>
                   <tr>
-                    <th scope="col">担当</th>
+                    <th scope="col">客車担当</th>
                     <th scope="col">当日</th>
                     <th scope="col">今月</th>
                     <th scope="col">先月</th>

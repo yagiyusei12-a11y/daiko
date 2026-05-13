@@ -4,6 +4,7 @@ import { authenticate, jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
 import { coercePricingPrefs, mergeLegSurchargesJson, tripSurchargeDefaults } from "../lib/pricing-prefs.js";
 import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
+import { hasSecondClassDriverLicense } from "../lib/employee-license.js";
 
 function asObj(v: unknown): Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -39,6 +40,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         meterStart: true,
         meterEnd: true,
         mainEmployee: { select: { familyName: true, givenName: true } },
+        escortVehicle: { select: { label: true } },
       },
     });
     return {
@@ -48,6 +50,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         meterStart: r.meterStart,
         meterEnd: r.meterEnd,
         mainEmployeeName: `${r.mainEmployee.familyName} ${r.mainEmployee.givenName}`,
+        escortVehicleLabel: r.escortVehicle?.label ?? null,
       })),
     };
   });
@@ -71,6 +74,9 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     }
     const emp = await prisma.employee.findFirst({ where: { id: mainEmployeeId, tenantId } });
     if (!emp) return reply.code(400).send({ error: "invalid employee" });
+    if (!hasSecondClassDriverLicense(emp.registerExtension)) {
+      return reply.code(400).send({ error: "客車担当者は第二種免許を登録した従業員を選んでください" });
+    }
 
     let partnerEmployeeId: string | null = null;
     if (b.partnerEmployeeId !== undefined && b.partnerEmployeeId !== null && String(b.partnerEmployeeId).trim()) {
@@ -87,6 +93,22 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       const ev = await prisma.vehicle.findFirst({ where: { id: eid, tenantId } });
       if (!ev) return reply.code(400).send({ error: "invalid escortVehicleId" });
       escortVehicleId = eid;
+    }
+
+    const dupReport = await prisma.dailyReport.findFirst({
+      where: {
+        tenantId,
+        businessDate,
+        mainEmployeeId,
+        escortVehicleId,
+      },
+      select: { id: true },
+    });
+    if (dupReport) {
+      return reply.code(409).send({
+        error:
+          "この事業日・客車担当・随伴車の組み合わせの日報は既にあります。随伴車を変える場合は新しい日報を作成してください。",
+      });
     }
 
     let escortOdometerStartM: number | null = null;
@@ -174,10 +196,27 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
 
     if (b.escortVehicleId !== undefined) {
       const raw = b.escortVehicleId;
+      const nextEscort = raw === null || raw === "" ? null : String(raw).trim();
+      const dupOther = await prisma.dailyReport.findFirst({
+        where: {
+          tenantId,
+          businessDate: dr.businessDate,
+          mainEmployeeId: dr.mainEmployeeId,
+          escortVehicleId: nextEscort,
+          NOT: { id },
+        },
+        select: { id: true },
+      });
+      if (dupOther) {
+        return reply.code(409).send({
+          error:
+            "この事業日・客車担当・随伴車の組み合わせの日報が既に存在します。随伴車を変える場合は新しい日報を作成してください。",
+        });
+      }
       if (raw === null || raw === "") {
         data.escortVehicle = { disconnect: true };
       } else {
-        const vid = String(raw).trim();
+        const vid = nextEscort as string;
         const v = await prisma.vehicle.findFirst({ where: { id: vid, tenantId } });
         if (!v) return reply.code(400).send({ error: "invalid escortVehicleId" });
         data.escortVehicle = { connect: { id: vid } };
@@ -447,4 +486,16 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       return { ok: true };
     },
   );
+
+  app.delete<{ Params: { id: string; tripId: string } }>("/daily-reports/:id/trips/:tripId", async (req, reply) => {
+    const { tenantId } = jwtUser(req);
+    const rid = String(req.params.id);
+    const tripId = String(req.params.tripId);
+    const dr = await prisma.dailyReport.findFirst({ where: { id: rid, tenantId } });
+    if (!dr) return reply.code(404).send({ error: "not found" });
+    const trip = await prisma.tripLeg.findFirst({ where: { id: tripId, dailyReportId: rid } });
+    if (!trip) return reply.code(404).send({ error: "trip not found" });
+    await prisma.tripLeg.delete({ where: { id: tripId } });
+    return { ok: true };
+  });
 }

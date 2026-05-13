@@ -607,6 +607,7 @@ export default function DailyReportDetailPage(): JSX.Element {
   const [addTripOpen, setAddTripOpen] = useState(false);
   const [dialogTripId, setDialogTripId] = useState<string | null>(null);
   const [addTripBusy, setAddTripBusy] = useState(false);
+  const [tripActionBusy, setTripActionBusy] = useState(false);
   const [schedulePrefill, setSchedulePrefill] = useState<SchedulePrefillPayload | null>(null);
   const schedulePrefillSeq = useRef(0);
   const [schedulePickOpen, setSchedulePickOpen] = useState(false);
@@ -697,11 +698,35 @@ export default function DailyReportDetailPage(): JSX.Element {
     setAddTripBusy(false);
   }
 
-  function closeAddTripDialog(): void {
+  function clearAddTripUi(): void {
     setAddTripOpen(false);
     setDialogTripId(null);
     setSchedulePrefill(null);
     setSchedulePickOpen(false);
+  }
+
+  async function discardAddTripDraft(): Promise<void> {
+    const tid = dialogTripId;
+    const rid = reportId;
+    clearAddTripUi();
+    if (!tid || !rid) return;
+    setTripActionBusy(true);
+    setErr(null);
+    const r = await apiFetch(`/daily-reports/${rid}/trips/${tid}`, { method: "DELETE" });
+    setTripActionBusy(false);
+    if (!r.ok) setErr(r.error);
+    await load();
+  }
+
+  async function deleteTripLeg(tripId: string, summary: string): Promise<void> {
+    if (!reportId) return;
+    if (!window.confirm(`この運行を削除しますか？\n${summary}`)) return;
+    setTripActionBusy(true);
+    setErr(null);
+    const r = await apiFetch(`/daily-reports/${reportId}/trips/${tripId}`, { method: "DELETE" });
+    setTripActionBusy(false);
+    if (!r.ok) setErr(r.error);
+    else void load();
   }
 
   function closeEditTripDialog(): void {
@@ -778,6 +803,13 @@ export default function DailyReportDetailPage(): JSX.Element {
     return report.trips.find((t) => t.id === dialogTripId) ?? null;
   }, [report, addTripOpen, dialogTripId]);
 
+  const draftTripId = addTripOpen && dialogTripId ? dialogTripId : null;
+  const tableTrips = useMemo(() => {
+    if (!report) return [];
+    if (!draftTripId) return report.trips;
+    return report.trips.filter((t) => t.id !== draftTripId);
+  }, [report, draftTripId]);
+
   const mainDriverReservations = useMemo(() => {
     if (!schedulePayload || !report) return [];
     return schedulePayload.reservations.filter((x) => x.driverEmployeeId === report.mainEmployeeId);
@@ -803,14 +835,17 @@ export default function DailyReportDetailPage(): JSX.Element {
       <p className="settings-hint" style={{ marginTop: 0 }}>
         <Link to="/daily-reports">一覧へ</Link>
         {" · "}
-        乗務: {report.mainEmployee.familyName} {report.mainEmployee.givenName} / メーター {report.meterStart}→{report.meterEnd}
+        客車担当: {report.mainEmployee.familyName} {report.mainEmployee.givenName}
+        {report.escortVehicle ? ` / 随伴: ${report.escortVehicle.label}` : " / 随伴: 未設定"} / メーター {report.meterStart}→{report.meterEnd}
       </p>
 
       <div className="settings-section-panel" style={{ marginBottom: "1rem" }}>
         <h3 className="settings-subtitle" style={{ marginTop: 0 }}>
           勤務セッション（この日報で固定）
         </h3>
-        <p className="settings-hint">ペア・随伴車は途中で変えたいときだけ保存してください。次の運行入力ではそのまま引き継がれます。</p>
+        <p className="settings-hint">
+          ペアはこの日報内で変更できます。随伴車を変える場合は、客車担当と随伴車の組み合わせごとに日報が分かれるため、新しい日報を作成してください（一覧で同じ事業日・担当・随伴の組が重ならないようにします）。
+        </p>
         <Err msg={sessionErr} />
         <div className="settings-form">
           <label>ペア（乗務員）</label>
@@ -859,12 +894,12 @@ export default function DailyReportDetailPage(): JSX.Element {
       </div>
 
       <div style={{ marginBottom: "0.75rem" }}>
-        <button type="button" className="settings-primary" disabled={addTripBusy} onClick={() => void openNewTripDialog()}>
+        <button type="button" className="settings-primary" disabled={addTripBusy || tripActionBusy} onClick={() => void openNewTripDialog()}>
           {addTripBusy ? "準備中…" : "運行を追加"}
         </button>
       </div>
 
-      {report.trips.length === 0 ? <p className="settings-hint">運行がまだありません。「運行を追加」から入力してください。</p> : null}
+      {report.trips.length === 0 && !addTripOpen ? <p className="settings-hint">運行がまだありません。「運行を追加」から入力してください。</p> : null}
 
       {report.trips.length > 0 ? (
         <div className="settings-section-panel trip-history-wrap" style={{ marginBottom: "1rem" }}>
@@ -874,6 +909,10 @@ export default function DailyReportDetailPage(): JSX.Element {
           <p className="settings-hint" style={{ marginTop: 0 }}>
             行をタップすると修正ダイアログが開きます{addTripOpen ? "（運行追加中は一覧から開けません）" : ""}。
           </p>
+          {tableTrips.length === 0 && addTripOpen ? (
+            <p className="settings-hint">追加中の運行は「送信」するまで一覧に表示されません。閉じると入力は破棄されます。</p>
+          ) : null}
+          {tableTrips.length > 0 ? (
           <table className="trip-history-table">
             <thead>
               <tr>
@@ -883,13 +922,16 @@ export default function DailyReportDetailPage(): JSX.Element {
                 <th>経由地</th>
                 <th>到着場所</th>
                 <th className="trip-history-th-narrow">金額</th>
+                <th className="trip-history-th-actions">操作</th>
               </tr>
             </thead>
             <tbody>
-              {report.trips.map((t) => {
+              {tableTrips.map((t) => {
                 const rowDisabled = addTripOpen;
                 const startLabel = formatTripStartDisplay(t.departedAt);
                 const viaLabel = viaSummaryFromTrip(t);
+                const clientLabel = t.clientName?.trim() ? t.clientName : "（未入力）";
+                const delSummary = `${startLabel} ${clientLabel}`;
                 return (
                   <tr
                     key={t.id}
@@ -912,8 +954,8 @@ export default function DailyReportDetailPage(): JSX.Element {
                     <td className="trip-history-cell-clip" title={startLabel}>
                       {startLabel}
                     </td>
-                    <td className="trip-history-cell-clip" title={t.clientName || "（未入力）"}>
-                      {t.clientName?.trim() ? t.clientName : "（未入力）"}
+                    <td className="trip-history-cell-clip" title={clientLabel}>
+                      {clientLabel}
                     </td>
                     <td className="trip-history-cell-clip" title={t.origin}>
                       {t.origin?.trim() ? t.origin : "—"}
@@ -925,11 +967,25 @@ export default function DailyReportDetailPage(): JSX.Element {
                       {t.destination?.trim() ? t.destination : "—"}
                     </td>
                     <td className="trip-history-td-yen">{t.fareYen.toLocaleString("ja-JP")}円</td>
+                    <td className="trip-history-td-actions">
+                      <button
+                        type="button"
+                        className="settings-secondary"
+                        disabled={rowDisabled || tripActionBusy}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void deleteTripLeg(t.id, delSummary);
+                        }}
+                      >
+                        削除
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          ) : null}
         </div>
       ) : null}
 
@@ -939,7 +995,7 @@ export default function DailyReportDetailPage(): JSX.Element {
           style={{ zIndex: 105 }}
           role="presentation"
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget) closeAddTripDialog();
+            if (e.target === e.currentTarget) void discardAddTripDraft();
           }}
         >
           <div
@@ -952,7 +1008,7 @@ export default function DailyReportDetailPage(): JSX.Element {
             <h2 id="dr-add-trip-title" className="pricing-modal-title">
               運行を追加
             </h2>
-            <p className="settings-hint">入力後「送信」で保存します。閉じた場合も空の運行は一覧に残ります。</p>
+            <p className="settings-hint">入力後「送信」で保存すると運行一覧に表示されます。閉じると未送信の運行は破棄されます。</p>
             <div className="attend-shift-dialog-scroll" style={{ display: "flex", flexDirection: "column", gap: "0.5rem", paddingTop: "0.35rem" }}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
                 <button type="button" className="settings-secondary" disabled={schedulePickLoading} onClick={() => void openSchedulePicker()}>
@@ -968,7 +1024,7 @@ export default function DailyReportDetailPage(): JSX.Element {
                 sectionTitle="運行入力"
                 schedulePrefill={schedulePrefill}
                 onSubmitted={async () => {
-                  closeAddTripDialog();
+                  clearAddTripUi();
                   await load();
                   setContinueOpen(true);
                   setContinueStep("choose");
@@ -976,7 +1032,7 @@ export default function DailyReportDetailPage(): JSX.Element {
               />
             </div>
             <div className="pricing-modal-actions">
-              <button type="button" className="settings-secondary" onClick={() => closeAddTripDialog()}>
+              <button type="button" className="settings-secondary" disabled={tripActionBusy} onClick={() => void discardAddTripDraft()}>
                 閉じる
               </button>
             </div>

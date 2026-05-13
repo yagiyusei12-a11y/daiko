@@ -13,6 +13,7 @@ type ReportRow = {
   meterStart: number;
   meterEnd: number;
   mainEmployeeName: string;
+  escortVehicleLabel: string | null;
 };
 
 export default function DailyReportsMenuPage(): JSX.Element {
@@ -21,6 +22,7 @@ export default function DailyReportsMenuPage(): JSX.Element {
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [vehicles, setVehicles] = useState<{ id: string; label: string }[]>([]);
   const [employees, setEmployees] = useState<{ id: string; familyName: string; givenName: string }[]>([]);
+  const [passengerDrivers, setPassengerDrivers] = useState<{ id: string; familyName: string; givenName: string }[]>([]);
   const [businessDate, setBusinessDate] = useState(tokyoTodayYmd);
   const [employeeId, setEmployeeId] = useState("");
   const [partnerId, setPartnerId] = useState("");
@@ -30,17 +32,23 @@ export default function DailyReportsMenuPage(): JSX.Element {
   const [createOpen, setCreateOpen] = useState(false);
 
   const load = useCallback(async () => {
-    const [r1, r2, r3] = await Promise.all([
+    const [r1, r2, r3, r4] = await Promise.all([
       apiFetch<{ reports: ReportRow[] }>(`/daily-reports?businessDate=${encodeURIComponent(businessDate)}`),
       apiFetch<{ vehicles: { id: string; label: string }[] }>("/settings/vehicles"),
       apiFetch<{ employees: { id: string; familyName: string; givenName: string }[] }>("/settings/employees"),
+      apiFetch<{ employees: { id: string; familyName: string; givenName: string }[] }>("/settings/employees?forPassengerDriver=1"),
     ]);
     if (r1.ok) setReports(r1.data.reports);
     else setErr(r1.error);
     if (r2.ok) setVehicles(r2.data.vehicles);
-    if (r3.ok) {
-      setEmployees(r3.data.employees);
-      setEmployeeId((e) => e || r3.data.employees[0]?.id || "");
+    if (r3.ok) setEmployees(r3.data.employees);
+    if (r4.ok) {
+      setPassengerDrivers(r4.data.employees);
+      setEmployeeId((cur) => {
+        const list = r4.data.employees;
+        if (list.some((x) => x.id === cur)) return cur;
+        return list[0]?.id || "";
+      });
     }
   }, [businessDate]);
 
@@ -50,7 +58,7 @@ export default function DailyReportsMenuPage(): JSX.Element {
 
   async function create(): Promise<void> {
     if (!employeeId) {
-      setErr("乗務（主）を選んでください");
+      setErr("客車担当者を選んでください（第二種免許を登録した従業員のみ表示されます）");
       return;
     }
     setBusy(true);
@@ -73,8 +81,9 @@ export default function DailyReportsMenuPage(): JSX.Element {
     }
   }
 
-  async function deleteReport(reportId: string, mainName: string): Promise<void> {
-    if (!window.confirm(`「${mainName}」の日報を削除しますか？\n運行データもすべて失われます。`)) return;
+  async function deleteReport(reportId: string, mainName: string, escortLabel: string | null): Promise<void> {
+    const esc = escortLabel?.trim() ? `随伴: ${escortLabel}` : "随伴: 未設定";
+    if (!window.confirm(`「${mainName}」(${esc})の日報を削除しますか？\n運行データもすべて失われます。`)) return;
     setBusy(true);
     setErr(null);
     const r = await apiFetch(`/daily-reports/${reportId}`, { method: "DELETE" });
@@ -113,7 +122,10 @@ export default function DailyReportsMenuPage(): JSX.Element {
             {reports.map((r) => (
               <li key={r.id} className="settings-list-item-split">
                 <Link className="settings-list-btn" to={`/daily-reports/${r.id}`} style={{ textDecoration: "none", color: "inherit", flex: 1 }}>
-                  <span>{r.mainEmployeeName}</span>
+                  <span>
+                    {r.mainEmployeeName}
+                    {r.escortVehicleLabel ? ` · ${r.escortVehicleLabel}` : " · 随伴未設定"}
+                  </span>
                   <span className="settings-list-meta">
                     メーター {r.meterStart}→{r.meterEnd}
                   </span>
@@ -123,7 +135,7 @@ export default function DailyReportsMenuPage(): JSX.Element {
                   className="settings-secondary settings-list-delete-btn"
                   disabled={busy}
                   aria-label={`${r.mainEmployeeName}の日報を削除`}
-                  onClick={() => void deleteReport(r.id, r.mainEmployeeName)}
+                  onClick={() => void deleteReport(r.id, r.mainEmployeeName, r.escortVehicleLabel)}
                 >
                   削除
                 </button>
@@ -158,15 +170,16 @@ export default function DailyReportsMenuPage(): JSX.Element {
               <div className="settings-form">
                 <label htmlFor="dr-create-date">事業日</label>
                 <input id="dr-create-date" type="date" value={businessDate} onChange={(e) => setBusinessDate(e.target.value)} />
-                <label htmlFor="dr-create-emp">乗務（主）</label>
+                <label htmlFor="dr-create-emp">客車担当者</label>
                 <select id="dr-create-emp" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                   <option value="">選択</option>
-                  {employees.map((e) => (
+                  {passengerDrivers.map((e) => (
                     <option key={e.id} value={e.id}>
                       {e.familyName} {e.givenName}
                     </option>
                   ))}
                 </select>
+                <p className="settings-hint">第二種免許を従業員登録に記載した人のみ選べます。</p>
                 <label htmlFor="dr-create-partner">ペア（任意）</label>
                 <select
                   id="dr-create-partner"

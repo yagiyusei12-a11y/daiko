@@ -15,6 +15,7 @@ import { coercePricingPrefs, mergePricingPrefsUpdate } from "../lib/pricing-pref
 import { prisma } from "../db.js";
 import { reverseGeocodeTownJaCached } from "../lib/reverse-geocode-cache.js";
 import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
+import { hasSecondClassDriverLicense } from "../lib/employee-license.js";
 
 type JsonObj = Record<string, unknown>;
 
@@ -286,15 +287,17 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     return reply.send({ ok: true });
   });
 
-  app.get("/employees", async (req) => {
+  app.get<{ Querystring: { forPassengerDriver?: string } }>("/employees", async (req) => {
     const { tenantId } = jwtUser(req);
+    const passengerOnly = String(req.query?.forPassengerDriver ?? "").trim() === "1";
     const rows = await prisma.employee.findMany({
-      where: { tenantId },
+      where: { tenantId, ...(passengerOnly ? { status: "ACTIVE" as const } : {}) },
       orderBy: { createdAt: "desc" },
       include: { linkedUsers: { select: { id: true, email: true } } },
     });
+    const filtered = passengerOnly ? rows.filter((e) => hasSecondClassDriverLicense(e.registerExtension)) : rows;
     return {
-      employees: rows.map((e) => ({
+      employees: filtered.map((e) => ({
         id: e.id,
         familyName: e.familyName,
         givenName: e.givenName,

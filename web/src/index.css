@@ -1091,6 +1091,22 @@ td {
   text-align: right !important;
 }
 
+.trip-history-th-actions {
+  white-space: nowrap;
+  text-align: center !important;
+}
+
+.trip-history-td-actions {
+  white-space: nowrap;
+  text-align: center !important;
+  cursor: default;
+}
+
+.trip-history-td-actions .settings-secondary {
+  font-size: 0.82rem;
+  padding: 0.25rem 0.45rem;
+}
+
 .trip-history-tr {
   cursor: pointer;
 }
