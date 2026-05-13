@@ -2,8 +2,8 @@ import type { FastifyInstance } from "fastify";
 import type { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { authenticate, jwtUser } from "../auth/pre.js";
-import { JP_DRIVER_LICENSE_CLASSES, JP_PLATE_REGION_NAMES } from "../lib/jp-constants.js";
-import { JP_LICENSE_CONDITION_OPTIONS } from "../lib/jp-license-conditions.js";
+import { JP_DRIVER_LICENSE_CLASSES_EMPLOYEE, JP_PLATE_REGION_NAMES } from "../lib/jp-constants.js";
+import { JP_LICENSE_CONDITION_OPTIONS, licenseConditionOptionsForKind } from "../lib/jp-license-conditions.js";
 import {
   coerceBusinessBasicsFromCustomJson,
   mergeBusinessBasicsIntoCustomJson,
@@ -665,10 +665,17 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
   });
 
   app.get("/meta", async () => {
+    const licenseClasses = JP_DRIVER_LICENSE_CLASSES_EMPLOYEE;
+    const licenseConditionOptionsByKind: Record<string, string[]> = {};
+    for (const c of licenseClasses) {
+      licenseConditionOptionsByKind[c] = licenseConditionOptionsForKind(c);
+    }
     return {
-      licenseClasses: JP_DRIVER_LICENSE_CLASSES,
+      licenseClasses,
       plateRegions: JP_PLATE_REGION_NAMES,
+      /** 旧データの免許種別が一覧外のときのフォールバック用（全候補） */
       licenseConditionOptions: JP_LICENSE_CONDITION_OPTIONS,
+      licenseConditionOptionsByKind,
     };
   });
 }

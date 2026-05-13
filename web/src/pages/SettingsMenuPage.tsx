@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth";
 import { apiFetch } from "../api";
@@ -145,6 +145,7 @@ export default function SettingsMenuPage(): JSX.Element {
   const [licenseClasses, setLicenseClasses] = useState<string[]>([]);
   const [plateRegions, setPlateRegions] = useState<string[]>([]);
   const [licenseConditionOptions, setLicenseConditionOptions] = useState<string[]>([]);
+  const [licenseConditionOptionsByKind, setLicenseConditionOptionsByKind] = useState<Record<string, string[]>>({});
   const lastFetchedZipRef = useRef("");
 
   const [company, setCompany] = useState<CompanyDto | null>(null);
@@ -202,11 +203,13 @@ export default function SettingsMenuPage(): JSX.Element {
       licenseClasses: string[];
       plateRegions: string[];
       licenseConditionOptions: string[];
+      licenseConditionOptionsByKind?: Record<string, string[]>;
     }>("/settings/meta");
     if (r.ok) {
       setLicenseClasses(r.data.licenseClasses);
       setPlateRegions(r.data.plateRegions);
       setLicenseConditionOptions(r.data.licenseConditionOptions ?? []);
+      setLicenseConditionOptionsByKind(r.data.licenseConditionOptionsByKind ?? {});
     }
   }, []);
 
@@ -336,6 +339,15 @@ export default function SettingsMenuPage(): JSX.Element {
     }
     const ex = e.registerExtension;
     setEmpSel(e.id);
+    const rawLc = extLicenseConditions(ex);
+    const lk = extStr(ex, "licenseKind");
+    let licenseConditions = rawLc;
+    if (licenseClasses.length > 0 && licenseConditionOptions.length > 0) {
+      const allowedForLoad = licenseClasses.includes(lk)
+        ? (licenseConditionOptionsByKind[lk] ?? [])
+        : licenseConditionOptions;
+      licenseConditions = rawLc.filter((c) => allowedForLoad.includes(c));
+    }
     setEmpForm({
       loginEmail: e.loginEmail ?? "",
       password: "",
@@ -353,7 +365,7 @@ export default function SettingsMenuPage(): JSX.Element {
       licenseKind: extStr(ex, "licenseKind"),
       licenseNumber: extStr(ex, "licenseNumber"),
       licenseExpiresOn: extStr(ex, "licenseExpiresOn"),
-      licenseConditions: extLicenseConditions(ex),
+      licenseConditions,
       licensePhotoFrontDataUrl: extStr(ex, "licensePhotoFrontDataUrl") || extStr(ex, "licensePhotoDataUrl"),
       licensePhotoBackDataUrl: extStr(ex, "licensePhotoBackDataUrl"),
       adminMaster: Boolean(e.adminMaster),
@@ -543,6 +555,16 @@ export default function SettingsMenuPage(): JSX.Element {
     }));
   }
 
+  const licenseConditionChoices = useMemo(() => {
+    const lk = empForm.licenseKind.trim();
+    if (!lk) return [];
+    if (licenseClasses.length > 0 && licenseClasses.includes(empForm.licenseKind)) {
+      return licenseConditionOptionsByKind[empForm.licenseKind] ?? [];
+    }
+    if (licenseConditionOptions.length > 0) return licenseConditionOptions;
+    return [];
+  }, [empForm.licenseKind, licenseClasses, licenseConditionOptionsByKind, licenseConditionOptions]);
+
   const companyPanel = company ? (() => {
     const zipDigits = (company.legalPostalCode ?? "").replace(/\D/g, "").slice(0, 7);
     const zip3 = zipDigits.slice(0, 3);
@@ -731,8 +753,34 @@ export default function SettingsMenuPage(): JSX.Element {
             <label>緊急連絡先 TEL</label>
             <input value={empForm.emergencyTel} onChange={(e) => setEmpForm({ ...empForm, emergencyTel: e.target.value })} />
             <label>免許種別（一番上位の種別を選択）</label>
-            <select value={empForm.licenseKind} onChange={(e) => setEmpForm({ ...empForm, licenseKind: e.target.value })}>
+            <select
+              value={empForm.licenseKind}
+              onChange={(e) => {
+                const next = e.target.value;
+                setEmpForm((f) => {
+                  let allowed: string[] = [];
+                  if (next.trim()) {
+                    if (licenseClasses.length > 0 && licenseClasses.includes(next)) {
+                      allowed = licenseConditionOptionsByKind[next] ?? [];
+                    } else {
+                      allowed = licenseConditionOptions;
+                    }
+                  }
+                  return {
+                    ...f,
+                    licenseKind: next,
+                    licenseConditions:
+                      allowed.length > 0 ? f.licenseConditions.filter((c) => allowed.includes(c)) : f.licenseConditions,
+                  };
+                });
+              }}
+            >
               <option value="">選択</option>
+              {empForm.licenseKind && licenseClasses.length > 0 && !licenseClasses.includes(empForm.licenseKind) ? (
+                <option value={empForm.licenseKind}>
+                  {empForm.licenseKind}（登録済・種別は下の一覧から更新してください）
+                </option>
+              ) : null}
               {licenseClasses.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -757,8 +805,11 @@ export default function SettingsMenuPage(): JSX.Element {
               onChange={(e) => setEmpForm({ ...empForm, licenseExpiresOn: e.target.value })}
             />
             <label>免許の条件・限定等（複数選択）</label>
+            {!empForm.licenseKind.trim() ? (
+              <p className="settings-hint">先に免許種別を選ぶと、この免許であり得る条件・限定の候補だけが表示されます。</p>
+            ) : null}
             <div className="settings-license-conditions">
-              {licenseConditionOptions.map((opt) => (
+              {licenseConditionChoices.map((opt) => (
                 <label key={opt} className="settings-check settings-check--block">
                   <input
                     type="checkbox"

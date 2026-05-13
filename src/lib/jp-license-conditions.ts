@@ -40,3 +40,51 @@ export const JP_LICENSE_CONDITION_OPTIONS: string[] = [
   "自動運転補助装置",
   "その他（備考欄に記載）",
 ];
+
+const EMPLOYEE_LICENSE_KINDS = new Set([
+  "大型免許",
+  "中型免許",
+  "準中型免許",
+  "普通免許",
+  "大型第二種免許",
+  "普通第二種免許",
+]);
+
+const SAME_RANK_LONG_FOUR = new Set([
+  "運転に際し必要な同一順位の条件が2以上付加されている者には準中型自動車・中型自動車・大型自動車及びけん引用大型等以外の運転に限定",
+  "運転に際し必要な同一順位の条件が2以上付加されている者には中型自動車・大型自動車及びけん引用大型等以外の運転に限定",
+  "運転に際し必要な同一順位の条件が2以上付加されている者には大型自動車及びけん引用大型等以外の運転に限定",
+  "運転に際し必要な同一順位の条件が2以上付加されている者にはけん引用大型等以外の運転に限定",
+]);
+
+const LIMIT_RELEASE = new Set(["中型自動車の限定解除中", "大型自動車の限定解除中", "けん引の限定解除中"]);
+
+const SECOND_CLASS_CONDITION = "第二種免許の条件（中型・大型・けん引）";
+
+/**
+ * 設定画面で選べる従業員免許種別ごとに、証票に付記され得る条件・限定の候補だけを返す（JP_LICENSE_CONDITION_OPTIONS の順序を維持）。
+ */
+export function licenseConditionOptionsForKind(licenseKind: string): string[] {
+  const k = String(licenseKind ?? "").trim();
+  if (!EMPLOYEE_LICENSE_KINDS.has(k)) return [];
+
+  const isSecond = k === "大型第二種免許" || k === "普通第二種免許";
+
+  return JP_LICENSE_CONDITION_OPTIONS.filter((opt) => {
+    if (opt === SECOND_CLASS_CONDITION) return isSecond;
+    if (SAME_RANK_LONG_FOUR.has(opt)) return !isSecond;
+
+    if (LIMIT_RELEASE.has(opt)) {
+      if (isSecond) return false;
+      if (k === "普通免許") return false;
+      if (k === "準中型免許") return opt === "中型自動車の限定解除中";
+      if (k === "中型免許") return opt === "中型自動車の限定解除中" || opt === "大型自動車の限定解除中";
+      if (k === "大型免許") return true;
+      return false;
+    }
+
+    if (opt === "普通自動車は除く") return k !== "普通免許";
+
+    return true;
+  });
+}

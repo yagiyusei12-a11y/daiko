@@ -1,3 +1,13 @@
+/** 従業員名簿・設定画面の「免許種別」で選ばせる範囲（貸切運転代行に関係する第一種・第二種のみ） */
+export const JP_DRIVER_LICENSE_CLASSES_EMPLOYEE: string[] = [
+  "大型免許",
+  "中型免許",
+  "準中型免許",
+  "普通免許",
+  "大型第二種免許",
+  "普通第二種免許",
+];
+
 /** 運転免許の種別（設定 UI 用。必要に応じて追記） */
 export const JP_DRIVER_LICENSE_CLASSES: string[] = [
   "原動機付自転車",
