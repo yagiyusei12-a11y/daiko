@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { apiFetchText } from "../api";
 import { Card, Tabs, type TabDef } from "../ui";
 
 function PanelHint({ children }: { children: React.ReactNode }): JSX.Element {
@@ -8,6 +9,29 @@ function PanelHint({ children }: { children: React.ReactNode }): JSX.Element {
 
 export default function DocumentsPage(): JSX.Element {
   const [tab, setTab] = useState("nippo");
+  const [rosterErr, setRosterErr] = useState<string | null>(null);
+  const [rosterBusy, setRosterBusy] = useState(false);
+  const [includeRetired, setIncludeRetired] = useState(false);
+
+  async function openEmployeeRosterPrint(): Promise<void> {
+    setRosterErr(null);
+    setRosterBusy(true);
+    const q = includeRetired ? "?includeRetired=1" : "";
+    const r = await apiFetchText(`/documents/employee-roster-print.html${q}`);
+    setRosterBusy(false);
+    if (!r.ok) {
+      setRosterErr(r.error);
+      return;
+    }
+    const w = window.open("", "_blank", "noopener,noreferrer");
+    if (!w) {
+      setRosterErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
+      return;
+    }
+    w.document.open();
+    w.document.write(r.text);
+    w.document.close();
+  }
 
   const tabItems: TabDef[] = [
     {
@@ -29,10 +53,28 @@ export default function DocumentsPage(): JSX.Element {
       label: "従業員名簿",
       children: (
         <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
-          <PanelHint>従事者の氏名・住所・免許情報などは「設定」で従業員を登録すると名簿用データとして利用できます。</PanelHint>
-          <p style={{ marginTop: "0.75rem" }}>
+          <PanelHint>
+            従事者の氏名・ふりがな・住所・連絡先・免許・緊急連絡先などは「設定」の従業員登録に入力すると、この名簿の印刷に反映されます（免許証の表裏は写真アップロードがある場合のみ印刷枠に表示されます）。
+          </PanelHint>
+          <p style={{ marginTop: "0.75rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
+            <button type="button" className="settings-primary" disabled={rosterBusy} onClick={() => void openEmployeeRosterPrint()}>
+              {rosterBusy ? "取得中…" : "従事者名簿を印刷"}
+            </button>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={includeRetired}
+                onChange={(e) => setIncludeRetired(e.target.checked)}
+              />
+              退職者も含める
+            </label>
             <Link to="/settings">設定（従業員・車両）へ</Link>
           </p>
+          {rosterErr ? (
+            <p className="settings-hint" style={{ color: "var(--danger, #b00020)", marginTop: "0.5rem" }}>
+              {rosterErr}
+            </p>
+          ) : null}
         </div>
       ),
     },
