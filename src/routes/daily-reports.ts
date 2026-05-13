@@ -47,7 +47,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         businessDate: r.businessDate,
         meterStart: r.meterStart,
         meterEnd: r.meterEnd,
-        vehicleLabel: r.vehicle.label,
+        vehicleLabel: r.vehicle?.label ?? "—",
         mainEmployeeName: `${r.mainEmployee.familyName} ${r.mainEmployee.givenName}`,
       })),
     };
@@ -57,16 +57,21 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     const { tenantId } = jwtUser(req);
     const b = (req.body || {}) as Record<string, unknown>;
     const businessDate = String(b.businessDate || "").trim();
-    const vehicleId = String(b.vehicleId || "").trim();
+    const vehicleIdRaw = String(b.vehicleId ?? "").trim();
     const mainEmployeeId = String(b.mainEmployeeId || "").trim();
     const meterStart = Math.max(0, Math.floor(Number(b.meterStart) || 0));
     const meterEnd = Math.max(0, Math.floor(Number(b.meterEnd) || 0));
-    if (!businessDate || !vehicleId || !mainEmployeeId) {
-      return reply.code(400).send({ error: "businessDate, vehicleId, mainEmployeeId required" });
+    if (!businessDate || !mainEmployeeId) {
+      return reply.code(400).send({ error: "businessDate, mainEmployeeId required" });
     }
-    const veh = await prisma.vehicle.findFirst({ where: { id: vehicleId, tenantId } });
+    let vehicleId: string | null = null;
+    if (vehicleIdRaw) {
+      const veh = await prisma.vehicle.findFirst({ where: { id: vehicleIdRaw, tenantId } });
+      if (!veh) return reply.code(400).send({ error: "invalid vehicleId" });
+      vehicleId = vehicleIdRaw;
+    }
     const emp = await prisma.employee.findFirst({ where: { id: mainEmployeeId, tenantId } });
-    if (!veh || !emp) return reply.code(400).send({ error: "invalid vehicle or employee" });
+    if (!emp) return reply.code(400).send({ error: "invalid employee" });
 
     let partnerEmployeeId: string | null = null;
     if (b.partnerEmployeeId !== undefined && b.partnerEmployeeId !== null && String(b.partnerEmployeeId).trim()) {
@@ -113,6 +118,18 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     if (!dr) return reply.code(404).send({ error: "not found" });
     const b = req.body || {};
     const data: Prisma.DailyReportUpdateInput = {};
+
+    if (b.vehicleId !== undefined) {
+      const raw = b.vehicleId;
+      if (raw === null || raw === "") {
+        data.vehicle = { disconnect: true };
+      } else {
+        const vid = String(raw).trim();
+        const v = await prisma.vehicle.findFirst({ where: { id: vid, tenantId } });
+        if (!v) return reply.code(400).send({ error: "invalid vehicleId" });
+        data.vehicle = { connect: { id: vid } };
+      }
+    }
 
     if (b.partnerEmployeeId !== undefined) {
       const raw = b.partnerEmployeeId;

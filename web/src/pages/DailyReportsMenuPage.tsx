@@ -23,7 +23,6 @@ export default function DailyReportsMenuPage(): JSX.Element {
   const [vehicles, setVehicles] = useState<{ id: string; label: string }[]>([]);
   const [employees, setEmployees] = useState<{ id: string; familyName: string; givenName: string }[]>([]);
   const [businessDate, setBusinessDate] = useState(tokyoTodayYmd);
-  const [vehicleId, setVehicleId] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [partnerId, setPartnerId] = useState("");
   const [escortVehicleId, setEscortVehicleId] = useState("");
@@ -41,10 +40,7 @@ export default function DailyReportsMenuPage(): JSX.Element {
     ]);
     if (r1.ok) setReports(r1.data.reports);
     else setErr(r1.error);
-    if (r2.ok) {
-      setVehicles(r2.data.vehicles);
-      setVehicleId((v) => v || r2.data.vehicles[0]?.id || "");
-    }
+    if (r2.ok) setVehicles(r2.data.vehicles);
     if (r3.ok) {
       setEmployees(r3.data.employees);
       setEmployeeId((e) => e || r3.data.employees[0]?.id || "");
@@ -56,8 +52,8 @@ export default function DailyReportsMenuPage(): JSX.Element {
   }, [load]);
 
   async function create(): Promise<void> {
-    if (!vehicleId || !employeeId) {
-      setErr("車両と乗務員を選んでください");
+    if (!employeeId) {
+      setErr("乗務（主）を選んでください");
       return;
     }
     setBusy(true);
@@ -66,7 +62,6 @@ export default function DailyReportsMenuPage(): JSX.Element {
       method: "POST",
       json: {
         businessDate,
-        vehicleId,
         mainEmployeeId: employeeId,
         meterStart,
         meterEnd,
@@ -151,15 +146,6 @@ export default function DailyReportsMenuPage(): JSX.Element {
               <div className="settings-form">
                 <label htmlFor="dr-create-date">事業日</label>
                 <input id="dr-create-date" type="date" value={businessDate} onChange={(e) => setBusinessDate(e.target.value)} />
-                <label htmlFor="dr-create-veh">客車</label>
-                <select id="dr-create-veh" value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
-                  <option value="">選択</option>
-                  {vehicles.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.label}
-                    </option>
-                  ))}
-                </select>
                 <label htmlFor="dr-create-emp">乗務（主）</label>
                 <select id="dr-create-emp" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                   <option value="">選択</option>

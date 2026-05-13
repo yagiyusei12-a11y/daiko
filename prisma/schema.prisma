@@ -450,8 +450,8 @@ model DailyReport {
   tenantId          String
   tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   businessDate      String
-  vehicleId         String
-  vehicle           Vehicle   @relation("DailyReportMainVehicle", fields: [vehicleId], references: [id], onDelete: Restrict)
+  vehicleId         String?
+  vehicle           Vehicle?  @relation("DailyReportMainVehicle", fields: [vehicleId], references: [id], onDelete: Restrict)
   mainEmployeeId    String
   mainEmployee      Employee  @relation("DailyReportMain", fields: [mainEmployeeId], references: [id], onDelete: Restrict)
   partnerEmployeeId String?

@@ -39,14 +39,14 @@ type ReportDetail = {
   businessDate: string;
   meterStart: number;
   meterEnd: number;
-  vehicleId: string;
+  vehicleId: string | null;
   mainEmployeeId: string;
   partnerEmployeeId: string | null;
   escortVehicleId: string | null;
   escortOdometerStartM: number | null;
   escortOdometerEndM: number | null;
   trips: TripLegFull[];
-  vehicle: VehMini;
+  vehicle: VehMini | null;
   escortVehicle: VehMini | null;
   mainEmployee: EmpMini;
   partnerEmployee: EmpMini | null;
@@ -419,6 +419,7 @@ export default function DailyReportDetailPage(): JSX.Element {
   const [vehicles, setVehicles] = useState<VehMini[]>([]);
 
   const [partnerId, setPartnerId] = useState<string>("");
+  const [mainVehicleId, setMainVehicleId] = useState<string>("");
   const [escortVehicleId, setEscortVehicleId] = useState<string>("");
   const [escortOdoStart, setEscortOdoStart] = useState<number>(0);
   const [sessionBusy, setSessionBusy] = useState(false);
@@ -451,6 +452,7 @@ export default function DailyReportDetailPage(): JSX.Element {
     setVehicles(r.data.vehicles ?? []);
     const rep = r.data.report;
     setPartnerId(rep.partnerEmployeeId ?? "");
+    setMainVehicleId(rep.vehicleId ?? "");
     setEscortVehicleId(rep.escortVehicleId ?? "");
     setEscortOdoStart(rep.escortOdometerStartM ?? 0);
     setErr(null);
@@ -481,6 +483,10 @@ export default function DailyReportDetailPage(): JSX.Element {
     const r = await apiFetch<{ id: string }>(`/daily-reports/${reportId}/trips`, { method: "POST", json: {} });
     if (!r.ok) setErr(r.error);
     else await load();
+  }
+
+  async function saveMainVehicle(): Promise<void> {
+    await patchSession({ vehicleId: mainVehicleId || null });
   }
 
   async function savePartner(): Promise<void> {
@@ -526,17 +532,32 @@ export default function DailyReportDetailPage(): JSX.Element {
       <p className="settings-hint" style={{ marginTop: 0 }}>
         <Link to="/daily-reports">一覧へ</Link>
         {" · "}
-        客車: {report.vehicle.label} / 乗務: {report.mainEmployee.familyName} {report.mainEmployee.givenName} / メーター {report.meterStart}→{report.meterEnd}
+        客車: {report.vehicle ? `${report.vehicle.label}${report.vehicle.plate ? `（${report.vehicle.plate}）` : ""}` : "未設定"} / 乗務:{" "}
+        {report.mainEmployee.familyName} {report.mainEmployee.givenName} / メーター {report.meterStart}→{report.meterEnd}
       </p>
 
       <div className="settings-section-panel" style={{ marginBottom: "1rem" }}>
         <h3 className="settings-subtitle" style={{ marginTop: 0 }}>
           勤務セッション（この日報で固定）
         </h3>
-        <p className="settings-hint">ペア・随伴車は途中で変えたいときだけ保存してください。次の運行入力ではそのまま引き継がれます。</p>
+        <p className="settings-hint">ペア・客車・随伴車は途中で変えたいときだけ保存してください。次の運行入力ではそのまま引き継がれます。</p>
         <Err msg={sessionErr} />
         <div className="settings-form">
-          <label>ペア（乗務員）</label>
+          <label>客車</label>
+          <select value={mainVehicleId} onChange={(e) => setMainVehicleId(e.target.value)}>
+            <option value="">未設定</option>
+            {vehicles.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.label}
+                {v.plate ? `（${v.plate}）` : ""}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="settings-secondary" disabled={sessionBusy} onClick={() => void saveMainVehicle()}>
+            客車を保存
+          </button>
+
+          <label style={{ marginTop: "0.75rem" }}>ペア（乗務員）</label>
           <select value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
             <option value="">未設定</option>
             {employees
