@@ -88,88 +88,213 @@ function safeDataUrlImg(src: string): string {
 }
 
 const PRINT_CSS = `
-@page { size: A4; margin: 10mm; }
+@page { size: A4 portrait; margin: 10mm 12mm; }
 @media print {
   .no-print { display: none !important; }
-  body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+    background: #fff !important;
+    padding: 0 !important;
+  }
+  .sheet {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+}
+@media screen {
+  body {
+    background: linear-gradient(165deg, #f1f5f9 0%, #e2e8f0 50%, #f8fafc 100%);
+    min-height: 100vh;
+  }
 }
 body {
-  font-family: "MS P Gothic","MS PGothic","Yu Gothic","Meiryo",sans-serif;
+  font-family: "MS PMincho","ＭＳ Ｐ明朝","MS P Gothic","MS PGothic","Yu Gothic","Meiryo",sans-serif;
   font-size: 10.5pt;
-  color: #000;
+  color: #334155;
   margin: 0;
-  padding: 8px 10px;
-}
-.toolbar { margin-bottom: 8px; }
-.toolbar button { padding: 6px 12px; font-size: 12px; cursor: pointer; font-family: inherit; }
-.sheet {
-  max-width: 185mm;
-  margin: 0 auto 0;
-  page-break-after: always;
-  border: 2px solid #000;
-  padding: 8px 10px 10px;
+  padding: 12px 14px 20px;
   box-sizing: border-box;
+  line-height: 1.45;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.toolbar { margin-bottom: 10px; }
+.toolbar button {
+  padding: 8px 16px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  background: #1e293b;
+  color: #f8fafc;
+}
+.toolbar button:hover { background: #334155; }
+.sheet {
+  max-width: 186mm;
+  margin: 0 auto 16px;
+  page-break-after: always;
+  border: 1px solid #64748b;
+  padding: 12px 14px 14px;
+  box-sizing: border-box;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(15,23,42,.06), 0 8px 20px rgba(15,23,42,.05);
 }
 .sheet:last-of-type { page-break-after: auto; }
-.rtop { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 4px; }
-.rret { font-size: 9pt; text-align: right; flex: 1; }
-.rdates { border-collapse: collapse; font-size: 9pt; }
-.rdates td, .rdates th { border: 1px solid #000; padding: 2px 6px; vertical-align: middle; }
-.rdates .dl { background: #d7e4f7; font-weight: bold; text-align: center; white-space: nowrap; }
+.rtop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  margin-bottom: 8px;
+}
+.rret {
+  font-size: 8.5pt;
+  text-align: left;
+  color: #64748b;
+  letter-spacing: 0.02em;
+  flex: 0 1 auto;
+  max-width: min(100%, 22em);
+}
+.rdates { border-collapse: collapse; font-size: 9pt; flex: 0 0 auto; margin-left: auto; }
+.rdates td, .rdates th {
+  border: 1px solid #cbd5e1;
+  padding: 5px 10px;
+  vertical-align: middle;
+}
+.rdates .dl {
+  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  color: #1e293b;
+}
+.rdates .rd-val { white-space: nowrap; color: #0f172a; }
 .rtitle {
   text-align: center;
-  font-size: 16pt;
-  font-weight: bold;
-  letter-spacing: 0.35em;
-  margin: 6px 0 10px;
-  text-indent: 0.35em;
+  font-size: 15pt;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-indent: 0.28em;
+  margin: 4px 0 10px;
+  color: #0f172a;
+  font-feature-settings: "palt";
+}
+.r-subtitle {
+  margin: -2px 0 10px;
+  font-size: 9.5pt;
+  color: #475569;
 }
 .rf {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  border: 2px solid #000;
+  border: 1px solid #64748b;
 }
 .rf td, .rf th {
-  border: 1px solid #000;
-  padding: 4px 5px;
+  border: 1px solid #cbd5e1;
+  padding: 7px 8px;
   vertical-align: middle;
   font-size: 10pt;
 }
 .rf .L {
-  background: #d7e4f7;
-  font-weight: bold;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  font-weight: 600;
   text-align: center;
-  width: 5.5em;
+  width: 5.8em;
+  min-width: 4.8em;
+  color: #1e293b;
+  white-space: nowrap;
 }
-.rf .Lwide { background: #d7e4f7; font-weight: bold; text-align: center; width: 7em; }
+.rf .Lwide {
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  font-weight: 600;
+  text-align: center;
+  width: 4.5em;
+  min-width: 3.5em;
+  white-space: nowrap;
+  color: #1e293b;
+}
 .rf .Lvert {
-  background: #d7e4f7;
-  font-weight: bold;
+  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+  font-weight: 600;
   text-align: center;
   writing-mode: vertical-rl;
   text-orientation: upright;
-  width: 1.8em;
-  letter-spacing: 0.15em;
-  padding: 6px 2px;
+  width: 2em;
+  min-width: 1.6em;
+  letter-spacing: 0.12em;
+  padding: 8px 4px;
+  color: #1e293b;
+  border-right-color: #94a3b8;
 }
-.rf .fg { font-size: 9pt; border-bottom: 1px dashed #999; min-height: 1.3em; padding: 2px 4px; }
-.rf .nm { font-size: 11pt; min-height: 1.6em; padding: 4px; }
+.rf .fg {
+  font-size: 9pt;
+  border-bottom: 1px dashed #cbd5e1;
+  min-height: 1.4em;
+  padding: 4px 6px 5px;
+  color: #475569;
+}
+.rf .nm {
+  font-size: 11pt;
+  min-height: 1.5em;
+  padding: 6px 6px 5px;
+  color: #0f172a;
+}
+.cell-nameblock { padding: 0 !important; vertical-align: top; }
+.cell-spacer { min-height: 0.5em; background: #fafafa; }
+.cell-gender {
+  white-space: nowrap;
+  padding: 6px 4px !important;
+}
+.gender-line { display: inline-flex; align-items: baseline; gap: 0.08em; }
+.g-mark { letter-spacing: 0; }
+.g-lbl { font-weight: 500; }
+.g-sep { margin: 0 0.35em; color: #94a3b8; }
+.cell-date { white-space: nowrap; font-variant-numeric: tabular-nums; color: #0f172a; }
+.cell-age { white-space: nowrap; }
+.cell-address { line-height: 1.5; padding: 8px 10px !important; color: #0f172a; }
+.addr-body { display: inline; }
+.cell-tel { padding: 7px 10px !important; white-space: nowrap; color: #0f172a; }
+.cell-emergency {
+  padding: 8px 10px !important;
+  line-height: 1.55;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5em 1.25em;
+  color: #0f172a;
+}
+.em-part { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0.2em; max-width: 100%; }
+.em-lbl { font-weight: 600; color: #475569; flex-shrink: 0; }
+.em-paren { color: #94a3b8; }
+.cell-lic, .cell-lic-cond { line-height: 1.5; padding: 8px 10px !important; vertical-align: top; }
+.cell-lic-cond { word-break: break-word; overflow-wrap: break-word; }
 .rf .cen { text-align: center; }
-.rf .photo { height: 130px; vertical-align: top; padding: 4px; }
+.rf .photo { height: 128px; vertical-align: top; padding: 6px; }
 .rf .photobox {
-  border: 1px dashed #555;
-  height: 118px;
+  border: 1px dashed #94a3b8;
+  height: 116px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fafafa;
+  background: #f8fafc;
   box-sizing: border-box;
+  border-radius: 2px;
 }
 .rf .photobox img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.rf .phlbl { background: #d7e4f7; font-weight: bold; text-align: center; font-size: 9.5pt; }
+.rf .phlbl {
+  background: linear-gradient(180deg, #f1f5f9 0%, #e8edf3 100%);
+  font-weight: 600;
+  text-align: center;
+  font-size: 9.5pt;
+  color: #1e293b;
+}
 .cen { text-align: center; }
-.empty-note { padding: 16px; text-align: center; color: #444; }
+.empty-note { padding: 20px; text-align: center; color: #64748b; }
 `;
 
 function ymdCells(ymd: string): string {
@@ -205,7 +330,6 @@ function buildOneSheet(emp: Employee, ctx: { createdYmd: string; operatorName: s
   const emRel = extStr(ext, "emergencyRelation");
   const emTel = extStr(ext, "emergencyTel");
   const licKind = extStr(ext, "licenseKind");
-  const licNum = extStr(ext, "licenseNumber");
   const licExp = extStr(ext, "licenseExpiresOn");
   const licCond = licenseConditionsText(ext);
   const hasCond = licCond.length > 0;
@@ -220,69 +344,75 @@ function buildOneSheet(emp: Employee, ctx: { createdYmd: string; operatorName: s
   <table class="rdates">
     <tr>
       <td class="dl">作成日</td>
-      <td>${ymdCells(ctx.createdYmd)}</td>
+      <td class="rd-val">${ymdCells(ctx.createdYmd)}</td>
       <td class="dl">修正日</td>
-      <td>${ymdCellsBlank()}</td>
+      <td class="rd-val">${ymdCellsBlank()}</td>
     </tr>
   </table>
 </div>
 <h1 class="rtitle">従　事　者　名　簿</h1>
-${ctx.operatorName ? `<p class="cen" style="margin:-4px 0 8px;font-size:9.5pt">${esc(ctx.operatorName)}</p>` : ""}
+${ctx.operatorName ? `<p class="r-subtitle cen">${esc(ctx.operatorName)}</p>` : ""}
 
 <table class="rf">
   <tr>
     <td class="L" rowspan="2">氏名</td>
-    <td colspan="3" style="padding:0;vertical-align:top">
-      <div class="fg">${furigana ? esc(furigana) : "（　　　　　　　　　　　　　　　　　　　　　　　　　）"}</div>
+    <td colspan="3" class="cell-nameblock">
+      <div class="fg">${furigana ? esc(furigana) : "（ふりがな）"}</div>
       <div class="nm">${esc(fullName)}</div>
     </td>
     <td class="L">性別</td>
-    <td class="cen">${mark("男")}男　・　${mark("女")}女</td>
+    <td class="cen cell-gender">
+      <span class="gender-line"><span class="g-mark">${mark("男")}</span><span class="g-lbl">男</span></span>
+      <span class="g-sep">・</span>
+      <span class="gender-line"><span class="g-mark">${mark("女")}</span><span class="g-lbl">女</span></span>
+    </td>
     <td class="L">生年月日</td>
-    <td class="cen">${ymdCells(birth)}</td>
+    <td class="cen cell-date">${ymdCells(birth)}</td>
   </tr>
   <tr>
-    <td colspan="3"></td>
+    <td colspan="3" class="cell-spacer"></td>
     <td class="L" colspan="2">採用時年齢</td>
-    <td colspan="2" class="cen">満　${esc(ageHire || "　　")}　歳</td>
+    <td colspan="2" class="cen cell-age">満　${esc(ageHire || "　　")}　歳</td>
   </tr>
   <tr>
     <td class="L">住所</td>
-    <td colspan="7">〒　${esc(zip)}　${esc(body)}</td>
+    <td colspan="7" class="cell-address">〒　${esc(zip)}　<span class="addr-body">${esc(body)}</span></td>
   </tr>
   <tr>
     <td class="L" rowspan="2">連絡先</td>
-    <td class="Lwide" colspan="1">自宅</td>
-    <td colspan="6">（　${esc(phone)}　）</td>
+    <td class="Lwide">自宅</td>
+    <td colspan="6" class="cell-tel">（　${esc(phone)}　）</td>
   </tr>
   <tr>
     <td class="Lwide">携帯</td>
-    <td colspan="6">（　${esc(mobile)}　）</td>
+    <td colspan="6" class="cell-tel">（　${esc(mobile)}　）</td>
   </tr>
   <tr>
     <td class="L">緊急<br/>連絡先</td>
-    <td colspan="7">氏名　（　${esc(emName)}　）　続柄　（　${esc(emRel)}　）　電話番号　（　${esc(emTel)}　）</td>
+    <td colspan="7" class="cell-emergency">
+      <span class="em-part"><span class="em-lbl">氏名</span><span class="em-paren">（</span>${esc(emName)}<span class="em-paren">）</span></span>
+      <span class="em-part"><span class="em-lbl">続柄</span><span class="em-paren">（</span>${esc(emRel)}<span class="em-paren">）</span></span>
+      <span class="em-part"><span class="em-lbl">電話番号</span><span class="em-paren">（</span>${esc(emTel)}<span class="em-paren">）</span></span>
+    </td>
   </tr>
   <tr>
     <td class="L">採用<br/>年月日</td>
-    <td colspan="3" class="cen">${ymdCells(hired)}</td>
+    <td colspan="3" class="cen cell-date">${ymdCells(hired)}</td>
     <td class="L">退職<br/>年月日</td>
-    <td colspan="3" class="cen">${ymdCells(retiredYmd)}</td>
+    <td colspan="3" class="cen cell-date">${ymdCells(retiredYmd)}</td>
   </tr>
   <tr>
     <td class="Lvert" rowspan="3">運転免許</td>
     <td class="L" colspan="2">種類</td>
-    <td colspan="5">${esc(licKind)}</td>
+    <td colspan="5" class="cell-lic">${esc(licKind)}</td>
   </tr>
   <tr>
-    <td class="L" colspan="2">番号</td>
-    <td colspan="2">第　${esc(licNum)}　号</td>
-    <td class="L">有効期限</td>
-    <td colspan="2" class="cen">${ymdCells(licExp)}</td>
+    <td class="L" colspan="2">有効期限</td>
+    <td colspan="6" class="cen cell-date">${ymdCells(licExp)}</td>
   </tr>
   <tr>
     <td class="L" colspan="2">免許条件<br/>・限定等</td>
-    <td colspan="5">${hasCond ? `あり（ ${esc(licCond)} ）・なし（　　）` : "あり（　　　　　　　）・なし（　●　）"}</td>
+    <td colspan="6" class="cell-lic-cond">${hasCond ? `あり（ ${esc(licCond)} ）・なし（　　）` : "あり（　　　　　　　）・なし（　●　）"}</td>
   </tr>
   <tr>
     <td class="phlbl" colspan="4">運転免許証表</td>
