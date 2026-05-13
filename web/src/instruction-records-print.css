@@ -195,14 +195,6 @@
   }
 }
 
-.instruction-print-global-meta {
-  font-size: 9pt;
-  color: #4a5568;
-  text-align: right;
-  margin: 0 0 0.5rem;
-  padding: 0 0.15rem;
-}
-
 .instruction-doc-page + .instruction-doc-page {
   margin-top: 1.5rem;
 }
@@ -215,6 +207,11 @@
   font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
   color: #1a1d26;
   background: #fff;
+}
+
+.instruction-doc-table-wrap {
+  border: 2px solid #1e3a5f;
+  border-top: none;
 }
 
 .instruction-doc-banner {
@@ -238,7 +235,7 @@
   border-collapse: collapse;
   table-layout: fixed;
   font-size: 10pt;
-  border: 2px solid #1e3a5f;
+  border: none;
 }
 
 .instruction-doc-table th {
@@ -251,6 +248,11 @@
   background: #eef2f7;
   border: 1px solid #1e3a5f;
   border-top: none;
+}
+
+.instruction-doc-table tr:first-child th,
+.instruction-doc-table tr:first-child td {
+  border-top: 1px solid #1e3a5f;
 }
 
 .instruction-doc-table td {
@@ -275,19 +277,11 @@
   min-height: 4.5rem;
 }
 
-.instruction-doc-footer {
-  margin-top: 0.5rem;
-  padding: 0.35rem 0.25rem 0;
-  font-size: 8.5pt;
-  color: #5c6473;
-  text-align: right;
-  border-top: 1px solid #c5ccd8;
-}
-
 @media print {
+  /* A4 縦：印刷可能領域いっぱいに1件を収める（@page の margin と数値を揃える） */
   @page {
     size: A4 portrait;
-    margin: 12mm 14mm;
+    margin: 10mm 12mm;
   }
 
   body.instruction-records-printing * {
@@ -306,6 +300,8 @@
     width: 100%;
     display: block !important;
     background: #fff;
+    margin: 0;
+    padding: 0;
   }
 
   body.instruction-records-printing .instruction-doc-page + .instruction-doc-page {
@@ -314,13 +310,45 @@
   }
 
   body.instruction-records-printing .instruction-doc-page {
+    box-sizing: border-box;
     max-width: none;
+    width: 100%;
     margin: 0;
-    page-break-inside: avoid;
+    /* 297mm − 上下 @page margin 20mm。短文でもこの高さまで伸ばし、表エリアで余白を吸収 */
+    min-height: 277mm;
+    display: flex;
+    flex-direction: column;
+    page-break-after: auto;
   }
 
-  body.instruction-records-printing .instruction-doc-row-tall td {
-    min-height: auto;
+  body.instruction-records-printing .instruction-doc-page:last-child {
+    page-break-after: avoid;
+  }
+
+  body.instruction-records-printing .instruction-doc-table-wrap {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border: 2px solid #1e3a5f;
+    border-top: none;
+  }
+
+  body.instruction-records-printing .instruction-doc-table {
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+  }
+
+  body.instruction-records-printing .instruction-doc-row-tall {
+    height: 100%;
+  }
+
+  body.instruction-records-printing .instruction-doc-row-tall td,
+  body.instruction-records-printing .instruction-doc-row-tall th {
+    min-height: 0;
+    height: 100%;
+    vertical-align: top;
   }
 
   body.instruction-records-printing .instruction-doc-row-mid td {

@@ -144,51 +144,46 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
       </div>
 
       <div className="instruction-print-sheet">
-        <p className="instruction-print-global-meta">
-          出力期間: {from} ～ {to}（東京） / 印刷枚数: {sortedRows.length} 枚（1件につき1枚）
-        </p>
         {sortedRows.map((r) => (
           <article key={r.id} className="instruction-doc-page">
             <header className="instruction-doc-banner">
               <h1 className="instruction-doc-heading">従事者に対する指導記録簿</h1>
             </header>
 
-            <table className="instruction-doc-table">
-              <tbody>
-                <tr>
-                  <th scope="row">指導実施日時</th>
-                  <td>{formatInstructionDate(r.date)}</td>
-                </tr>
-                <tr>
-                  <th scope="row">指導実施場所</th>
-                  <td className="instruction-doc-td-pre">{dashIfEmpty(r.instructionVenue)}</td>
-                </tr>
-                <tr>
-                  <th scope="row">指導担当者名（複数）</th>
-                  <td className="instruction-doc-td-pre">{dashIfEmpty(r.instructorLabel)}</td>
-                </tr>
-                <tr>
-                  <th scope="row">指導を受けた者</th>
-                  <td className="instruction-doc-td-pre">{dashIfEmpty(r.recipientLabel)}</td>
-                </tr>
-                <tr className="instruction-doc-row-tall">
-                  <th scope="row">指導項目</th>
-                  <td className="instruction-doc-td-pre">{r.instructionItems.trim() ? r.instructionItems : "—"}</td>
-                </tr>
-                <tr className="instruction-doc-row-mid">
-                  <th scope="row">特記事項</th>
-                  <td className="instruction-doc-td-pre">{r.specialNotes.trim() ? r.specialNotes : "—"}</td>
-                </tr>
-                <tr className="instruction-doc-row-mid">
-                  <th scope="row">備考</th>
-                  <td className="instruction-doc-td-pre">{r.remarks.trim() ? r.remarks : "—"}</td>
-                </tr>
-              </tbody>
-            </table>
-
-            <footer className="instruction-doc-footer">
-              <span>事業者名義にて保管してください</span>
-            </footer>
+            <div className="instruction-doc-table-wrap">
+              <table className="instruction-doc-table">
+                <tbody>
+                  <tr>
+                    <th scope="row">指導実施日時</th>
+                    <td>{formatInstructionDate(r.date)}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">指導実施場所</th>
+                    <td className="instruction-doc-td-pre">{dashIfEmpty(r.instructionVenue)}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">指導担当者名（複数）</th>
+                    <td className="instruction-doc-td-pre">{dashIfEmpty(r.instructorLabel)}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">指導を受けた者</th>
+                    <td className="instruction-doc-td-pre">{dashIfEmpty(r.recipientLabel)}</td>
+                  </tr>
+                  <tr className="instruction-doc-row-tall">
+                    <th scope="row">指導項目</th>
+                    <td className="instruction-doc-td-pre">{r.instructionItems.trim() ? r.instructionItems : "—"}</td>
+                  </tr>
+                  <tr className="instruction-doc-row-mid">
+                    <th scope="row">特記事項</th>
+                    <td className="instruction-doc-td-pre">{r.specialNotes.trim() ? r.specialNotes : "—"}</td>
+                  </tr>
+                  <tr className="instruction-doc-row-mid">
+                    <th scope="row">備考</th>
+                    <td className="instruction-doc-td-pre">{r.remarks.trim() ? r.remarks : "—"}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </article>
         ))}
       </div>
