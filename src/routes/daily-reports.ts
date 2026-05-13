@@ -6,6 +6,7 @@ import { coercePricingPrefs, mergeLegSurchargesJson, tripSurchargeDefaults } fro
 import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
 import { hasSecondClassDriverLicense } from "../lib/employee-license.js";
 import { isLibreOfficeConfigured, renderJommuKirokuboPdf } from "../lib/jommu-excel-pdf.js";
+import { userFacingJommuPdfError } from "../lib/jommu-pdf-user-error.js";
 import { loadJommuKirokuboModelForDailyReport } from "../lib/jommu-daily-report-model.js";
 
 function asObj(v: unknown): Record<string, unknown> {
@@ -334,7 +335,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       req.log.error({ err: e, jommuPdf: true, message: msg }, "jommu kirokubo pdf failed");
-      return reply.code(500).send({ error: "乗務記録簿 PDF の生成に失敗しました" });
+      return reply.code(500).send({ error: userFacingJommuPdfError(e) });
     }
   });
 

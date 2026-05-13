@@ -5,6 +5,7 @@ import { buildEmployeeRosterPrintHtml } from "../lib/employee-roster-print-html.
 import { hasSecondClassDriverLicense } from "../lib/employee-license.js";
 import type { JommuKirokuboModel } from "../lib/jommu-types.js";
 import { isLibreOfficeConfigured, renderJommuKirokuboPdfBundle } from "../lib/jommu-excel-pdf.js";
+import { userFacingJommuPdfError } from "../lib/jommu-pdf-user-error.js";
 import { loadJommuKirokuboModelForDailyReport } from "../lib/jommu-daily-report-model.js";
 import { buildDaikoLaw14SeiyakuPrintHtml } from "../lib/daiko-law14-seiyaku-print-html.js";
 import { buildDaikoNinteiCertificatePrintHtml } from "../lib/daiko-nintei-certificate-print-html.js";
@@ -329,7 +330,7 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       req.log.error({ err: e, jommuPdf: true, message: msg }, "jommu kirokubo pdf failed");
-      return reply.code(500).send({ error: "乗務記録簿 PDF の生成に失敗しました。時間をおいて再度お試しください。" });
+      return reply.code(500).send({ error: userFacingJommuPdfError(e) });
     }
   });
 

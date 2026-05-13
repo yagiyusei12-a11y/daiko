@@ -9,6 +9,14 @@ import type { JommuKirokuboModel } from "./jommu-types.js";
 type PopulatedWorkbook = Awaited<ReturnType<typeof XlsxPopulate.fromDataAsync>>;
 type PopSheet = NonNullable<ReturnType<PopulatedWorkbook["sheet"]>>;
 
+/** OOXML で禁止の制御文字を除き、セル上限に収める */
+const OOXML_CTRL = /[\x00-\x08\x0B\x0C\x0E-\x1F]/g;
+const MAX_CELL_CHARS = 32_000;
+
+function sanitizeForCell(s: string): string {
+  return s.replace(OOXML_CTRL, " ").replace(/\s+/g, " ").trim().slice(0, MAX_CELL_CHARS);
+}
+
 function splitHm(hm: string | null | undefined): { hh: string; mm: string } {
   if (!hm || !String(hm).trim()) return { hh: "", mm: "" };
   const p = String(hm).trim().split(":");
@@ -24,13 +32,17 @@ function setCell(sheet: PopSheet, addr: string, v: string | number | null | unde
     sheet.cell(addr).value(v);
     return;
   }
-  const s = String(v).trim();
+  const s = sanitizeForCell(String(v));
   if (!s) return;
   sheet.cell(addr).value(s);
 }
 
 function clearCell(sheet: PopSheet, addr: string): void {
-  sheet.cell(addr).clear();
+  try {
+    sheet.cell(addr).clear();
+  } catch {
+    /* 結合・保護などで clear が失敗しても続行 */
+  }
 }
 
 export function fillJommuWorkbookPopulate(wb: PopulatedWorkbook, model: JommuKirokuboModel): void {
@@ -103,10 +115,16 @@ export function fillJommuWorkbookPopulate(wb: PopulatedWorkbook, model: JommuKir
 }
 
 export async function buildJommuFilledXlsxBuffer(tpl: Buffer, model: JommuKirokuboModel): Promise<Buffer> {
-  const wb = await XlsxPopulate.fromDataAsync(tpl);
-  fillJommuWorkbookPopulate(wb, model);
-  const out = await wb.outputAsync({ type: "nodebuffer" });
-  if (Buffer.isBuffer(out)) return out;
-  if (out instanceof Uint8Array) return Buffer.from(out);
-  throw new Error("jommu: unexpected output type from xlsx-populate");
+  try {
+    const wb = await XlsxPopulate.fromDataAsync(tpl);
+    fillJommuWorkbookPopulate(wb, model);
+    const out = await wb.outputAsync({ type: "nodebuffer" });
+    if (Buffer.isBuffer(out)) return out;
+    if (out instanceof Uint8Array) return Buffer.from(out);
+    throw new Error("jommu: unexpected output type from xlsx-populate");
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("jommu:")) throw e;
+    const detail = e instanceof Error ? e.message : String(e);
+    throw new Error(`jommu: xlsx の埋め込みまたは書き出しに失敗しました（${detail}）`);
+  }
 }

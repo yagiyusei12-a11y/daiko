@@ -48,6 +48,20 @@ fi
 
 log "soffice: $soffice_path"
 
+log "qpdf（複数枚 PDF の結合バックアップ）を確認します…"
+set +e
+if command -v qpdf >/dev/null 2>&1; then
+  log "qpdf: $(command -v qpdf)"
+else
+  sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
+  if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y qpdf; then
+    log "qpdf をインストールしました。"
+  else
+    log "WARN: qpdf のインストールに失敗しました（複数枚の乗務記録簿 PDF のみ影響する場合があります）。"
+  fi
+fi
+set -e
+
 if [[ ! -f "$ENV_FILE" ]]; then
   log "WARN: $ENV_FILE がありません。スキップします。"
   exit 0
