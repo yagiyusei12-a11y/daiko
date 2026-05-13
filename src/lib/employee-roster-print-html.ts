@@ -1,6 +1,7 @@
-/** 従事者名簿（印刷用 HTML）。Excel 様式に準拠したレイアウト。 */
+/** 従事者名簿（印刷用 HTML）。従業員マスタの内容を帳票レイアウトで出力。 */
 
 import type { Employee } from "@prisma/client";
+import { PRINT_BUSINESS_BASE_CSS } from "./print-business-theme.js";
 
 function esc(s: string): string {
   return s
@@ -10,7 +11,6 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** img の src 用（data URL 等。& と " のみエスケープ） */
 function escAttr(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 }
@@ -87,246 +87,74 @@ function safeDataUrlImg(src: string): string {
   return src;
 }
 
-const PRINT_CSS = `
-@page { size: A4 portrait; margin: 10mm 12mm; }
-@media print {
-  .no-print { display: none !important; }
-  body {
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
-    background: #fff !important;
-    padding: 0 !important;
-  }
-  .sheet {
-    box-shadow: none !important;
-    border-radius: 0 !important;
-  }
-}
-@media screen {
-  body {
-    background: linear-gradient(165deg, #f1f5f9 0%, #e2e8f0 50%, #f8fafc 100%);
-    min-height: 100vh;
-  }
-}
-body {
-  font-family: "MS PMincho","ＭＳ Ｐ明朝","MS P Gothic","MS PGothic","Yu Gothic","Meiryo",sans-serif;
-  font-size: 10.5pt;
-  color: #334155;
-  margin: 0;
-  padding: 12px 14px 20px;
-  box-sizing: border-box;
-  line-height: 1.45;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-}
-.toolbar { margin-bottom: 10px; }
-.toolbar button {
-  padding: 8px 16px;
-  font-size: 12px;
-  cursor: pointer;
-  font-family: inherit;
-  border: 1px solid #334155;
-  border-radius: 4px;
-  background: #1e293b;
-  color: #f8fafc;
-}
-.toolbar button:hover { background: #334155; }
-.sheet {
-  max-width: 186mm;
-  margin: 0 auto 16px;
-  page-break-after: always;
-  border: 1px solid #64748b;
-  padding: 12px 14px 14px;
-  box-sizing: border-box;
-  background: #fff;
-  border-radius: 2px;
-  box-shadow: 0 1px 3px rgba(15,23,42,.06), 0 8px 20px rgba(15,23,42,.05);
-}
-.sheet:last-of-type { page-break-after: auto; }
-.rtop {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 10px 12px;
-  margin-bottom: 8px;
-}
-.rret {
-  font-size: 8.5pt;
-  text-align: left;
-  color: #64748b;
-  letter-spacing: 0.02em;
-  flex: 0 1 auto;
-  max-width: min(100%, 22em);
-}
-.rdates { border-collapse: collapse; font-size: 9pt; flex: 0 0 auto; margin-left: auto; }
-.rdates td, .rdates th {
-  border: 1px solid #cbd5e1;
-  padding: 5px 10px;
-  vertical-align: middle;
-}
-.rdates .dl {
-  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
-  font-weight: 600;
-  text-align: center;
-  white-space: nowrap;
-  color: #1e293b;
-}
-.rdates .rd-val { white-space: nowrap; color: #0f172a; }
-.rtitle {
-  text-align: center;
-  font-size: 15pt;
-  font-weight: 600;
-  letter-spacing: 0.28em;
-  text-indent: 0.28em;
-  margin: 4px 0 10px;
-  color: #0f172a;
-  font-feature-settings: "palt";
-}
-.r-subtitle {
-  margin: -2px 0 10px;
-  font-size: 9.5pt;
-  color: #475569;
-}
-.rf {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-  border: 1px solid #64748b;
-}
-.rf td, .rf th {
-  border: 1px solid #cbd5e1;
-  padding: 7px 8px;
-  vertical-align: middle;
-  font-size: 10pt;
-}
-.rf .L {
-  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
-  font-weight: 600;
-  text-align: center;
-  width: 5.8em;
-  min-width: 4.8em;
-  color: #1e293b;
-  white-space: nowrap;
-}
-.rf .Lwide {
-  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
-  font-weight: 600;
-  text-align: center;
-  width: 4.5em;
-  min-width: 3.5em;
-  white-space: nowrap;
-  color: #1e293b;
-}
-.rf .Lvert {
-  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
-  font-weight: 600;
-  text-align: center;
-  writing-mode: vertical-rl;
-  text-orientation: upright;
-  width: 2em;
-  min-width: 1.6em;
-  letter-spacing: 0.12em;
-  padding: 8px 4px;
-  color: #1e293b;
-  border-right-color: #94a3b8;
-}
-.cell-nameblock { padding: 0 !important; vertical-align: middle; }
-.fg-wrap {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.45em;
-  padding: 6px 8px 4px;
-  border-bottom: 1px dashed #cbd5e1;
-}
-.fg-lbl {
-  font-size: 8.5pt;
-  color: #64748b;
-  white-space: nowrap;
-  flex-shrink: 0;
-  font-weight: 600;
-  line-height: 1.2;
-}
-.fg-line {
-  flex: 1;
-  min-width: 0;
-  min-height: 1.35em;
-  font-size: 9pt;
-  color: #334155;
-  line-height: 1.35;
-}
-.rf .nm {
-  font-size: 11pt;
-  min-height: 1.45em;
-  padding: 6px 8px 7px;
-  color: #0f172a;
-  line-height: 1.4;
-}
-.cell-spacer { min-height: 0.5em; background: #fafafa; }
-.cell-gender {
-  white-space: nowrap;
-  padding: 6px 4px !important;
-}
-.gender-line { display: inline-flex; align-items: baseline; gap: 0.08em; }
-.g-mark { letter-spacing: 0; }
-.g-lbl { font-weight: 500; }
-.g-sep { margin: 0 0.35em; color: #94a3b8; }
-.cell-date { white-space: nowrap; font-variant-numeric: tabular-nums; color: #0f172a; }
-.cell-age { white-space: nowrap; }
-.cell-address { line-height: 1.5; padding: 8px 10px !important; color: #0f172a; }
-.addr-body { display: inline; }
-.cell-tel { padding: 7px 10px !important; white-space: nowrap; color: #0f172a; }
-.cell-emergency {
-  padding: 8px 10px !important;
-  vertical-align: middle;
-  color: #0f172a;
-}
-.em-stacked { display: flex; flex-direction: column; gap: 6px; }
-.em-line {
+const ROSTER_CSS = `${PRINT_BUSINESS_BASE_CSS}
+.rs-doc .rs-top { margin-bottom: 4px; }
+.rs-doc .rs-grid { margin-top: 0; border-top: 2px solid var(--pd-accent); }
+.rs-doc .rs-grid td { font-size: 9.8pt; }
+.rs-doc .rs-label-narrow { width: 4.25rem; min-width: 3.5rem; }
+.rs-doc .rs-name-block { padding: 0 !important; vertical-align: middle; }
+.rs-doc .rs-furi-row {
   display: flex;
   align-items: baseline;
-  flex-wrap: nowrap;
-  gap: 0.2em;
-  line-height: 1.45;
+  gap: 0.5rem;
+  padding: 8px 10px 5px;
+  border-bottom: 1px dashed var(--pd-line-strong);
 }
-.em-lbl { font-weight: 600; color: #475569; flex-shrink: 0; white-space: nowrap; }
-.em-parens { color: #94a3b8; flex-shrink: 0; }
-.em-body { flex: 1; min-width: 0; word-break: break-word; overflow-wrap: anywhere; }
-.cell-lic {
-  line-height: 1.45;
-  padding: 8px 10px !important;
-  vertical-align: middle;
-  text-align: left;
+.rs-doc .rs-furi-lbl {
+  font-size: 8.5pt;
+  font-weight: 600;
+  color: var(--pd-muted);
+  white-space: nowrap;
 }
-.cell-lic-cond {
-  line-height: 1.5;
-  padding: 8px 10px !important;
-  vertical-align: middle;
-  word-break: break-word;
-  overflow-wrap: break-word;
+.rs-doc .rs-furi-val {
+  flex: 1;
+  min-width: 0;
+  font-size: 9.5pt;
+  color: var(--pd-ink);
+  line-height: 1.4;
 }
-.rf .cen { text-align: center; }
-.rf .photo { height: 128px; vertical-align: top; padding: 6px; }
-.rf .photobox {
-  border: 1px dashed #94a3b8;
-  height: 116px;
+.rs-doc .rs-name-main {
+  padding: 8px 10px 10px;
+  font-size: 12pt;
+  font-weight: 700;
+  color: var(--pd-ink);
+  letter-spacing: 0.02em;
+}
+.rs-doc .rs-spacer { height: 6px; background: var(--pd-fill); }
+.rs-doc .rs-gender { white-space: nowrap; text-align: center; padding: 6px 4px !important; }
+.rs-doc .rs-g-line { display: inline-flex; align-items: baseline; gap: 0.06em; }
+.rs-doc .rs-g-sep { margin: 0 0.3em; color: var(--pd-line-strong); }
+.rs-doc .rs-date { white-space: nowrap; text-align: center; font-variant-numeric: tabular-nums; color: var(--pd-ink); }
+.rs-doc .rs-address { line-height: 1.55; padding: 9px 11px !important; color: var(--pd-ink); }
+.rs-doc .rs-tel { padding: 8px 10px !important; white-space: nowrap; color: var(--pd-ink); }
+.rs-doc .rs-em-wrap { padding: 10px 11px !important; vertical-align: middle; }
+.rs-doc .rs-em-stack { display: table; width: 100%; }
+.rs-doc .rs-em-row { display: table-row; }
+.rs-doc .rs-em-cell { display: table-cell; padding: 3px 0; vertical-align: baseline; }
+.rs-doc .rs-em-cell:first-child { width: 5.2em; font-weight: 600; color: var(--pd-muted); font-size: 9pt; }
+.rs-doc .rs-em-val { color: var(--pd-ink); padding-left: 0.35rem; }
+.rs-doc .rs-lic { text-align: left; vertical-align: middle; padding: 9px 11px !important; line-height: 1.45; color: var(--pd-ink); }
+.rs-doc .rs-lic-cond { word-break: break-word; overflow-wrap: anywhere; }
+.rs-doc .rs-photo { height: 124px; vertical-align: middle; padding: 8px; }
+.rs-doc .rs-photo-box {
+  height: 108px;
+  border: 1px dashed var(--pd-line-strong);
+  border-radius: 6px;
+  background: var(--pd-fill);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f8fafc;
-  box-sizing: border-box;
-  border-radius: 2px;
 }
-.rf .photobox img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.rf .phlbl {
-  background: linear-gradient(180deg, #f1f5f9 0%, #e8edf3 100%);
+.rs-doc .rs-photo-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.rs-doc .rs-photo-cap {
+  background: var(--pd-fill);
   font-weight: 600;
   text-align: center;
-  font-size: 9.5pt;
-  color: #1e293b;
+  font-size: 9pt;
+  color: var(--pd-ink);
+  padding: 7px;
 }
-.cen { text-align: center; }
-.empty-note { padding: 20px; text-align: center; color: #64748b; }
+.rs-empty { padding: 28px; text-align: center; color: var(--pd-muted); }
 `;
 
 function ymdCells(ymd: string): string {
@@ -369,106 +197,107 @@ function buildOneSheet(emp: Employee, ctx: { createdYmd: string; operatorName: s
 
   const mark = (which: "男" | "女") => (gender === which ? "（●）" : "（　）");
 
-  return `<section class="sheet">
-<div class="rtop">
-  <div class="rret">〈保存期間：退職日から2年間〉</div>
-  <table class="rdates">
+  return `<article class="pd-doc rs-doc">
+<div class="pd-doc-head rs-top">
+  <p class="pd-retention">〈保存期間：退職日から2年間〉</p>
+  <table class="pd-meta-dates" role="presentation">
     <tr>
-      <td class="dl">作成日</td>
-      <td class="rd-val">${ymdCells(ctx.createdYmd)}</td>
-      <td class="dl">修正日</td>
-      <td class="rd-val">${ymdCellsBlank()}</td>
+      <td class="pd-md-lbl">作成日</td>
+      <td class="pd-md-val">${ymdCells(ctx.createdYmd)}</td>
+      <td class="pd-md-lbl">修正日</td>
+      <td class="pd-md-val">${ymdCellsBlank()}</td>
     </tr>
   </table>
 </div>
-<h1 class="rtitle">従　事　者　名　簿</h1>
-${ctx.operatorName ? `<p class="r-subtitle cen">${esc(ctx.operatorName)}</p>` : ""}
+<div class="pd-title-wrap">
+  <h1 class="pd-title">従事者名簿</h1>
+  <div class="pd-title-rule" aria-hidden="true"></div>
+</div>
+${ctx.operatorName ? `<p class="pd-subtitle">${esc(ctx.operatorName)}</p>` : ""}
 
-<table class="rf">
+<table class="pd-table rs-grid">
+  <tbody>
   <tr>
-    <td class="L" rowspan="2">氏名</td>
-    <td colspan="3" class="cell-nameblock">
-      <div class="fg-wrap">
-        <span class="fg-lbl">ふりがな</span>
-        <div class="fg-line">${furigana ? esc(furigana) : "　"}</div>
+    <td class="pd-label-cell" rowspan="2">氏名</td>
+    <td colspan="3" class="rs-name-block">
+      <div class="rs-furi-row">
+        <span class="rs-furi-lbl">ふりがな</span>
+        <div class="rs-furi-val">${furigana ? esc(furigana) : "　"}</div>
       </div>
-      <div class="nm">${esc(fullName)}</div>
+      <div class="rs-name-main">${esc(fullName)}</div>
     </td>
-    <td class="L">性別</td>
-    <td class="cen cell-gender">
-      <span class="gender-line"><span class="g-mark">${mark("男")}</span><span class="g-lbl">男</span></span>
-      <span class="g-sep">・</span>
-      <span class="gender-line"><span class="g-mark">${mark("女")}</span><span class="g-lbl">女</span></span>
+    <td class="pd-label-cell">性別</td>
+    <td class="pd-center rs-gender">
+      <span class="rs-g-line"><span>${mark("男")}</span>男</span>
+      <span class="rs-g-sep">・</span>
+      <span class="rs-g-line"><span>${mark("女")}</span>女</span>
     </td>
-    <td class="L">生年月日</td>
-    <td class="cen cell-date">${ymdCells(birth)}</td>
+    <td class="pd-label-cell">生年月日</td>
+    <td class="rs-date">${ymdCells(birth)}</td>
   </tr>
   <tr>
-    <td colspan="3" class="cell-spacer"></td>
-    <td class="L" colspan="2">採用時年齢</td>
-    <td colspan="2" class="cen cell-age">満　${esc(ageHire || "　　")}　歳</td>
+    <td colspan="3" class="rs-spacer"></td>
+    <td class="pd-label-cell" colspan="2">採用時年齢</td>
+    <td colspan="2" class="pd-center rs-date">満　${esc(ageHire || "　　")}　歳</td>
   </tr>
   <tr>
-    <td class="L">住所</td>
-    <td colspan="7" class="cell-address">〒　${esc(zip)}　<span class="addr-body">${esc(body)}</span></td>
+    <td class="pd-label-cell">住所</td>
+    <td colspan="7" class="rs-address">〒　${esc(zip)}　${esc(body)}</td>
   </tr>
   <tr>
-    <td class="L" rowspan="2">連絡先</td>
-    <td class="Lwide">自宅</td>
-    <td colspan="6" class="cell-tel">（　${esc(phone)}　）</td>
+    <td class="pd-label-cell" rowspan="2">連絡先</td>
+    <td class="pd-label-cell rs-label-narrow">自宅</td>
+    <td colspan="6" class="rs-tel">（　${esc(phone)}　）</td>
   </tr>
   <tr>
-    <td class="Lwide">携帯</td>
-    <td colspan="6" class="cell-tel">（　${esc(mobile)}　）</td>
+    <td class="pd-label-cell rs-label-narrow">携帯</td>
+    <td colspan="6" class="rs-tel">（　${esc(mobile)}　）</td>
   </tr>
   <tr>
-    <td class="L">緊急<br/>連絡先</td>
-    <td colspan="7" class="cell-emergency">
-      <div class="em-stacked">
-        <div class="em-line">
-          <span class="em-lbl">氏名</span>
-          <span class="em-parens">（</span><span class="em-body">${esc(emName)}</span><span class="em-parens">）</span>
+    <td class="pd-label-cell">緊急<br/>連絡先</td>
+    <td colspan="7" class="rs-em-wrap">
+      <div class="rs-em-stack">
+        <div class="rs-em-row">
+          <div class="rs-em-cell">氏名</div>
+          <div class="rs-em-cell rs-em-val">（${esc(emName)}）</div>
         </div>
-        <div class="em-line">
-          <span class="em-lbl">電話番号</span>
-          <span class="em-parens">（</span><span class="em-body">${esc(emTel)}</span><span class="em-parens">）</span>
+        <div class="rs-em-row">
+          <div class="rs-em-cell">電話番号</div>
+          <div class="rs-em-cell rs-em-val">（${esc(emTel)}）</div>
         </div>
       </div>
     </td>
   </tr>
   <tr>
-    <td class="L">採用<br/>年月日</td>
-    <td colspan="3" class="cen cell-date">${ymdCells(hired)}</td>
-    <td class="L">退職<br/>年月日</td>
-    <td colspan="3" class="cen cell-date">${ymdCells(retiredYmd)}</td>
+    <td class="pd-label-cell">採用<br/>年月日</td>
+    <td colspan="3" class="pd-center rs-date">${ymdCells(hired)}</td>
+    <td class="pd-label-cell">退職<br/>年月日</td>
+    <td colspan="3" class="pd-center rs-date">${ymdCells(retiredYmd)}</td>
   </tr>
   <tr>
-    <td class="Lvert" rowspan="3">運転免許</td>
-    <td class="L" colspan="2">種類</td>
-    <td colspan="5" class="cell-lic">${esc(licKind)}</td>
+    <td class="pd-label-cell pd-vertical" rowspan="3">運転免許</td>
+    <td class="pd-label-cell" colspan="2">種類</td>
+    <td colspan="5" class="rs-lic">${esc(licKind)}</td>
   </tr>
   <tr>
-    <td class="L" colspan="2">有効期限</td>
-    <td colspan="6" class="cen cell-date">${ymdCells(licExp)}</td>
+    <td class="pd-label-cell" colspan="2">有効期限</td>
+    <td colspan="6" class="pd-center rs-date">${ymdCells(licExp)}</td>
   </tr>
   <tr>
-    <td class="L" colspan="2">免許条件<br/>・限定等</td>
-    <td colspan="6" class="cell-lic-cond">${hasCond ? `あり（ ${esc(licCond)} ）・なし（　　）` : "あり（　　　　　　　）・なし（　●　）"}</td>
+    <td class="pd-label-cell" colspan="2">免許条件<br/>・限定等</td>
+    <td colspan="6" class="rs-lic rs-lic-cond">${hasCond ? `あり（ ${esc(licCond)} ）・なし（　　）` : "あり（　　　　　　　）・なし（　●　）"}</td>
   </tr>
   <tr>
-    <td class="phlbl" colspan="4">運転免許証表</td>
-    <td class="phlbl" colspan="4">運転免許証裏</td>
+    <td class="rs-photo-cap" colspan="4">運転免許証（表）</td>
+    <td class="rs-photo-cap" colspan="4">運転免許証（裏）</td>
   </tr>
   <tr>
-    <td class="photo" colspan="4">
-      <div class="photobox">${front ? `<img src="${escAttr(front)}" alt=""/>` : ""}</div>
-    </td>
-    <td class="photo" colspan="4">
-      <div class="photobox">${back ? `<img src="${escAttr(back)}" alt=""/>` : ""}</div>
-    </td>
+    <td class="rs-photo" colspan="4"><div class="rs-photo-box">${front ? `<img src="${escAttr(front)}" alt=""/>` : ""}</div></td>
+    <td class="rs-photo" colspan="4"><div class="rs-photo-box">${back ? `<img src="${escAttr(back)}" alt=""/>` : ""}</div></td>
   </tr>
+  </tbody>
 </table>
-</section>`;
+</article>`;
 }
 
 export function buildEmployeeRosterPrintHtml(args: {
@@ -480,17 +309,17 @@ export function buildEmployeeRosterPrintHtml(args: {
   const op = (args.operatorName ?? "").trim();
   const sheets =
     args.employees.length === 0
-      ? `<section class="sheet"><p class="empty-note">印刷対象の従業員がありません。</p></section>`
+      ? `<article class="pd-doc rs-doc"><p class="rs-empty">印刷対象の従業員がありません。</p></article>`
       : args.employees.map((e) => buildOneSheet(e, { createdYmd, operatorName: op })).join("\n");
 
   return `<!DOCTYPE html><html lang="ja"><head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>従事者名簿</title>
-<style>${PRINT_CSS}</style>
-</head><body>
-<div class="toolbar no-print"><button type="button" onclick="window.print()">印刷</button></div>
+<style>${ROSTER_CSS}</style>
+</head><body class="pd-body">
+<div class="pd-toolbar no-print"><button type="button" onclick="window.print()">印刷</button></div>
 ${sheets}
-<p class="no-print" style="text-align:center;font-size:10px;color:#444;margin-top:8px">ブラウザの印刷ダイアログから PDF 保存できます。</p>
+<p class="pd-hint no-print">ブラウザの印刷ダイアログから PDF 保存できます。</p>
 </body></html>`;
 }
