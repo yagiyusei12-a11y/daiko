@@ -78,6 +78,18 @@ function DailyReportJommuPrintBlock(): JSX.Element {
       setPrintErr("印刷する従業員を 1 人以上選んでください");
       return;
     }
+    // 非同期のあとに window.open すると空タブのままになるブラウザがあるため、同期で先に開く
+    const w = window.open("", "_blank", "noopener,noreferrer");
+    if (!w) {
+      setPrintErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
+      return;
+    }
+    w.document.open();
+    w.document.write(
+      '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>取得中</title></head><body><p>取得中…</p></body></html>',
+    );
+    w.document.close();
+
     setBusy(true);
     const r = await apiFetchText("/documents/daily-reports-jommu-print", {
       method: "POST",
@@ -85,12 +97,13 @@ function DailyReportJommuPrintBlock(): JSX.Element {
     });
     setBusy(false);
     if (!r.ok) {
+      const msg = r.error.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+      w.document.open();
+      w.document.write(
+        `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>エラー</title><style>body{font-family:sans-serif;padding:1rem}</style></head><body><p>${msg}</p><p><button type="button" onclick="window.close()">閉じる</button></p></body></html>`,
+      );
+      w.document.close();
       setPrintErr(r.error);
-      return;
-    }
-    const w = window.open("", "_blank", "noopener,noreferrer");
-    if (!w) {
-      setPrintErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
       return;
     }
     w.document.open();
@@ -193,17 +206,29 @@ export default function DocumentsPage(): JSX.Element {
 
   async function openEmployeeRosterPrint(): Promise<void> {
     setRosterErr(null);
+    const w = window.open("", "_blank", "noopener,noreferrer");
+    if (!w) {
+      setRosterErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
+      return;
+    }
+    w.document.open();
+    w.document.write(
+      '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>取得中</title></head><body><p>取得中…</p></body></html>',
+    );
+    w.document.close();
+
     setRosterBusy(true);
     const q = includeRetired ? "?includeRetired=1" : "";
     const r = await apiFetchText(`/documents/employee-roster-print.html${q}`);
     setRosterBusy(false);
     if (!r.ok) {
+      const msg = r.error.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+      w.document.open();
+      w.document.write(
+        `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>エラー</title><style>body{font-family:sans-serif;padding:1rem}</style></head><body><p>${msg}</p><p><button type="button" onclick="window.close()">閉じる</button></p></body></html>`,
+      );
+      w.document.close();
       setRosterErr(r.error);
-      return;
-    }
-    const w = window.open("", "_blank", "noopener,noreferrer");
-    if (!w) {
-      setRosterErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
       return;
     }
     w.document.open();
