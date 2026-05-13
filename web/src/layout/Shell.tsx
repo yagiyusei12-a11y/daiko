@@ -9,6 +9,7 @@ const navItems: { to: string; label: string; match: "schedule" | "prefix" }[] = 
   { to: "/daily-reports", label: "日報", match: "prefix" },
   { to: "/schedule", label: "スケジュール", match: "schedule" },
   { to: "/attendance", label: "勤怠", match: "prefix" },
+  { to: "/documents", label: "書類", match: "prefix" },
   { to: "/settings", label: "設定", match: "prefix" },
 ];
 
