@@ -208,15 +208,15 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   background: var(--pd-fill-label);
   font-weight: 600;
   text-align: center;
-  font-size: 7.2pt;
-  line-height: 1.2;
-  padding: 3px 1px !important;
+  font-size: 7.6pt;
+  line-height: 1.25;
+  padding: 4px 3px !important;
   color: var(--pd-ink);
 }
 .jm-doc .jm-work tbody td {
-  font-size: 7.5pt;
-  padding: 2px 2px !important;
-  height: 1.35rem;
+  font-size: 7.6pt;
+  padding: 3px 4px !important;
+  min-height: 1.45rem;
   vertical-align: middle;
 }
 .jm-doc .jm-no {
@@ -233,16 +233,17 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
 .jm-doc .jm-r {
   text-align: right;
   font-variant-numeric: tabular-nums;
-  position: relative;
-  padding-right: 14px !important;
+  padding: 2px 5px !important;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 .jm-doc .jm-unit {
-  position: absolute;
-  right: 2px;
-  bottom: 1px;
+  display: inline;
   font-size: 6.5pt;
   font-weight: 600;
   color: var(--pd-muted);
+  margin-left: 3px;
 }
 .jm-doc .jm-daiko {
   text-align: center;
@@ -252,26 +253,32 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
 .jm-doc .jm-foot-v {
   writing-mode: vertical-rl;
   text-orientation: upright;
-  width: 1.5rem;
-  min-width: 1.4rem;
-  letter-spacing: 0.08em;
-  padding: 4px 1px !important;
-  font-size: 7.5pt;
+  width: 2.6rem;
+  min-width: 2.5rem;
+  max-width: 2.75rem;
+  letter-spacing: 0.06em;
+  padding: 6px 4px !important;
+  font-size: 7.8pt;
+  line-height: 1.35;
 }
 .jm-doc .jm-foot thead th {
   background: var(--pd-fill-label);
   font-weight: 600;
   text-align: center;
-  font-size: 7.5pt;
-  padding: 4px 2px !important;
-  line-height: 1.2;
+  font-size: 7.6pt;
+  padding: 5px 4px !important;
+  line-height: 1.25;
 }
 .jm-doc .jm-foot tbody td {
-  font-size: 9pt;
+  font-size: 9.5pt;
   font-weight: 600;
   text-align: right;
-  padding: 5px 6px !important;
+  padding: 6px 8px !important;
   font-variant-numeric: tabular-nums;
+  min-width: 3.2rem;
+  vertical-align: middle;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 .jm-doc .jm-footnote {
   display: flex;
@@ -366,21 +373,35 @@ function renderJommuSheet(model: JommuKirokuboModel): string {
 <h1 class="jm-title">乗務記録簿</h1>
 ${renderHeaderMeta(model)}
 <table class="jm-tbl jm-work">
+  <colgroup>
+    <col style="width:3%" />
+    <col style="width:8.5%" />
+    <col style="width:7.5%" />
+    <col style="width:8.5%" />
+    <col style="width:7%" />
+    <col style="width:7.5%" />
+    <col style="width:8.5%" />
+    <col style="width:7%" />
+    <col style="width:9%" />
+    <col style="width:9%" />
+    <col style="width:5.5%" />
+    <col style="width:19%" />
+  </colgroup>
   <thead>
     <tr><th class="jm-section-h" colspan="12">業務記録</th></tr>
     <tr>
-      <th style="width:2%">　</th>
-      <th style="width:9%">依頼者</th>
-      <th style="width:8%">客車の<br/>車両番号</th>
-      <th style="width:9%">依頼場所</th>
-      <th style="width:6.5%">開始時刻</th>
-      <th style="width:8%">経由地</th>
-      <th style="width:9%">到着場所</th>
-      <th style="width:6.5%">到着時刻</th>
-      <th style="width:7%">走行距離</th>
-      <th style="width:7%">料金</th>
-      <th style="width:6%">同乗した<br/>車両</th>
-      <th style="width:12%">苦情　意見等備考</th>
+      <th>　</th>
+      <th>依頼者</th>
+      <th>客車の<br/>車両番号</th>
+      <th>依頼場所</th>
+      <th>開始時刻</th>
+      <th>経由地</th>
+      <th>到着場所</th>
+      <th>到着時刻</th>
+      <th>走行距離</th>
+      <th>料金</th>
+      <th>同乗した<br/>車両</th>
+      <th>苦情　意見等備考</th>
     </tr>
   </thead>
   <tbody>
@@ -388,6 +409,14 @@ ${tripBody}
   </tbody>
 </table>
 <table class="jm-tbl jm-foot">
+  <colgroup>
+    <col style="width:11%" />
+    <col style="width:17.8%" />
+    <col style="width:17.8%" />
+    <col style="width:17.8%" />
+    <col style="width:17.8%" />
+    <col style="width:17.8%" />
+  </colgroup>
   <thead>
     <tr>
       <th class="jm-lbl jm-foot-v" rowspan="2">メーター・距離等</th>
