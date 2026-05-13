@@ -8,6 +8,7 @@ import DailyReportsMenuPage from "./pages/DailyReportsMenuPage";
 import AttendanceMenuPage from "./pages/AttendanceMenuPage";
 import DocumentsPage from "./pages/DocumentsPage";
 import DashboardPage from "./pages/DashboardPage";
+import SettingsMenuPage from "./pages/SettingsMenuPage";
 
 export default function App(): JSX.Element {
   return (

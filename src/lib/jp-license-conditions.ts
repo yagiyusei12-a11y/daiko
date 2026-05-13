@@ -47,6 +47,7 @@ const EMPLOYEE_LICENSE_KINDS = new Set([
   "準中型免許",
   "普通免許",
   "大型第二種免許",
+  "中型第二種免許",
   "普通第二種免許",
 ]);
 
@@ -68,7 +69,7 @@ export function licenseConditionOptionsForKind(licenseKind: string): string[] {
   const k = String(licenseKind ?? "").trim();
   if (!EMPLOYEE_LICENSE_KINDS.has(k)) return [];
 
-  const isSecond = k === "大型第二種免許" || k === "普通第二種免許";
+  const isSecond = k === "大型第二種免許" || k === "中型第二種免許" || k === "普通第二種免許";
 
   return JP_LICENSE_CONDITION_OPTIONS.filter((opt) => {
     if (opt === SECOND_CLASS_CONDITION) return isSecond;

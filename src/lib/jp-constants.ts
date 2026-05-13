@@ -5,6 +5,7 @@ export const JP_DRIVER_LICENSE_CLASSES_EMPLOYEE: string[] = [
   "準中型免許",
   "普通免許",
   "大型第二種免許",
+  "中型第二種免許",
   "普通第二種免許",
 ];
 
@@ -27,6 +28,7 @@ export const JP_DRIVER_LICENSE_CLASSES: string[] = [
   "大特免許",
   "けん引免許",
   "大型第二種免許",
+  "中型第二種免許",
   "普通第二種免許",
   "大型自動二輪車免許",
   "普通自動二輪車免許",
