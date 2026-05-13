@@ -11,9 +11,52 @@ function esc(s: string): string {
 }
 
 function splitYmd(ymd: string): { y: string; m: string; d: string } {
-  const m = ymd.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return { y: "", m: "", d: "" };
-  return { y: m[1], m: String(Number(m[2])), d: String(Number(m[3])) };
+  const mm = ymd.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!mm) return { y: "", m: "", d: "" };
+  return { y: mm[1], m: String(Number(mm[2])), d: String(Number(mm[3])) };
+}
+
+/** 既定の「１〜５」行を検出できればリスト化（字下げ）。それ以外はエスケープ全文をそのまま表示。 */
+function formatPledgeBodyHtml(raw: string): string {
+  const lines = raw.replace(/\r\n/g, "\n").split("\n");
+  const itemRe = /^([１２３４５])[　 \t]*(.*)$/;
+  type Item = { mark: string; text: string };
+  const intro: string[] = [];
+  const items: Item[] = [];
+  let seenItem = false;
+
+  for (const line of lines) {
+    const hit = line.match(itemRe);
+    if (hit && hit[1] != null && hit[2] !== undefined) {
+      seenItem = true;
+      items.push({ mark: hit[1], text: hit[2] });
+    } else if (seenItem && items.length > 0) {
+      const t = line.trimEnd();
+      if (t.trim() === "") continue;
+      const last = items[items.length - 1];
+      last.text = last.text ? `${last.text}\n${t}` : t;
+    } else {
+      intro.push(line);
+    }
+  }
+
+  if (items.length === 0) {
+    return `<div class="seiyaku-body seiyaku-body--raw">${esc(raw).replace(/\n/g, "<br/>\n")}</div>`;
+  }
+
+  const introBlock = intro.join("\n").trim();
+  const introHtml = introBlock
+    ? `<p class="seiyaku-intro">${esc(introBlock).replace(/\n/g, "<br/>\n")}</p>`
+    : "";
+
+  const itemsHtml = items
+    .map((it) => {
+      const body = esc(it.text).replace(/\n/g, "<br/>\n");
+      return `<li class="seiyaku-item"><span class="seiyaku-item-mark">${esc(it.mark)}</span><span class="seiyaku-item-body">${body}</span></li>`;
+    })
+    .join("\n");
+
+  return `${introHtml}\n<ul class="seiyaku-item-list">${itemsHtml}\n</ul>`;
 }
 
 const SEIYAKU_CSS = `${PRINT_BUSINESS_BASE_CSS}
@@ -45,13 +88,41 @@ const SEIYAKU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   letter-spacing: 0.35em;
   text-indent: 0.35em;
 }
-.seiyaku-doc .seiyaku-body {
+.seiyaku-doc .seiyaku-prose {
   margin: 0 0 8mm;
-  white-space: pre-wrap;
-  word-break: break-word;
-  text-align: justify;
   font-size: 10pt;
   line-height: 1.75;
+}
+.seiyaku-doc .seiyaku-intro {
+  margin: 0 0 1em;
+  text-align: justify;
+  word-break: break-word;
+}
+.seiyaku-doc .seiyaku-item-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.seiyaku-doc .seiyaku-item {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.45em;
+  margin: 0 0 0.65em;
+  text-align: justify;
+  word-break: break-word;
+}
+.seiyaku-doc .seiyaku-item-mark {
+  flex: 0 0 1.35em;
+  font-weight: 700;
+}
+.seiyaku-doc .seiyaku-item-body {
+  flex: 1;
+  min-width: 0;
+}
+.seiyaku-doc .seiyaku-body--raw {
+  text-align: justify;
+  word-break: break-word;
 }
 .seiyaku-doc .seiyaku-date {
   margin: 10mm 0 6mm;
@@ -61,40 +132,39 @@ const SEIYAKU_CSS = `${PRINT_BUSINESS_BASE_CSS}
 }
 .seiyaku-doc .seiyaku-date .num {
   font-variant-numeric: tabular-nums;
-  padding: 0 0.15em;
+  padding: 0 0.08em;
 }
-.seiyaku-doc .seiyaku-block {
-  margin-top: 5mm;
+.seiyaku-doc .seiyaku-footer-fields {
+  margin-top: 6mm;
 }
-.seiyaku-doc .seiyaku-lbl {
-  font-weight: 700;
-  font-size: 10pt;
-  margin-bottom: 2mm;
-}
-.seiyaku-doc .seiyaku-val {
-  min-height: 2.8em;
-  padding: 3mm 4mm;
-  border: 1px solid var(--pd-line-strong);
-  background: #fff;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-size: 10pt;
-}
-.seiyaku-doc .seiyaku-name-row {
+.seiyaku-doc .seiyaku-field-row {
   display: flex;
   align-items: flex-end;
-  gap: 6mm;
-  margin-top: 5mm;
+  gap: 0.55em;
+  margin-top: 4.5mm;
 }
-.seiyaku-doc .seiyaku-name-row .grow {
+.seiyaku-doc .seiyaku-field-lbl {
+  font-weight: 700;
+  font-size: 10pt;
+  flex-shrink: 0;
+}
+.seiyaku-doc .seiyaku-field-line {
   flex: 1;
   min-width: 0;
+  border-bottom: 0.1rem solid var(--pd-ink);
+  min-height: 1.35em;
+  padding: 0.1em 0.2em 0.2em;
+  font-size: 10.5pt;
+  word-break: break-word;
+}
+.seiyaku-doc .seiyaku-field-row--name .seiyaku-field-line {
+  margin-right: 0;
 }
 .seiyaku-doc .seiyaku-inkan {
   flex-shrink: 0;
-  font-size: 16pt;
+  font-size: 15pt;
   font-weight: 700;
-  padding: 0 2mm 1mm;
+  padding: 0 0 0.15em 0.25em;
   line-height: 1;
 }
 `;
@@ -117,18 +187,18 @@ function buildOneSheet(args: {
     <div>${esc(args.representativeLine)}</div>
   </header>
   <h1>誓約書</h1>
-  <div class="seiyaku-body">${esc(args.pledgeBody)}</div>
+  <div class="seiyaku-prose">${formatPledgeBodyHtml(args.pledgeBody)}</div>
   <p class="seiyaku-date"><span class="num">${esc(yDisp)}</span>年　<span class="num">${esc(mDisp)}</span>月　<span class="num">${esc(dDisp)}</span>日</p>
-  <div class="seiyaku-block">
-    <div class="seiyaku-lbl">住所</div>
-    <div class="seiyaku-val">${esc(args.signerAddress)}</div>
-  </div>
-  <div class="seiyaku-block seiyaku-name-row">
-    <div class="grow">
-      <div class="seiyaku-lbl">氏名</div>
-      <div class="seiyaku-val">${esc(args.signerName)}</div>
+  <div class="seiyaku-footer-fields">
+    <div class="seiyaku-field-row">
+      <span class="seiyaku-field-lbl">住所</span>
+      <span class="seiyaku-field-line">${esc(args.signerAddress)}</span>
     </div>
-    <div class="seiyaku-inkan" aria-hidden="true">㊞</div>
+    <div class="seiyaku-field-row seiyaku-field-row--name">
+      <span class="seiyaku-field-lbl">氏名</span>
+      <span class="seiyaku-field-line">${esc(args.signerName)}</span>
+      <span class="seiyaku-inkan" aria-hidden="true">㊞</span>
+    </div>
   </div>
 </article>`;
 }
