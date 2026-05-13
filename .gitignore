@@ -10,3 +10,5 @@ uploads/
 .cursor/debug-*.log
 # ローカル参考（Excel 様式など）。リポジトリには含めない
 新しいフォルダー/
+# Excel 抽出のフルダンプ（再生成は scripts/extract_jommu_excel_spec.py）
+src/lib/jommu-excel-spec.json

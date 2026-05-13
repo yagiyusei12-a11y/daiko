@@ -1,9 +1,16 @@
-/** 乗務記録簿（印刷用 HTML）。A4 横向き・公的様式に近いレイアウト（薄いピーチの見出し帯・2 列ヘッダー）。 */
+/** 乗務記録簿（印刷用 HTML）。A4 横向き。列幅・色・フォントは `zyoumukiroku.xlsx` 由来（`jommu-excel-layout.generated.ts`）。 */
 
 import { PRINT_BUSINESS_BASE_CSS } from "./print-business-theme.js";
+import {
+  JOMMU_EXCEL_BODY_FONT_PT,
+  JOMMU_EXCEL_HEADER_FILL,
+  JOMMU_EXCEL_RETENTION_FONT_PT,
+  JOMMU_EXCEL_TABLE_COL_FRAC,
+  JOMMU_EXCEL_TITLE_FONT_FAMILY,
+  JOMMU_EXCEL_TITLE_FONT_PT,
+} from "./jommu-excel-layout.generated.js";
 
-/** 見出し帯・表ヘッダー地色（様式の淡いピーチ系） */
-const JOMMU_HEADER_FILL = "#fde4d6";
+const JOMMU_SMALL_PT = Math.round(Number(JOMMU_EXCEL_BODY_FONT_PT) * 0.75 * 10) / 10;
 
 function esc(s: string): string {
   return s
@@ -68,6 +75,14 @@ function timeCellsInline(hm: string): string {
   return timeCells(hm.trim() ? hm : null);
 }
 
+function colgroupMainFromExcel(): string {
+  const lines = JOMMU_EXCEL_TABLE_COL_FRAC.map((frac) => {
+    const pct = (Number(frac) * 100).toFixed(4);
+    return `    <col style="width:${pct}%" />`;
+  });
+  return `<colgroup>\n${lines.join("\n")}\n  </colgroup>`;
+}
+
 /** 黒枠・見出し帯は淡いピーチ（公的様式のイメージに合わせる） */
 const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
 @page { size: A4 landscape; margin: 6mm 8mm; }
@@ -77,7 +92,7 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   margin: 0 auto;
   padding: 0;
   color: #000000;
-  font-size: 9pt;
+  font-size: ${JOMMU_EXCEL_BODY_FONT_PT}pt;
   font-family: "Noto Sans CJK JP", "Yu Gothic UI", "Yu Gothic", "Meiryo", "MS PGothic", sans-serif;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
@@ -92,7 +107,7 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   top: 0;
   right: 0;
   margin: 0;
-  font-size: 8pt;
+  font-size: ${JOMMU_EXCEL_RETENTION_FONT_PT}pt;
   color: #000000;
   letter-spacing: 0;
   line-height: 1.35;
@@ -103,12 +118,12 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   margin: 0;
   padding: 0 18% 0 18%;
   text-align: center;
-  font-size: 19pt;
+  font-size: ${JOMMU_EXCEL_TITLE_FONT_PT}pt;
   font-weight: 700;
   letter-spacing: 0.35em;
   text-indent: 0.35em;
   color: #000000;
-  font-family: "Noto Serif CJK JP", "Yu Mincho", "YuMincho", "MS Mincho", serif;
+  font-family: ${JOMMU_EXCEL_TITLE_FONT_FAMILY};
 }
 .jm-doc table.jm-tbl {
   width: 100%;
@@ -128,7 +143,7 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   color: #000000;
 }
 .jm-doc .jm-lbl {
-  background: ${JOMMU_HEADER_FILL};
+  background: ${JOMMU_EXCEL_HEADER_FILL};
   font-weight: 600;
   text-align: center;
   color: #000000;
@@ -184,45 +199,45 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   text-align: center;
   font-variant-numeric: tabular-nums;
   padding: 4px !important;
-  font-size: 10pt;
+  font-size: ${JOMMU_EXCEL_BODY_FONT_PT}pt;
 }
 .jm-doc .jm-plate {
   padding: 4px 6px !important;
-  font-size: 10pt;
+  font-size: ${JOMMU_EXCEL_BODY_FONT_PT}pt;
 }
 .jm-doc .jm-office-block {
   padding: 4px 6px !important;
   min-height: 2.6em;
-  font-size: 10pt;
+  font-size: ${JOMMU_EXCEL_BODY_FONT_PT}pt;
 }
 .jm-doc .jm-mgr-val {
   padding: 4px 6px !important;
-  font-size: 10pt;
+  font-size: ${JOMMU_EXCEL_BODY_FONT_PT}pt;
   min-height: 2.2em;
 }
 .jm-doc .jm-section-h {
-  background: ${JOMMU_HEADER_FILL};
+  background: ${JOMMU_EXCEL_HEADER_FILL};
   color: #000000;
   font-weight: 700;
   text-align: center;
-  font-size: 10pt;
+  font-size: ${JOMMU_EXCEL_BODY_FONT_PT}pt;
   padding: 4px !important;
   letter-spacing: 0.35em;
   text-indent: 0.35em;
   border-color: #000000;
 }
 .jm-doc .jm-work thead th {
-  background: ${JOMMU_HEADER_FILL};
+  background: ${JOMMU_EXCEL_HEADER_FILL};
   font-weight: 600;
   text-align: center;
-  font-size: 7.5pt;
+  font-size: ${JOMMU_SMALL_PT}pt;
   line-height: 1.2;
   padding: 3px 2px !important;
   color: #000000;
   border-color: #000000;
 }
 .jm-doc .jm-work tbody td {
-  font-size: 7.5pt;
+  font-size: ${JOMMU_EXCEL_BODY_FONT_PT}pt;
   padding: 2px 3px !important;
   height: 5mm;
   vertical-align: middle;
@@ -296,7 +311,7 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
 .jm-doc .jm-daiko {
   text-align: center;
   font-weight: 600;
-  font-size: 7.5pt;
+  font-size: ${JOMMU_SMALL_PT}pt;
 }
 .jm-doc .jm-foot-v {
   writing-mode: vertical-rl;
@@ -306,9 +321,9 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   max-width: 2.8rem;
   letter-spacing: 0.1em;
   padding: 5px 3px !important;
-  font-size: 7.5pt;
+  font-size: ${JOMMU_SMALL_PT}pt;
   line-height: 1.35;
-  background: ${JOMMU_HEADER_FILL};
+  background: ${JOMMU_EXCEL_HEADER_FILL};
   color: #000000;
   font-weight: 700;
 }
@@ -317,17 +332,17 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   font-weight: 600;
 }
 .jm-doc .jm-foot thead th {
-  background: ${JOMMU_HEADER_FILL};
+  background: ${JOMMU_EXCEL_HEADER_FILL};
   font-weight: 600;
   text-align: center;
-  font-size: 7.5pt;
+  font-size: ${JOMMU_SMALL_PT}pt;
   padding: 4px 5px !important;
   line-height: 1.2;
   color: #000000;
   vertical-align: bottom;
 }
 .jm-doc .jm-foot tbody td {
-  font-size: 10pt;
+  font-size: ${JOMMU_EXCEL_BODY_FONT_PT}pt;
   font-weight: 600;
   text-align: right;
   padding: 5px 7px !important;
@@ -342,7 +357,7 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   display: flex;
   justify-content: flex-end;
   margin-top: 0.8mm;
-  font-size: 8pt;
+  font-size: ${JOMMU_EXCEL_RETENTION_FONT_PT}pt;
   color: #000000;
   font-variant-numeric: tabular-nums;
 }
@@ -421,20 +436,7 @@ function renderJommuSheet(model: JommuKirokuboModel): string {
 </div>
 ${renderHeaderMeta(model)}
 <table class="jm-tbl jm-work">
-  <colgroup>
-    <col style="width:2.8%" />
-    <col style="width:9%" />
-    <col style="width:8%" />
-    <col style="width:9%" />
-    <col style="width:7%" />
-    <col style="width:8%" />
-    <col style="width:9%" />
-    <col style="width:7%" />
-    <col style="width:8.5%" />
-    <col style="width:8.5%" />
-    <col style="width:5.5%" />
-    <col style="width:17.2%" />
-  </colgroup>
+${colgroupMainFromExcel()}
   <thead>
     <tr><th class="jm-section-h" colspan="12">乗務記録</th></tr>
     <tr>
