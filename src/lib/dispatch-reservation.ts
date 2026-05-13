@@ -117,11 +117,14 @@ export function shiftFullyContainsBooking(shiftStart: Date, shiftEnd: Date, book
 export async function hasOverlappingReservation(
   db: Pick<Prisma.TransactionClient, "dispatchReservation">,
   tenantId: string,
-  driverEmployeeId: string,
+  driverEmployeeId: string | null,
   startsAt: Date,
   endsAt: Date,
   excludeReservationId?: string,
 ): Promise<boolean> {
+  if (driverEmployeeId === null) {
+    return false;
+  }
   const overlap = await db.dispatchReservation.findFirst({
     where: {
       tenantId,
@@ -162,7 +165,7 @@ export async function createDispatchReservationExplicitInTransaction(
   tx: Prisma.TransactionClient,
   args: {
     tenantId: string;
-    driverEmployeeId: string;
+    driverEmployeeId: string | null;
     vehicleId: string | null;
     startsAt: Date;
     endsAt: Date;
@@ -193,7 +196,7 @@ export async function createDispatchReservationExplicitInTransaction(
 
 export async function createDispatchReservationExplicit(args: {
   tenantId: string;
-  driverEmployeeId: string;
+  driverEmployeeId: string | null;
   vehicleId: string | null;
   startsAt: Date;
   endsAt: Date;

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
+import { SCHEDULE_UNASSIGNED_DRIVER_ID } from "../lib/schedule-constants";
 import { useSavedToast } from "../saved-toast";
 import { useDeviceKind } from "../hooks/useDeviceKind";
 import { Card, Err } from "../ui";
@@ -158,6 +159,11 @@ export default function TodaySchedulePage(): JSX.Element {
   const scheduleHeadPx = 36;
   const scheduleGridPx = scheduleAxis.slotCount * scheduleSlotPx;
 
+  const onlyUnassignedDriverColumn = useMemo(() => {
+    const ds = data?.drivers;
+    return Boolean(ds && ds.length === 1 && ds[0].employeeId === SCHEDULE_UNASSIGNED_DRIVER_ID);
+  }, [data?.drivers]);
+
   function openDialog(): void {
     setCustomerName("");
     setPhone("");
@@ -210,8 +216,7 @@ export default function TodaySchedulePage(): JSX.Element {
   const reservationsByDriver = useMemo(() => {
     const m = new Map<string, ReservationRow[]>();
     for (const row of data?.reservations ?? []) {
-      const id = row.driverEmployeeId ?? "";
-      if (!id) continue;
+      const id = row.driverEmployeeId ?? SCHEDULE_UNASSIGNED_DRIVER_ID;
       const arr = m.get(id) ?? [];
       arr.push(row);
       m.set(id, arr);
@@ -233,7 +238,7 @@ export default function TodaySchedulePage(): JSX.Element {
           value={viewDate}
           onChange={(e) => setViewDate(e.target.value)}
         />
-        <button type="button" className="settings-primary" disabled={!data?.drivers.length} onClick={() => openDialog()}>
+        <button type="button" className="settings-primary" disabled={loading || !data} onClick={() => openDialog()}>
           予定登録
         </button>
       </div>
@@ -242,11 +247,14 @@ export default function TodaySchedulePage(): JSX.Element {
 
       {loading ? (
         <p className="settings-hint">読み込み中…</p>
-      ) : !data?.drivers.length ? (
-        <p className="settings-hint">
-          この日に「客車」の確定シフトがある従業員がいません。勤怠の「シフト調整」で客車を付けた担当者がここに並び、予定を登録できます。
-        </p>
-      ) : scheduleTranspose ? (
+      ) : data ? (
+        <>
+          {onlyUnassignedDriverColumn ? (
+            <p className="settings-hint" style={{ marginBottom: "0.75rem" }}>
+              この日は客車の確定シフトがありません。「未予定」を選ぶと、担当者を決める前に運行予定だけ登録できます。
+            </p>
+          ) : null}
+          {scheduleTranspose ? (
         <div className="attend-schedule-wrap attend-schedule-wrap--transpose">
           <div className="attend-schedule-transpose-inner">
             <div className="attend-schedule-time-rail" style={{ width: "2.35rem", flexShrink: 0 }}>
@@ -328,7 +336,7 @@ export default function TodaySchedulePage(): JSX.Element {
             })}
           </div>
         </div>
-      ) : (
+          ) : (
         <div className="attend-schedule-wrap">
           <div className="attend-schedule-axis">
             <div className="attend-schedule-corner" />
@@ -370,7 +378,9 @@ export default function TodaySchedulePage(): JSX.Element {
             );
           })}
         </div>
-      )}
+          )}
+        </>
+      ) : null}
 
       <p className="settings-hint" style={{ marginTop: "0.75rem" }}>
         横軸は設定の営業時間（曜日別・特定日を含む）に合わせた15分刻みです。表示は運行予定のみです（確定シフトの帯は表示しません）。
@@ -443,7 +453,12 @@ export default function TodaySchedulePage(): JSX.Element {
                     </option>
                   ))}
                 </select>
-                <label htmlFor="sr-driver">客車担当者（この日のシフト）</label>
+                <label htmlFor="sr-driver">
+                  客車担当者（この日のシフト）
+                  {onlyUnassignedDriverColumn ? (
+                    <span style={{ fontWeight: 400, color: "var(--color-muted)" }}> — 未確定時は「未予定」</span>
+                  ) : null}
+                </label>
                 <select id="sr-driver" value={driverEmployeeId} onChange={(e) => setDriverEmployeeId(e.target.value)}>
                   <option value="">選択してください</option>
                   {(data?.drivers ?? []).map((d) => (

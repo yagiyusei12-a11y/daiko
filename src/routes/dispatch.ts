@@ -12,6 +12,7 @@ import {
   parseDutiesJson,
   YMD_RE,
 } from "../lib/dispatch-reservation.js";
+import { SCHEDULE_UNASSIGNED_DRIVER_ID } from "../lib/schedule-constants.js";
 import { loadUserAccess, type UserAccessContext } from "../lib/permissions.js";
 import { parseTokyoLocalDateTimeToUtc, tokyoDayRangeUtc } from "../lib/tokyo-datetime.js";
 import { prisma } from "../db.js";
@@ -30,7 +31,7 @@ async function loadDriverRows(
     include: { employee: { select: { familyName: true, givenName: true } } },
     orderBy: [{ employee: { familyName: "asc" } }, { employee: { givenName: "asc" } }],
   });
-  return rows
+  const out = rows
     .filter((r) => parseDutiesJson(r.dutiesJson).includes("客車"))
     .map((r) => ({
       employeeId: r.employeeId,
@@ -38,6 +39,15 @@ async function loadDriverRows(
       startTime: r.startTime,
       endTime: r.endTime,
     }));
+  if (out.length === 0) {
+    out.push({
+      employeeId: SCHEDULE_UNASSIGNED_DRIVER_ID,
+      name: "未予定",
+      startTime: "0:00",
+      endTime: "24:00",
+    });
+  }
+  return out;
 }
 
 export async function registerDispatchRoutes(app: FastifyInstance): Promise<void> {
@@ -66,7 +76,7 @@ export async function registerDispatchRoutes(app: FastifyInstance): Promise<void
       endsAt: { gt: range.start },
     };
     if (access.isStaffShiftOnly && access.employeeId) {
-      resWhere.driverEmployeeId = access.employeeId;
+      resWhere.OR = [{ driverEmployeeId: access.employeeId }, { driverEmployeeId: null }];
     }
 
     const reservations = await prisma.dispatchReservation.findMany({
@@ -106,7 +116,7 @@ export async function registerDispatchRoutes(app: FastifyInstance): Promise<void
 
     const startLocal = String(b.startLocal ?? "").trim();
     const durationMinutes = typeof b.durationMinutes === "number" ? b.durationMinutes : Number(b.durationMinutes);
-    const driverEmployeeId = String(b.driverEmployeeId ?? "").trim();
+    const driverRaw = String(b.driverEmployeeId ?? "").trim();
     const vehicleIdRaw = b.vehicleId !== undefined && b.vehicleId !== null ? String(b.vehicleId).trim() : "";
     const vehicleId = vehicleIdRaw || null;
 
@@ -124,13 +134,18 @@ export async function registerDispatchRoutes(app: FastifyInstance): Promise<void
     if (!Number.isFinite(durationMinutes) || durationMinutes < 15 || durationMinutes > 480 || durationMinutes % 15 !== 0) {
       return reply.code(400).send({ error: "予定実車時間は 15〜480 分で 15 分刻みにしてください" });
     }
-    if (!driverEmployeeId) {
+    if (!driverRaw) {
       return reply.code(400).send({ error: "客車担当者を選んでください" });
     }
 
+    const driverUnassigned = driverRaw === SCHEDULE_UNASSIGNED_DRIVER_ID;
+    const driverEmployeeId: string | null = driverUnassigned ? null : driverRaw;
+
     if (access.isStaffShiftOnly) {
-      if (!access.employeeId || driverEmployeeId !== access.employeeId) {
-        return reply.code(403).send({ error: "このアカウントでは選べる客車担当者はご自身のみです" });
+      if (!driverUnassigned) {
+        if (!access.employeeId || driverRaw !== access.employeeId) {
+          return reply.code(403).send({ error: "このアカウントでは選べる客車担当者はご自身のみです" });
+        }
       }
     }
 
@@ -145,19 +160,21 @@ export async function registerDispatchRoutes(app: FastifyInstance): Promise<void
       return reply.code(400).send({ error: "日時に日付が含まれていません" });
     }
 
-    const conf = await prisma.confirmedShiftDay.findFirst({
-      where: { tenantId, businessDate, employeeId: driverEmployeeId },
-      select: { dutiesJson: true },
-    });
-    if (!conf || !parseDutiesJson(conf.dutiesJson).includes("客車")) {
-      return reply.code(400).send({ error: "その日の確定シフトで客車を担当している従業員を選んでください" });
-    }
+    if (driverEmployeeId !== null) {
+      const conf = await prisma.confirmedShiftDay.findFirst({
+        where: { tenantId, businessDate, employeeId: driverEmployeeId },
+        select: { dutiesJson: true },
+      });
+      if (!conf || !parseDutiesJson(conf.dutiesJson).includes("客車")) {
+        return reply.code(400).send({ error: "その日の確定シフトで客車を担当している従業員を選んでください" });
+      }
 
-    const emp = await prisma.employee.findFirst({
-      where: { id: driverEmployeeId, tenantId, status: "ACTIVE" },
-      select: { id: true },
-    });
-    if (!emp) return reply.code(404).send({ error: "従業員が見つかりません" });
+      const emp = await prisma.employee.findFirst({
+        where: { id: driverEmployeeId, tenantId, status: "ACTIVE" },
+        select: { id: true },
+      });
+      if (!emp) return reply.code(404).send({ error: "従業員が見つかりません" });
+    }
 
     if (vehicleId) {
       const v = await prisma.vehicle.findFirst({ where: { id: vehicleId, tenantId }, select: { id: true } });
