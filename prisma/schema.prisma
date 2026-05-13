@@ -268,8 +268,8 @@ model InstructionRecord {
   sessionGroupId   String?
   /// 指導実施場所
   instructionVenue String   @default("")
-  /// 指導担当者名（複数行可）
-  instructorNames  String   @default("") @db.Text
+  /// 指導担当者（従業員マスタの id 配列）
+  instructorEmployeeIds Json     @default("[]")
   /// 指導事項
   instructionItems String   @db.Text
   /// 特記事項

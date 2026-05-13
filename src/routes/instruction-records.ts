@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import type { Prisma } from "@prisma/client";
 import { authenticate, jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
 import { tokyoDayRangeUtc } from "../lib/tokyo-datetime.js";
@@ -9,7 +10,16 @@ const MAX_TEXT = 100_000;
 const MAX_LIST = 500;
 const MAX_BATCH_CREATE = 80;
 const MAX_VENUE = 500;
-const MAX_INSTRUCTOR_NAMES = 4000;
+const MAX_INSTRUCTORS = 30;
+
+function parseEmployeeIdArrayJson(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.map((x) => String(x).trim()).filter(Boolean))];
+}
+
+function employeeName(e: { familyName: string; givenName: string }): string {
+  return `${e.familyName} ${e.givenName}`.trim();
+}
 
 export async function registerInstructionRecordsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
@@ -43,22 +53,47 @@ export async function registerInstructionRecordsRoutes(app: FastifyInstance): Pr
       },
     });
 
+    const allInstructorIds = new Set<string>();
+    for (const r of rows) {
+      for (const id of parseEmployeeIdArrayJson(r.instructorEmployeeIds)) {
+        allInstructorIds.add(id);
+      }
+    }
+    const instRows =
+      allInstructorIds.size > 0
+        ? await prisma.employee.findMany({
+            where: { tenantId, id: { in: [...allInstructorIds] } },
+            select: { id: true, familyName: true, givenName: true },
+          })
+        : [];
+    const instMap = new Map(instRows.map((e) => [e.id, e]));
+
     return {
-      records: rows.map((r) => ({
-        id: r.id,
-        sessionGroupId: r.sessionGroupId,
-        employeeId: r.employeeId,
-        employeeFamilyName: r.employee.familyName,
-        employeeGivenName: r.employee.givenName,
-        date: r.date.toISOString(),
-        instructionVenue: r.instructionVenue,
-        instructorNames: r.instructorNames,
-        instructionItems: r.instructionItems,
-        specialNotes: r.specialNotes,
-        remarks: r.remarks,
-        createdAt: r.createdAt.toISOString(),
-        updatedAt: r.updatedAt.toISOString(),
-      })),
+      records: rows.map((r) => {
+        const ids = parseEmployeeIdArrayJson(r.instructorEmployeeIds);
+        const instructors = ids
+          .map((id) => instMap.get(id))
+          .filter((e): e is (typeof instRows)[0] => e != null)
+          .map((e) => ({ id: e.id, familyName: e.familyName, givenName: e.givenName }));
+        const instructorLabel = instructors.map((e) => employeeName(e)).join("、");
+        return {
+          id: r.id,
+          sessionGroupId: r.sessionGroupId,
+          employeeId: r.employeeId,
+          employeeFamilyName: r.employee.familyName,
+          employeeGivenName: r.employee.givenName,
+          date: r.date.toISOString(),
+          instructionVenue: r.instructionVenue,
+          instructorEmployeeIds: ids,
+          instructors,
+          instructorLabel,
+          instructionItems: r.instructionItems,
+          specialNotes: r.specialNotes,
+          remarks: r.remarks,
+          createdAt: r.createdAt.toISOString(),
+          updatedAt: r.updatedAt.toISOString(),
+        };
+      }),
     };
   });
 
@@ -68,10 +103,18 @@ export async function registerInstructionRecordsRoutes(app: FastifyInstance): Pr
 
     const dateRaw = String(b.date ?? "").trim();
     const instructionVenue = String(b.instructionVenue ?? "").trim();
-    const instructorNames = String(b.instructorNames ?? "");
     const instructionItems = String(b.instructionItems ?? "");
     const specialNotes = String(b.specialNotes ?? "");
     const remarks = String(b.remarks ?? "");
+
+    const rawInst = b.instructorEmployeeIds;
+    const instructorEmployeeIds = Array.isArray(rawInst)
+      ? [...new Set(rawInst.map((x) => String(x).trim()).filter(Boolean))]
+      : [];
+
+    if (instructorEmployeeIds.length > MAX_INSTRUCTORS) {
+      return reply.code(400).send({ error: `指導担当者は ${MAX_INSTRUCTORS} 名まで選択できます` });
+    }
 
     const rawIds = b.employeeIds;
     let employeeIds: string[] = [];
@@ -98,9 +141,6 @@ export async function registerInstructionRecordsRoutes(app: FastifyInstance): Pr
     if (instructionVenue.length > MAX_VENUE) {
       return reply.code(400).send({ error: "指導実施場所が長すぎます" });
     }
-    if (instructorNames.length > MAX_INSTRUCTOR_NAMES) {
-      return reply.code(400).send({ error: "指導担当者名が長すぎます" });
-    }
     if (instructionItems.length > MAX_TEXT || specialNotes.length > MAX_TEXT || remarks.length > MAX_TEXT) {
       return reply.code(400).send({ error: "入力が長すぎます" });
     }
@@ -113,7 +153,18 @@ export async function registerInstructionRecordsRoutes(app: FastifyInstance): Pr
       return reply.code(400).send({ error: "無効な従業員が含まれるか、在籍でない方が含まれています" });
     }
 
+    if (instructorEmployeeIds.length > 0) {
+      const inst = await prisma.employee.findMany({
+        where: { tenantId, id: { in: instructorEmployeeIds }, status: "ACTIVE" },
+        select: { id: true },
+      });
+      if (inst.length !== instructorEmployeeIds.length) {
+        return reply.code(400).send({ error: "指導担当者に無効な従業員が含まれています" });
+      }
+    }
+
     const sessionGroupId = randomUUID();
+    const instructorJson = instructorEmployeeIds as unknown as Prisma.InputJsonValue;
 
     const rows = await prisma.$transaction(
       employeeIds.map((employeeId) =>
@@ -123,7 +174,7 @@ export async function registerInstructionRecordsRoutes(app: FastifyInstance): Pr
             employeeId,
             sessionGroupId,
             instructionVenue,
-            instructorNames,
+            instructorEmployeeIds: instructorJson,
             date,
             instructionItems,
             specialNotes,

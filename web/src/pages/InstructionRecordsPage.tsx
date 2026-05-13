@@ -21,10 +21,10 @@ export default function InstructionRecordsPage(): JSX.Element {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [employees, setEmployees] = useState<EmployeeOpt[]>([]);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedRecipientIds, setSelectedRecipientIds] = useState<Set<string>>(new Set());
+  const [selectedInstructorIds, setSelectedInstructorIds] = useState<Set<string>>(new Set());
   const [dateLocal, setDateLocal] = useState(() => toDatetimeLocalValue(new Date()));
   const [instructionVenue, setInstructionVenue] = useState("");
-  const [instructorNames, setInstructorNames] = useState("");
   const [instructionItems, setInstructionItems] = useState(DEFAULT_INSTRUCTION_ITEMS);
   const [specialNotes, setSpecialNotes] = useState(DEFAULT_SPECIAL_NOTES);
   const [remarks, setRemarks] = useState(DEFAULT_REMARKS);
@@ -41,8 +41,8 @@ export default function InstructionRecordsPage(): JSX.Element {
     })();
   }, []);
 
-  const toggleId = useCallback((id: string) => {
-    setSelectedIds((prev) => {
+  const toggleRecipient = useCallback((id: string) => {
+    setSelectedRecipientIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -50,19 +50,36 @@ export default function InstructionRecordsPage(): JSX.Element {
     });
   }, []);
 
-  const selectAll = useCallback(() => {
-    setSelectedIds(new Set(employees.map((e) => e.id)));
+  const selectAllRecipients = useCallback(() => {
+    setSelectedRecipientIds(new Set(employees.map((e) => e.id)));
   }, [employees]);
 
-  const clearSelection = useCallback(() => {
-    setSelectedIds(new Set());
+  const clearRecipients = useCallback(() => {
+    setSelectedRecipientIds(new Set());
+  }, []);
+
+  const toggleInstructor = useCallback((id: string) => {
+    setSelectedInstructorIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectAllInstructors = useCallback(() => {
+    setSelectedInstructorIds(new Set(employees.map((e) => e.id)));
+  }, [employees]);
+
+  const clearInstructors = useCallback(() => {
+    setSelectedInstructorIds(new Set());
   }, []);
 
   const save = useCallback(async () => {
     setErr(null);
-    const employeeIds = [...selectedIds];
+    const employeeIds = [...selectedRecipientIds];
     if (employeeIds.length === 0) {
-      setErr("対象者を1名以上選択してください");
+      setErr("指導を受ける対象者を1名以上選択してください");
       return;
     }
     const parsed = new Date(dateLocal);
@@ -70,14 +87,15 @@ export default function InstructionRecordsPage(): JSX.Element {
       setErr("指導日時が不正です");
       return;
     }
+    const instructorEmployeeIds = [...selectedInstructorIds];
     setBusy(true);
     const r = await apiFetch<{ ids: string[]; count: number }>("/instruction-records", {
       method: "POST",
       json: {
         employeeIds,
+        instructorEmployeeIds,
         date: parsed.toISOString(),
         instructionVenue,
-        instructorNames,
         instructionItems,
         specialNotes,
         remarks,
@@ -90,41 +108,79 @@ export default function InstructionRecordsPage(): JSX.Element {
     }
     setDateLocal(toDatetimeLocalValue(new Date()));
     setInstructionVenue("");
-    setInstructorNames("");
     setInstructionItems(DEFAULT_INSTRUCTION_ITEMS);
     setSpecialNotes(DEFAULT_SPECIAL_NOTES);
     setRemarks(DEFAULT_REMARKS);
-    setSelectedIds(new Set());
-  }, [selectedIds, dateLocal, instructionVenue, instructorNames, instructionItems, specialNotes, remarks]);
+    setSelectedRecipientIds(new Set());
+    setSelectedInstructorIds(new Set());
+  }, [
+    selectedRecipientIds,
+    selectedInstructorIds,
+    dateLocal,
+    instructionVenue,
+    instructionItems,
+    specialNotes,
+    remarks,
+  ]);
 
   return (
     <Card title="指導記録簿">
       <p className="settings-hint">
-        従業員への指導内容を登録します。一覧・印刷（A4縦・帳票形式）は「書類」メニューの「指導記録簿」タブから行えます。
+        従業員への指導内容を登録します。一覧・印刷（1件A4縦1枚）は「書類」メニューの「指導記録簿」タブから行えます。
       </p>
       <div className="instruction-form">
         <Err msg={err} />
         <div className="field-grid instruction-target-grid">
           <div className="field field--block instruction-target-field">
-            <span className="field-label">対象者（複数可）</span>
+            <span className="field-label">指導を受ける者（複数可）</span>
             <div className="instruction-target-actions no-print">
-              <button type="button" className="settings-secondary" disabled={busy} onClick={selectAll}>
+              <button type="button" className="settings-secondary" disabled={busy} onClick={selectAllRecipients}>
                 すべて選択
               </button>
-              <button type="button" className="settings-secondary" disabled={busy} onClick={clearSelection}>
+              <button type="button" className="settings-secondary" disabled={busy} onClick={clearRecipients}>
                 選択解除
               </button>
             </div>
-            <div className="instruction-employee-checks" role="group" aria-label="対象者">
+            <div className="instruction-employee-checks" role="group" aria-label="指導を受ける者">
               {employees.length === 0 ? (
                 <p className="settings-hint">在籍の従業員がいません。</p>
               ) : (
                 employees.map((e) => (
-                  <label key={e.id} className="settings-check instruction-employee-check">
+                  <label key={`rec-${e.id}`} className="settings-check instruction-employee-check">
                     <input
                       type="checkbox"
-                      checked={selectedIds.has(e.id)}
-                      onChange={() => toggleId(e.id)}
+                      checked={selectedRecipientIds.has(e.id)}
+                      onChange={() => toggleRecipient(e.id)}
+                      disabled={busy}
+                    />
+                    <span>
+                      {e.familyName} {e.givenName}
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+          <div className="field field--block instruction-target-field">
+            <span className="field-label">指導担当（従業員マスタ・複数可）</span>
+            <div className="instruction-target-actions no-print">
+              <button type="button" className="settings-secondary" disabled={busy} onClick={selectAllInstructors}>
+                すべて選択
+              </button>
+              <button type="button" className="settings-secondary" disabled={busy} onClick={clearInstructors}>
+                選択解除
+              </button>
+            </div>
+            <div className="instruction-employee-checks" role="group" aria-label="指導担当">
+              {employees.length === 0 ? (
+                <p className="settings-hint">在籍の従業員がいません。</p>
+              ) : (
+                employees.map((e) => (
+                  <label key={`ins-${e.id}`} className="settings-check instruction-employee-check">
+                    <input
+                      type="checkbox"
+                      checked={selectedInstructorIds.has(e.id)}
+                      onChange={() => toggleInstructor(e.id)}
                       disabled={busy}
                     />
                     <span>
@@ -157,18 +213,6 @@ export default function InstructionRecordsPage(): JSX.Element {
             placeholder="例：本社会議室、車庫前"
             maxLength={500}
             autoComplete="off"
-          />
-        </label>
-        <label className="field field--block">
-          <span className="field-label">指導担当者名（複数行可）</span>
-          <textarea
-            className="field-control instruction-textarea instruction-textarea--short"
-            rows={3}
-            value={instructorNames}
-            onChange={(e) => setInstructorNames(e.target.value)}
-            disabled={busy}
-            placeholder={"例：山田 太郎\n佐藤 花子"}
-            maxLength={4000}
           />
         </label>
         <label className="field field--block">
