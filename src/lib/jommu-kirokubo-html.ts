@@ -55,7 +55,7 @@ function timeCells(hm: string | null): string {
 }
 
 const PRINT_CSS = `
-@page { size: A4 landscape; margin: 8mm 10mm; }
+@page { size: A4 portrait; margin: 8mm 10mm; }
 @media print {
   .no-print { display: none !important; }
   body {
@@ -100,11 +100,11 @@ body {
 .toolbar button:hover { background: #334155; }
 .jommu-sheet {
   width: 100%;
-  max-width: 266mm;
+  max-width: 186mm;
   margin: 0 auto 14px;
   page-break-after: always;
   break-after: page;
-  padding: 12px 14px 14px;
+  padding: 10px 12px 12px;
   box-sizing: border-box;
   background: #fff;
   border: 1px solid #cbd5e1;
@@ -114,21 +114,23 @@ body {
 .jommu-sheet:last-of-type { page-break-after: auto; break-after: auto; }
 .jommu-retention {
   text-align: right;
-  font-size: 8.5pt;
-  margin-bottom: 6px;
-  padding-right: 2px;
+  font-size: 8pt;
+  margin-bottom: 4px;
+  padding-right: 1px;
   color: #64748b;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
 }
 .jommu-title {
   text-align: center;
-  font-size: 16pt;
+  font-size: 15pt;
   font-weight: 600;
-  margin: 2px 0 14px;
-  letter-spacing: 0.22em;
-  text-indent: 0.22em;
+  margin: 0 0 10px;
+  letter-spacing: 0.18em;
+  text-indent: 0.18em;
   color: #0f172a;
   font-feature-settings: "palt";
+  line-height: 1.25;
 }
 .jommu-meta {
   width: 100%;
@@ -140,7 +142,7 @@ body {
 }
 .jommu-meta td, .jommu-meta th {
   border: 1px solid #cbd5e1;
-  padding: 7px 8px;
+  padding: 8px 9px;
   vertical-align: middle;
   font-size: 9.5pt;
 }
@@ -157,13 +159,33 @@ body {
   width: 7.5em;
   color: #1e293b;
   border-right-color: #94a3b8;
+  vertical-align: middle;
+  line-height: 1.45;
+  padding: 8px 6px;
 }
-.jommu-meta .val { min-height: 2.2em; }
+.jommu-meta .val { min-height: 2em; }
 .jommu-meta .t-colon { padding: 0 2px; }
 .jommu-meta .t-blank { letter-spacing: 0.1em; }
-.jommu-meta .crew { font-size: 11pt; min-height: 3em; vertical-align: top; line-height: 1.45; }
-.jommu-meta .office { font-size: 11pt; vertical-align: top; line-height: 1.45; color: #0f172a; }
-.jommu-meta .time { font-size: 9.5pt; }
+.jommu-meta .crew {
+  font-size: 12pt;
+  font-weight: 600;
+  vertical-align: middle;
+  line-height: 1.4;
+  padding: 10px 10px;
+  color: #0f172a;
+}
+.jommu-meta .office {
+  font-size: 10.5pt;
+  vertical-align: middle;
+  line-height: 1.5;
+  color: #0f172a;
+  padding: 10px 10px;
+}
+.jommu-meta .time {
+  font-size: 9.5pt;
+  line-height: 1.55;
+  padding: 9px 10px;
+}
 .jommu-meta .t-center { text-align: center; }
 .jommu-main {
   width: 100%;
@@ -175,7 +197,7 @@ body {
 }
 .jommu-main th, .jommu-main td {
   border: 1px solid #cbd5e1;
-  padding: 6px 5px;
+  padding: 5px 4px;
   vertical-align: middle;
   font-size: 8.5pt;
 }
@@ -183,22 +205,32 @@ body {
   background: linear-gradient(180deg, #f8fafc 0%, #e8edf3 100%);
   font-weight: 600;
   text-align: center;
-  line-height: 1.3;
+  line-height: 1.2;
   color: #0f172a;
   border-bottom-color: #94a3b8;
+  padding: 7px 3px;
+  vertical-align: middle;
+  hyphens: none;
 }
+.jommu-main thead th .u-inline {
+  font-size: 7pt;
+  font-weight: 500;
+  color: #64748b;
+  white-space: nowrap;
+}
+.jommu-main thead th.th-compact { font-size: 7.8pt; padding: 6px 2px; }
 .jommu-main .c-no { width: 2em; text-align: center; color: #64748b; font-weight: 600; }
-.jommu-main .c-num { text-align: right; }
-.jommu-main .u { font-size: 7.5pt; font-weight: normal; color: #64748b; }
+.jommu-main .c-num { text-align: center; }
+.jommu-main .u { font-size: 7pt; font-weight: normal; color: #64748b; }
 .jommu-main tbody td { min-height: 1.4em; }
 .jommu-main tbody tr:nth-child(even) td { background: #f8fafc; }
 .jommu-main .col-daiko { text-align: center; font-weight: 600; color: #475569; }
 .jommu-main .t-center { text-align: center; }
-.jommu-main .num-with-unit { text-align: right; padding: 6px 7px; }
+.jommu-main .num-with-unit { text-align: center; padding: 6px 5px; }
 .jommu-main .nwu {
   display: inline-flex;
   align-items: baseline;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 0.15em;
   white-space: nowrap;
   max-width: 100%;
@@ -219,7 +251,7 @@ body {
 }
 .jommu-footer td, .jommu-footer th {
   border: 1px solid #cbd5e1;
-  padding: 7px 6px;
+  padding: 8px 5px;
   font-size: 9pt;
   text-align: center;
   vertical-align: middle;
@@ -239,11 +271,22 @@ body {
   background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
   font-weight: 600;
   color: #0f172a;
+  line-height: 1.35;
+  padding: 8px 4px;
+  font-size: 8.5pt;
+  white-space: normal;
+  word-break: keep-all;
+}
+.jommu-footer .fh .u-inline {
+  font-size: 7pt;
+  font-weight: 500;
+  color: #64748b;
+  white-space: nowrap;
 }
 .jommu-footer .fd {
-  text-align: right;
-  min-height: 1.55em;
-  padding: 7px 10px;
+  text-align: center;
+  min-height: 1.6em;
+  padding: 9px 8px;
   font-variant-numeric: tabular-nums;
   color: #0f172a;
 }
@@ -319,16 +362,16 @@ function renderJommuSheet(model: JommuKirokuboModel): string {
     <tr>
       <th class="c-no">No.</th>
       <th>依頼者</th>
-      <th>客車の<br/>車両番号</th>
+      <th class="th-compact">客車の車両番号</th>
       <th>出庫場所</th>
-      <th>開始<br/>時刻</th>
+      <th>開始時刻</th>
       <th>経由地</th>
       <th>到着場所</th>
-      <th>到着<br/>時刻</th>
-      <th>走行距離<br/><span class="u">（km）</span></th>
-      <th>料金<br/><span class="u">（円）</span></th>
-      <th>運転した<br/>車両</th>
-      <th>同伴<br/>従事者氏名</th>
+      <th>到着時刻</th>
+      <th>走行距離<span class="u-inline">（km）</span></th>
+      <th>料金<span class="u-inline">（円）</span></th>
+      <th class="th-compact">運転した車両</th>
+      <th class="th-compact">同伴従事者氏名</th>
     </tr>
   </thead>
   <tbody>
@@ -339,11 +382,11 @@ ${rows}
 <table class="jommu-footer">
   <tr>
     <th class="vm" rowspan="2">メーター・距離等</th>
-    <th class="fh">始業時<br/><span class="u">（km）</span></th>
-    <th class="fh">終業時<br/><span class="u">（km）</span></th>
-    <th class="fh">走行距離合計<br/><span class="u">（km）</span></th>
-    <th class="fh">実車走行距離<br/><span class="u">（km）</span></th>
-    <th class="fh">売上合計<br/><span class="u">（円）</span></th>
+    <th class="fh">始業時<span class="u-inline">（km）</span></th>
+    <th class="fh">終業時<span class="u-inline">（km）</span></th>
+    <th class="fh">走行距離合計<span class="u-inline">（km）</span></th>
+    <th class="fh">実車走行距離<span class="u-inline">（km）</span></th>
+    <th class="fh">売上合計<span class="u-inline">（円）</span></th>
   </tr>
   <tr>
     <td class="fd">${model.odoStartKm != null ? esc(model.odoStartKm) : ""}</td>
