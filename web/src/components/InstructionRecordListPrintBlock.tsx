@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import { Err } from "../ui";
+import { InstructionRecordEditDialog } from "./InstructionRecordEditDialog";
 import { type InstructionRow, firstDayOfMonth, formatInstructionDate, lastDayOfMonth } from "../lib/instruction-records-ui";
 
 import "../instruction-records-print.css";
@@ -10,7 +11,9 @@ function dashIfEmpty(s: string): string {
   return t ? s : "—";
 }
 
-/** 書類ページ「指導記録簿」タブ用：期間絞り込み・一覧・印刷（1レコード＝A4縦1枚） */
+type EmployeeOpt = { id: string; familyName: string; givenName: string; status: string };
+
+/** 書類ページ「指導記録簿」タブ用：期間絞り込み・一覧・印刷（1件＝A4縦1枚）・編集・削除 */
 export default function InstructionRecordListPrintBlock(): JSX.Element {
   const now = useMemo(() => new Date(), []);
   const [from, setFrom] = useState(() => firstDayOfMonth(now));
@@ -18,6 +21,8 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [records, setRecords] = useState<InstructionRow[]>([]);
+  const [employees, setEmployees] = useState<EmployeeOpt[]>([]);
+  const [editRecord, setEditRecord] = useState<InstructionRow | null>(null);
 
   const load = useCallback(async () => {
     setErr(null);
@@ -35,6 +40,13 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void (async () => {
+      const r = await apiFetch<{ employees: EmployeeOpt[] }>("/settings/employees");
+      if (r.ok) setEmployees(r.data.employees);
+    })();
+  }, []);
 
   useEffect(() => {
     const afterPrint = () => document.body.classList.remove("instruction-records-printing");
@@ -55,6 +67,14 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
   return (
     <div className="instruction-list">
       <Err msg={err} />
+      <InstructionRecordEditDialog
+        open={editRecord != null}
+        record={editRecord}
+        employees={employees}
+        onClose={() => setEditRecord(null)}
+        onSaved={() => void load()}
+      />
+
       <div className="instruction-filter no-print field-grid">
         <label className="field">
           <span className="field-label">開始日</span>
@@ -75,7 +95,7 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
       </div>
 
       <p className="settings-hint no-print" style={{ marginTop: 0 }}>
-        登録はメニュー「指導」から行えます。印刷は1件につきA4縦1枚です。
+        登録はメニュー「指導」から行えます。複数人をまとめて登録すると1件のデータになります。印刷は1件につきA4縦1枚です。
       </p>
 
       <div className="instruction-screen-table-wrap no-print">
@@ -86,16 +106,17 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
               <th>指導日時</th>
               <th>実施場所</th>
               <th>担当者</th>
-              <th>氏名</th>
+              <th>受講者</th>
               <th>指導事項</th>
               <th>特記事項</th>
               <th>備考</th>
+              <th className="instruction-col-actions">操作</th>
             </tr>
           </thead>
           <tbody>
             {records.length === 0 ? (
               <tr>
-                <td colSpan={8} className="instruction-table-empty">
+                <td colSpan={9} className="instruction-table-empty">
                   該当する指導記録がありません
                 </td>
               </tr>
@@ -106,12 +127,15 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
                   <td>{formatInstructionDate(r.date)}</td>
                   <td className="instruction-cell-pre">{dashIfEmpty(r.instructionVenue ?? "")}</td>
                   <td className="instruction-cell-pre">{dashIfEmpty(r.instructorLabel ?? "")}</td>
-                  <td>
-                    {r.employeeFamilyName} {r.employeeGivenName}
-                  </td>
+                  <td className="instruction-cell-pre">{dashIfEmpty(r.recipientLabel ?? "")}</td>
                   <td className="instruction-cell-pre">{r.instructionItems}</td>
                   <td className="instruction-cell-pre">{r.specialNotes}</td>
                   <td className="instruction-cell-pre">{r.remarks}</td>
+                  <td className="instruction-col-actions">
+                    <button type="button" className="settings-secondary instruction-row-btn" onClick={() => setEditRecord(r)}>
+                      編集
+                    </button>
+                  </td>
                 </tr>
               ))
             )}
@@ -121,7 +145,7 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
 
       <div className="instruction-print-sheet">
         <p className="instruction-print-global-meta">
-          出力期間: {from} ～ {to}（東京） / 印刷枚数: {sortedRows.length} 枚（1指導1枚）
+          出力期間: {from} ～ {to}（東京） / 印刷枚数: {sortedRows.length} 枚（1件につき1枚）
         </p>
         {sortedRows.map((r) => (
           <article key={r.id} className="instruction-doc-page">
@@ -145,9 +169,7 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
                 </tr>
                 <tr>
                   <th scope="row">指導を受けた者</th>
-                  <td className="instruction-doc-td-pre">
-                    {r.employeeFamilyName} {r.employeeGivenName}
-                  </td>
+                  <td className="instruction-doc-td-pre">{dashIfEmpty(r.recipientLabel)}</td>
                 </tr>
                 <tr className="instruction-doc-row-tall">
                   <th scope="row">指導項目</th>

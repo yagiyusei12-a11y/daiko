@@ -250,38 +250,33 @@ model Employee {
   confirmedShiftDays       ConfirmedShiftDay[]
   timeCardPunches          TimeCardPunch[]
   dispatchReservationsAsDriver DispatchReservation[] @relation("DispatchReservationDriver")
-  instructionRecords           InstructionRecord[]
 
   @@index([tenantId, status])
 }
 
-/// 指導記録簿（従業員別の指導内容の登録・一覧・印刷用）
+/// 指導記録簿（1行＝1回の指導。受講者は recipientEmployeeIds に複数可）
 model InstructionRecord {
-  id               String   @id @default(cuid())
-  tenantId         String
-  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  employeeId       String
-  employee         Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  id                    String   @id @default(cuid())
+  tenantId              String
+  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// 指導を受けた従業員 id（JSON 配列・1名以上）
+  recipientEmployeeIds  Json
   /// 指導日時
-  date             DateTime
-  /// 同一保存操作で作成された行をまとめる（印刷で受講者を一覧するため）
-  sessionGroupId   String?
+  date                  DateTime
   /// 指導実施場所
-  instructionVenue String   @default("")
+  instructionVenue      String   @default("")
   /// 指導担当者（従業員マスタの id 配列）
   instructorEmployeeIds Json     @default("[]")
   /// 指導事項
-  instructionItems String   @db.Text
+  instructionItems      String   @db.Text
   /// 特記事項
-  specialNotes     String   @db.Text
+  specialNotes            String   @db.Text
   /// 備考
-  remarks          String   @db.Text
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  remarks                 String   @db.Text
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
   @@index([tenantId, date])
-  @@index([tenantId, employeeId])
-  @@index([tenantId, sessionGroupId])
 }
 
 /// シフト調整で確定した日単位の勤務（担当業務は JSON 文字列配列）

@@ -2,18 +2,19 @@ export type InstructionInstructor = { id: string; familyName: string; givenName:
 
 export type InstructionRow = {
   id: string;
-  sessionGroupId: string | null;
-  employeeId: string;
-  employeeFamilyName: string;
-  employeeGivenName: string;
   date: string;
   instructionVenue: string;
+  recipientEmployeeIds: string[];
+  recipients: InstructionInstructor[];
+  recipientLabel: string;
   instructorEmployeeIds: string[];
   instructors: InstructionInstructor[];
   instructorLabel: string;
   instructionItems: string;
   specialNotes: string;
   remarks: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 function pad2(n: number): string {
