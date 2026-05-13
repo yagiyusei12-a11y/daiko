@@ -6,6 +6,7 @@ import { tokyoDayRangeUtc } from "../lib/tokyo-datetime.js";
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_TEXT = 100_000;
 const MAX_LIST = 500;
+const MAX_BATCH_CREATE = 80;
 
 export async function registerInstructionRecordsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
@@ -59,13 +60,26 @@ export async function registerInstructionRecordsRoutes(app: FastifyInstance): Pr
     const { tenantId } = jwtUser(req);
     const b = req.body || {};
 
-    const employeeId = String(b.employeeId ?? "").trim();
     const dateRaw = String(b.date ?? "").trim();
     const instructionItems = String(b.instructionItems ?? "");
     const specialNotes = String(b.specialNotes ?? "");
     const remarks = String(b.remarks ?? "");
 
-    if (!employeeId) return reply.code(400).send({ error: "従業員を選択してください" });
+    const rawIds = b.employeeIds;
+    let employeeIds: string[] = [];
+    if (Array.isArray(rawIds)) {
+      employeeIds = [...new Set(rawIds.map((x) => String(x).trim()).filter(Boolean))];
+    } else {
+      const single = String(b.employeeId ?? "").trim();
+      if (single) employeeIds = [single];
+    }
+
+    if (employeeIds.length === 0) {
+      return reply.code(400).send({ error: "従業員を1名以上選択してください" });
+    }
+    if (employeeIds.length > MAX_BATCH_CREATE) {
+      return reply.code(400).send({ error: `一度に登録できるのは ${MAX_BATCH_CREATE} 名までです` });
+    }
     if (!dateRaw) return reply.code(400).send({ error: "指導日時を入力してください" });
 
     const date = new Date(dateRaw);
@@ -77,24 +91,30 @@ export async function registerInstructionRecordsRoutes(app: FastifyInstance): Pr
       return reply.code(400).send({ error: "入力が長すぎます" });
     }
 
-    const emp = await prisma.employee.findFirst({
-      where: { id: employeeId, tenantId },
+    const emps = await prisma.employee.findMany({
+      where: { tenantId, id: { in: employeeIds }, status: "ACTIVE" },
       select: { id: true },
     });
-    if (!emp) return reply.code(404).send({ error: "従業員が見つかりません" });
+    if (emps.length !== employeeIds.length) {
+      return reply.code(400).send({ error: "無効な従業員が含まれるか、在籍でない方が含まれています" });
+    }
 
-    const row = await prisma.instructionRecord.create({
-      data: {
-        tenantId,
-        employeeId,
-        date,
-        instructionItems,
-        specialNotes,
-        remarks,
-      },
-      select: { id: true },
-    });
+    const rows = await prisma.$transaction(
+      employeeIds.map((employeeId) =>
+        prisma.instructionRecord.create({
+          data: {
+            tenantId,
+            employeeId,
+            date,
+            instructionItems,
+            specialNotes,
+            remarks,
+          },
+          select: { id: true },
+        }),
+      ),
+    );
 
-    return { id: row.id };
+    return { ids: rows.map((r) => r.id), count: rows.length };
   });
 }

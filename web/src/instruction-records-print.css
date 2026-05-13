@@ -6,6 +6,37 @@
   margin-bottom: 0.75rem;
 }
 
+.instruction-target-grid {
+  align-items: flex-start;
+}
+
+.instruction-target-field {
+  min-width: 0;
+}
+
+.instruction-target-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.instruction-employee-checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.35rem 0.75rem;
+  max-height: 14rem;
+  overflow: auto;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radius-sm, 4px);
+  padding: 0.5rem 0.65rem;
+  margin-top: 0.25rem;
+}
+
+.instruction-employee-check {
+  margin-top: 0;
+}
+
 .instruction-form .field--block {
   display: flex;
   flex-direction: column;

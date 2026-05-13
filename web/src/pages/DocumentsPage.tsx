@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { apiFetch, apiFetchText } from "../api";
 import { DAIKO_LAW14_DEFAULT_PLEDGE_BODY } from "../lib/daikoLaw14DefaultPledge";
 import { DAIKO_STANDARD_YAKKAN_DEFAULT_BODY } from "../lib/daikoYakkanDefaultBody";
+import InstructionRecordListPrintBlock from "../components/InstructionRecordListPrintBlock";
 import { Card, Tabs, type TabDef } from "../ui";
 
 function PanelHint({ children }: { children: React.ReactNode }): JSX.Element {
@@ -944,11 +945,7 @@ export default function DocumentsPage(): JSX.Element {
       label: "指導記録簿",
       children: (
         <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
-          <PanelHint>
-            指導記録の登録・一覧・印刷は、メニュー「
-            <Link to="/instruction-records">指導</Link>
-            」から行えます。
-          </PanelHint>
+          <InstructionRecordListPrintBlock />
         </div>
       ),
     },
