@@ -58,136 +58,211 @@ function timeCells(hm: string | null): string {
 }
 
 const PRINT_CSS = `
-@page { size: A4; margin: 10mm; }
+@page { size: A4 landscape; margin: 8mm 10mm; }
 @media print {
   .no-print { display: none !important; }
-  body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+    background: #fff !important;
+    padding: 0 !important;
+  }
+  .jommu-sheet {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+}
+@media screen {
+  body {
+    background: linear-gradient(160deg, #e9eef5 0%, #dfe6f0 45%, #e8ecf3 100%);
+    min-height: 100vh;
+    padding: 14px 16px 24px;
+  }
 }
 body {
-  font-family: "MS P Gothic","MS PGothic","Yu Gothic","Meiryo",sans-serif;
+  font-family: "MS PMincho","ＭＳ Ｐ明朝","MS P Gothic","MS PGothic","Yu Mincho","Yu Gothic","Meiryo",sans-serif;
   font-size: 10.5pt;
-  color: #000;
+  color: #1a1f28;
   margin: 0;
-  padding: 8px 10px;
+  box-sizing: border-box;
 }
-.toolbar { margin-bottom: 8px; }
-.toolbar button { padding: 6px 12px; font-size: 12px; cursor: pointer; font-family: inherit; }
+.toolbar { margin-bottom: 12px; }
+.toolbar button {
+  padding: 8px 18px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  border: none;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #3d5a80 0%, #2c4766 100%);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(44,71,102,.35);
+}
+.toolbar button:hover { filter: brightness(1.06); }
 .jommu-sheet {
-  max-width: 190mm;
-  margin: 0 auto 12px;
+  width: 100%;
+  max-width: 266mm;
+  margin: 0 auto 14px;
   page-break-after: always;
   break-after: page;
-  padding: 6px 8px 8px;
+  padding: 10px 12px 12px;
   box-sizing: border-box;
+  background: #fffef9;
+  border: 1px solid #b8b2a8;
+  border-radius: 3px;
+  box-shadow: 0 4px 24px rgba(26,31,40,.1);
 }
 .jommu-sheet:last-of-type { page-break-after: auto; break-after: auto; }
 .jommu-retention {
   text-align: right;
   font-size: 9pt;
-  margin-bottom: 2px;
-  padding-right: 2px;
+  margin-bottom: 4px;
+  padding-right: 4px;
+  color: #4a5568;
+  letter-spacing: 0.02em;
 }
 .jommu-title {
   text-align: center;
-  font-size: 16pt;
-  font-weight: bold;
-  margin: 2px 0 8px;
-  letter-spacing: 0.25em;
+  font-size: 17pt;
+  font-weight: 700;
+  margin: 4px 0 12px;
+  letter-spacing: 0.28em;
+  text-indent: 0.28em;
+  color: #1e2a3a;
+  font-feature-settings: "palt";
 }
 .jommu-meta {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
   margin-bottom: 0;
-  border: 2px solid #000;
+  border: 1.5px solid #2a2a2a;
   border-bottom: none;
 }
 .jommu-meta td, .jommu-meta th {
-  border: 1px solid #000;
-  padding: 4px 5px;
+  border: 1px solid #2a2a2a;
+  padding: 5px 6px;
   vertical-align: middle;
   font-size: 9.5pt;
 }
-.jommu-meta .hdr { background: #f4e3d0; font-weight: bold; text-align: center; }
-.jommu-meta .lbl { background: #f4e3d0; font-weight: bold; text-align: center; width: 7.5em; }
+.jommu-meta .hdr {
+  background: linear-gradient(180deg, #faf6f1 0%, #e8dcc8 100%);
+  font-weight: bold;
+  text-align: center;
+  color: #2c241c;
+}
+.jommu-meta .lbl {
+  background: linear-gradient(180deg, #faf6f1 0%, #e8dcc8 100%);
+  font-weight: bold;
+  text-align: center;
+  width: 7.5em;
+  color: #2c241c;
+}
 .jommu-meta .val { min-height: 2.2em; }
 .jommu-meta .t-colon { padding: 0 2px; }
 .jommu-meta .t-blank { letter-spacing: 0.1em; }
-.jommu-meta .time-row td { vertical-align: middle; }
 .jommu-meta .crew { font-size: 11pt; min-height: 3.2em; vertical-align: top; }
 .jommu-meta .office { font-size: 11pt; vertical-align: top; }
-.jommu-meta .office .safety { margin-top: 10px; font-size: 9pt; }
-.jommu-meta .hdr-i { background: #f4e3d0; font-weight: bold; text-align: center; margin: -3px -3px 4px; padding: 3px; border-bottom: 1px solid #000; }
+.jommu-meta .office .safety { margin-top: 10px; font-size: 9pt; color: #333; }
+.jommu-meta .hdr-i {
+  background: linear-gradient(180deg, #f5efe6 0%, #dccfb8 100%);
+  font-weight: bold;
+  text-align: center;
+  margin: -5px -6px 6px;
+  padding: 5px 6px;
+  border-bottom: 1px solid #2a2a2a;
+  color: #2c241c;
+}
 .jommu-meta .time { font-size: 9.5pt; }
 .jommu-meta .t-center { text-align: center; }
-.jommu-meta .safety-box { position: relative; min-height: 4.5em; }
 .jommu-meta .safety-inkan {
   float: right;
-  width: 2.4em;
-  height: 2.4em;
-  border: 1px solid #000;
+  width: 2.45em;
+  height: 2.45em;
+  border: 1.5px double #3d3d3d;
   border-radius: 50%;
   text-align: center;
-  line-height: 2.2em;
+  line-height: 2.15em;
   font-size: 8pt;
-  margin-left: 6px;
+  margin-left: 8px;
+  color: #2a2a2a;
+  background: radial-gradient(circle at 35% 30%, #fff 0%, #f3eee6 55%, #e5dfd4 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
 }
 .jommu-main {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
   margin-top: 0;
-  border: 2px solid #000;
-  border-top: 1px solid #000;
+  border: 1.5px solid #2a2a2a;
+  border-top: 1px solid #2a2a2a;
 }
 .jommu-main th, .jommu-main td {
-  border: 1px solid #000;
-  padding: 3px 2px;
+  border: 1px solid #2a2a2a;
+  padding: 4px 3px;
   vertical-align: middle;
   font-size: 8.5pt;
 }
 .jommu-main thead th {
-  background: #f4e3d0;
+  background: linear-gradient(180deg, #faf6f1 0%, #e3d5c4 100%);
   font-weight: bold;
   text-align: center;
   line-height: 1.25;
+  color: #2c241c;
 }
-.jommu-main .c-no { width: 2em; text-align: center; }
-.jommu-main .c-num { text-align: right; }
-.jommu-main .u { font-size: 7.5pt; font-weight: normal; }
+.jommu-main .c-no { width: 2em; text-align: center; color: #4a5568; font-weight: 600; }
+.jommu-main .c-num { text-align: right; padding-right: 6px; }
+.jommu-main .u { font-size: 7.5pt; font-weight: normal; color: #4a5568; }
 .jommu-main tbody td { min-height: 1.35em; }
-.jommu-main .col-daiko { text-align: center; }
+.jommu-main tbody tr:nth-child(even) td { background: rgba(250,248,244,.55); }
+.jommu-main .col-daiko { text-align: center; font-weight: 600; color: #3d4f66; }
 .jommu-main .t-center { text-align: center; }
+.jommu-main .unit-cell { position: relative; padding-bottom: 10px; padding-right: 4px; }
+.jommu-main .unit-text {
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  font-size: 8pt;
+  color: #5c6573;
+  font-weight: normal;
+}
 .jommu-footer {
   width: 100%;
   border-collapse: collapse;
   margin-top: 0;
-  border: 2px solid #000;
-  border-top: 1px solid #000;
+  border: 1.5px solid #2a2a2a;
+  border-top: 1px solid #2a2a2a;
 }
 .jommu-footer td, .jommu-footer th {
-  border: 1px solid #000;
-  padding: 4px 3px;
+  border: 1px solid #2a2a2a;
+  padding: 5px 4px;
   font-size: 9pt;
   text-align: center;
   vertical-align: middle;
 }
 .jommu-footer .vm {
-  background: #f4e3d0;
+  background: linear-gradient(180deg, #faf6f1 0%, #e3d5c4 100%);
   font-weight: bold;
   width: 2.2em;
   writing-mode: vertical-rl;
   text-orientation: upright;
   letter-spacing: 0.12em;
   padding: 6px 2px;
+  color: #2c241c;
 }
-.jommu-footer .fh { background: #f4e3d0; font-weight: bold; }
-.jommu-footer .fd { text-align: right; min-height: 1.5em; }
+.jommu-footer .fh {
+  background: linear-gradient(180deg, #faf6f1 0%, #e3d5c4 100%);
+  font-weight: bold;
+  color: #2c241c;
+}
+.jommu-footer .fd { text-align: right; min-height: 1.5em; padding-right: 8px; }
 .jommu-formno {
   text-align: right;
   font-size: 9pt;
-  margin-top: 4px;
-  padding-right: 2px;
+  margin-top: 6px;
+  padding-right: 4px;
+  color: #6b7280;
+  letter-spacing: 0.08em;
 }
 `;
 
@@ -206,8 +281,8 @@ function renderJommuTripRows(model: JommuKirokuboModel): string {
   <td>${t ? esc(t.viaText) : ""}</td>
   <td>${t ? esc(t.destination) : ""}</td>
   <td class="t-center">${t ? esc(t.arrivedHm) : ""}</td>
-  <td class="c-num">${t ? esc(t.distanceKm) : ""}</td>
-  <td class="c-num">${t ? esc(t.fareYen) : ""}</td>
+  <td class="c-num unit-cell">${t ? esc(t.distanceKm) : ""}<span class="unit-text">km</span></td>
+  <td class="c-num unit-cell">${t ? esc(t.fareYen) : ""}<span class="unit-text">円</span></td>
   <td class="col-daiko">代行</td>
   <td>${partner}</td>
 </tr>`);
