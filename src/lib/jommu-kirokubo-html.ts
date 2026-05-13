@@ -1,4 +1,4 @@
-/** 乗務記録簿（印刷用 HTML）。A4 横向き・業務様式に沿った枠付きレイアウト。 */
+/** 乗務記録簿（印刷用 HTML）。A4 横向き・Excel 様式帳票に近い枠・配色（薄青見出し・黒枠・帯見出し）。 */
 
 import { PRINT_BUSINESS_BASE_CSS } from "./print-business-theme.js";
 
@@ -64,68 +64,74 @@ function timeCellsInline(hm: string): string {
   return timeCells(hm.trim() ? hm : null);
 }
 
+/** Excel 帳票風：黒枠・ラベル薄青 (#d9e1f2)・業務記録は濃青帯・明朝系タイトル */
 const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
-@page { size: A4 landscape; margin: 8mm 10mm; }
+@page { size: A4 landscape; margin: 7mm 9mm; }
 .jm-doc {
   width: 277mm;
   max-width: 100%;
   margin: 0 auto;
-  padding: 2mm 0 0;
-  color: var(--pd-ink);
-  font-size: 8.5pt;
+  padding: 1.5mm 0 0;
+  color: #000000;
+  font-size: 9pt;
+  font-family: "Noto Sans CJK JP", "Yu Gothic UI", "Yu Gothic", "Meiryo", "MS PGothic", sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 .jm-doc .jm-topline {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 1mm;
+  margin-bottom: 0.5mm;
 }
 .jm-doc .jm-retention {
   margin: 0;
-  font-size: 7.5pt;
-  color: var(--pd-muted);
-  letter-spacing: 0.02em;
+  font-size: 8pt;
+  color: #000000;
+  letter-spacing: 0;
 }
 .jm-doc .jm-title {
-  margin: 0 0 2mm;
+  margin: 0 0 2.5mm;
   text-align: center;
-  font-size: 16pt;
+  font-size: 17pt;
   font-weight: 700;
-  letter-spacing: 0.35em;
-  text-indent: 0.35em;
-  color: var(--pd-ink);
+  letter-spacing: 0.12em;
+  text-indent: 0;
+  color: #000000;
+  font-family: "Noto Serif CJK JP", "Yu Mincho", "YuMincho", "MS Mincho", serif;
 }
 .jm-doc table.jm-tbl {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  border: 1.5px solid var(--pd-line-strong);
-  margin: 0 0 2mm;
-  background: var(--pd-paper);
+  border: 1.5pt solid #000000;
+  margin: 0 0 1.5mm;
+  background: #ffffff;
 }
 .jm-doc .jm-tbl th,
 .jm-doc .jm-tbl td {
-  border: 1px solid var(--pd-line-strong);
-  padding: 2px 4px;
+  border: 0.5pt solid #000000;
+  padding: 2px 3px;
   vertical-align: middle;
   word-wrap: break-word;
   overflow-wrap: anywhere;
+  color: #000000;
 }
 .jm-doc .jm-lbl {
-  background: var(--pd-fill-label);
+  background: #d9e1f2;
   font-weight: 600;
   text-align: center;
-  color: var(--pd-ink);
-  font-size: 8pt;
-  line-height: 1.25;
+  color: #000000;
+  font-size: 8.5pt;
+  line-height: 1.2;
 }
 .jm-doc .jm-val {
-  background: #fff;
-  min-height: 1.35em;
-  color: var(--pd-ink);
+  background: #ffffff;
+  min-height: 1.4em;
+  color: #000000;
 }
-.jm-doc .jm-meta-outer { margin-bottom: 2mm; }
+.jm-doc .jm-meta-outer { margin-bottom: 1.5mm; }
 .jm-doc .jm-meta-outer > tbody > tr > td {
-  border: 1.5px solid var(--pd-line-strong);
+  border: 1pt solid #000000;
   padding: 0;
   vertical-align: top;
   width: 33.33%;
@@ -136,12 +142,12 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   table-layout: fixed;
 }
 .jm-doc .jm-box-inner td {
-  border: 1px solid var(--pd-line-strong);
+  border: 0.5pt solid #000000;
 }
 .jm-doc .jm-crew-line {
-  font-size: 10pt;
+  font-size: 11pt;
   font-weight: 700;
-  padding: 4px 6px !important;
+  padding: 5px 6px !important;
 }
 .jm-doc .jm-sub2 {
   display: table;
@@ -151,27 +157,27 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
 .jm-doc .jm-sub2 > div {
   display: table-cell;
   width: 50%;
-  padding: 3px 4px;
+  padding: 4px 5px;
   vertical-align: middle;
-  font-size: 8pt;
+  font-size: 8.5pt;
 }
 .jm-doc .jm-sub2 > div:first-child {
-  border-right: 1px solid var(--pd-line-strong);
+  border-right: 0.5pt solid #000000;
 }
 .jm-doc .jm-ymd {
   text-align: center;
   font-variant-numeric: tabular-nums;
-  padding: 4px !important;
-  font-size: 9pt;
+  padding: 5px !important;
+  font-size: 10pt;
 }
 .jm-doc .jm-plate {
-  padding: 4px 6px !important;
-  font-size: 9pt;
+  padding: 5px 6px !important;
+  font-size: 10pt;
 }
 .jm-doc .jm-office-block {
-  padding: 4px 6px !important;
-  min-height: 2.6em;
-  font-size: 9pt;
+  padding: 5px 6px !important;
+  min-height: 2.8em;
+  font-size: 10pt;
 }
 .jm-doc .jm-mgr-inner {
   width: 100%;
@@ -179,53 +185,57 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   table-layout: fixed;
 }
 .jm-doc .jm-mgr-inner td {
-  border: 1px solid var(--pd-line-strong);
+  border: 0.5pt solid #000000;
 }
 .jm-doc .jm-mgr-inner .jm-mgr-lbl {
   width: 38%;
 }
 .jm-doc .jm-mgr-inner .jm-mgr-val {
-  padding: 3px 4px !important;
-  font-size: 9pt;
+  padding: 4px 5px !important;
+  font-size: 9.5pt;
 }
 .jm-doc .jm-in {
   width: 2.2rem;
   text-align: center;
-  font-size: 7.5pt;
+  font-size: 8pt;
   font-weight: 700;
-  background: var(--pd-fill-label);
+  background: #d9e1f2;
   vertical-align: middle !important;
 }
 .jm-doc .jm-section-h {
-  background: var(--pd-fill-label);
+  background: #2f5597;
+  color: #ffffff;
   font-weight: 700;
   text-align: center;
-  font-size: 8.5pt;
-  padding: 3px !important;
-  letter-spacing: 0.15em;
+  font-size: 10pt;
+  padding: 4px !important;
+  letter-spacing: 0.35em;
+  border-color: #000000;
 }
 .jm-doc .jm-work thead th {
-  background: var(--pd-fill-label);
+  background: #d9e1f2;
   font-weight: 600;
   text-align: center;
-  font-size: 7.6pt;
-  line-height: 1.25;
-  padding: 4px 3px !important;
-  color: var(--pd-ink);
+  font-size: 8pt;
+  line-height: 1.2;
+  padding: 4px 2px !important;
+  color: #000000;
+  border-color: #000000;
 }
 .jm-doc .jm-work tbody td {
-  font-size: 7.6pt;
-  padding: 3px 4px !important;
-  min-height: 1.45rem;
+  font-size: 8pt;
+  padding: 3px 3px !important;
+  height: 5.2mm;
   vertical-align: middle;
+  border-color: #000000;
 }
 .jm-doc .jm-no {
   width: 1.6em;
   text-align: center;
   font-weight: 600;
-  color: var(--pd-muted);
+  color: #000000;
   font-variant-numeric: tabular-nums;
-  background: #fafafa;
+  background: #f2f2f2;
 }
 .jm-doc .jm-c {
   text-align: center;
@@ -233,44 +243,48 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
 .jm-doc .jm-r {
   text-align: right;
   font-variant-numeric: tabular-nums;
-  padding: 2px 5px !important;
+  padding: 2px 4px !important;
   white-space: nowrap;
   overflow-wrap: normal;
   word-break: normal;
 }
 .jm-doc .jm-unit {
   display: inline;
-  font-size: 6.5pt;
+  font-size: 7pt;
   font-weight: 600;
-  color: var(--pd-muted);
-  margin-left: 3px;
+  color: #333333;
+  margin-left: 2px;
 }
 .jm-doc .jm-daiko {
   text-align: center;
   font-weight: 600;
-  font-size: 7.5pt;
+  font-size: 8pt;
 }
 .jm-doc .jm-foot-v {
   writing-mode: vertical-rl;
   text-orientation: upright;
-  width: 2.6rem;
-  min-width: 2.5rem;
-  max-width: 2.75rem;
-  letter-spacing: 0.06em;
+  width: 2.8rem;
+  min-width: 2.6rem;
+  max-width: 3rem;
+  letter-spacing: 0.12em;
   padding: 6px 4px !important;
-  font-size: 7.8pt;
+  font-size: 8pt;
   line-height: 1.35;
+  background: #d9e1f2;
+  color: #000000;
+  font-weight: 700;
 }
 .jm-doc .jm-foot thead th {
-  background: var(--pd-fill-label);
+  background: #d9e1f2;
   font-weight: 600;
   text-align: center;
-  font-size: 7.6pt;
-  padding: 5px 4px !important;
-  line-height: 1.25;
+  font-size: 8pt;
+  padding: 5px 3px !important;
+  line-height: 1.2;
+  color: #000000;
 }
 .jm-doc .jm-foot tbody td {
-  font-size: 9.5pt;
+  font-size: 10pt;
   font-weight: 600;
   text-align: right;
   padding: 6px 8px !important;
@@ -279,23 +293,25 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   vertical-align: middle;
   overflow-wrap: normal;
   word-break: normal;
+  background: #ffffff;
 }
 .jm-doc .jm-footnote {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin-top: 1mm;
-  font-size: 7.5pt;
-  color: var(--pd-muted);
+  font-size: 8pt;
+  color: #000000;
 }
 .jm-doc .jm-fn-box {
-  border: 1px solid var(--pd-line-strong);
-  padding: 1px 8px;
+  border: 0.5pt solid #000000;
+  padding: 1px 10px;
   min-width: 2.2em;
   text-align: center;
-  font-size: 8pt;
+  font-size: 8.5pt;
 }
+.jm-foot-sub { font-size: 7pt; font-weight: 500; }
 .jm-blank { letter-spacing: 0.06em; }
 .jm-colon { padding: 0 1px; }
 .jm-time-pair { white-space: nowrap; }
@@ -420,11 +436,11 @@ ${tripBody}
   <thead>
     <tr>
       <th class="jm-lbl jm-foot-v" rowspan="2">メーター・距離等</th>
-      <th>始業時<br/><span style="font-size:6.5pt;font-weight:500">（km）</span></th>
-      <th>終業時<br/><span style="font-size:6.5pt;font-weight:500">（km）</span></th>
-      <th>走行距離合計<br/><span style="font-size:6.5pt;font-weight:500">（km）</span></th>
-      <th>実車走行距離<br/><span style="font-size:6.5pt;font-weight:500">（km）</span></th>
-      <th>売上合計<br/><span style="font-size:6.5pt;font-weight:500">（円）</span></th>
+      <th>始業時<br/><span class="jm-foot-sub">（km）</span></th>
+      <th>終業時<br/><span class="jm-foot-sub">（km）</span></th>
+      <th>走行距離合計<br/><span class="jm-foot-sub">（km）</span></th>
+      <th>実車走行距離<br/><span class="jm-foot-sub">（km）</span></th>
+      <th>売上合計<br/><span class="jm-foot-sub">（円）</span></th>
     </tr>
   </thead>
   <tbody>
