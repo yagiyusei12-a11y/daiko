@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch, apiFetchText } from "../api";
 import { Card, Tabs, type TabDef } from "../ui";
@@ -78,8 +78,9 @@ function DailyReportJommuPrintBlock(): JSX.Element {
       setPrintErr("印刷する従業員を 1 人以上選んでください");
       return;
     }
-    // 非同期のあとに window.open すると空タブのままになるブラウザがあるため、同期で先に開く
-    const w = window.open("", "_blank", "noopener,noreferrer");
+    // 非同期のあとに window.open すると空タブのままになるブラウザがあるため、同期で先に開く。
+    // noopener 付きだと参照が null になり document.write できず about:blank のまま残ることがあるため付けない。
+    const w = window.open("", "_blank");
     if (!w) {
       setPrintErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
       return;
@@ -198,17 +199,74 @@ function DailyReportJommuPrintBlock(): JSX.Element {
   );
 }
 
-export default function DocumentsPage(): JSX.Element {
-  const [tab, setTab] = useState("nippo");
-  const [rosterErr, setRosterErr] = useState<string | null>(null);
-  const [rosterBusy, setRosterBusy] = useState(false);
-  const [includeRetired, setIncludeRetired] = useState(false);
+type EmpRosterRow = { id: string; familyName: string; givenName: string; status: string };
 
-  async function openEmployeeRosterPrint(): Promise<void> {
-    setRosterErr(null);
-    const w = window.open("", "_blank", "noopener,noreferrer");
+function EmployeeRosterPrintBlock(): JSX.Element {
+  const [allEmployees, setAllEmployees] = useState<EmpRosterRow[]>([]);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [includeRetired, setIncludeRetired] = useState(false);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [printErr, setPrintErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const visibleEmployees = useMemo(() => {
+    if (includeRetired) {
+      return allEmployees.filter((e) => e.status === "ACTIVE" || e.status === "RETIRED");
+    }
+    return allEmployees.filter((e) => e.status === "ACTIVE");
+  }, [allEmployees, includeRetired]);
+
+  const reload = useCallback(async () => {
+    setLoadErr(null);
+    const r = await apiFetch<{ employees: EmpRosterRow[] }>("/settings/employees");
+    if (!r.ok) {
+      setLoadErr(r.error);
+      setAllEmployees([]);
+      setSelected({});
+      return;
+    }
+    setAllEmployees(r.data.employees ?? []);
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  useEffect(() => {
+    setSelected((prev) => {
+      const next: Record<string, boolean> = { ...prev };
+      for (const e of visibleEmployees) {
+        if (next[e.id] === undefined) next[e.id] = true;
+      }
+      for (const id of Object.keys(next)) {
+        if (!visibleEmployees.some((e) => e.id === id)) delete next[id];
+      }
+      return next;
+    });
+  }, [visibleEmployees]);
+
+  function toggle(id: string): void {
+    setSelected((p) => ({ ...p, [id]: !p[id] }));
+  }
+
+  function setAll(on: boolean): void {
+    setSelected(() => {
+      const next: Record<string, boolean> = {};
+      for (const e of visibleEmployees) next[e.id] = on;
+      return next;
+    });
+  }
+
+  async function print(): Promise<void> {
+    setPrintErr(null);
+    const employeeIds = visibleEmployees.filter((e) => selected[e.id]).map((e) => e.id);
+    if (employeeIds.length === 0) {
+      setPrintErr("印刷する従業員を 1 人以上選んでください");
+      return;
+    }
+    const w = window.open("", "_blank");
     if (!w) {
-      setRosterErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
+      setPrintErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
       return;
     }
     w.document.open();
@@ -217,10 +275,12 @@ export default function DocumentsPage(): JSX.Element {
     );
     w.document.close();
 
-    setRosterBusy(true);
-    const q = includeRetired ? "?includeRetired=1" : "";
-    const r = await apiFetchText(`/documents/employee-roster-print.html${q}`);
-    setRosterBusy(false);
+    setBusy(true);
+    const r = await apiFetchText("/documents/employee-roster-print", {
+      method: "POST",
+      json: { includeRetired, employeeIds },
+    });
+    setBusy(false);
     if (!r.ok) {
       const msg = r.error.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
       w.document.open();
@@ -228,13 +288,83 @@ export default function DocumentsPage(): JSX.Element {
         `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>エラー</title><style>body{font-family:sans-serif;padding:1rem}</style></head><body><p>${msg}</p><p><button type="button" onclick="window.close()">閉じる</button></p></body></html>`,
       );
       w.document.close();
-      setRosterErr(r.error);
+      setPrintErr(r.error);
       return;
     }
     w.document.open();
     w.document.write(r.text);
     w.document.close();
   }
+
+  return (
+    <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
+      <PanelHint>
+        従事者の氏名・ふりがな・住所・連絡先・免許・緊急連絡先などは「設定」の従業員登録に入力すると反映されます。一覧で複数人にチェックを入れてから印刷してください（免許証の表裏は写真アップロードがある場合のみ枠内に表示されます）。
+      </PanelHint>
+      <label style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", cursor: "pointer", marginTop: "0.75rem" }}>
+        <input type="checkbox" checked={includeRetired} onChange={(e) => setIncludeRetired(e.target.checked)} />
+        退職者も一覧に含める
+      </label>
+      {loadErr ? (
+        <p className="settings-hint" style={{ color: "var(--danger, #b00020)", marginTop: "0.5rem" }}>
+          {loadErr}
+        </p>
+      ) : null}
+      <div className="settings-form" style={{ marginTop: "0.75rem", maxWidth: "36rem" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.35rem" }}>
+          <button type="button" className="settings-secondary" onClick={() => setAll(true)}>
+            全員チェック
+          </button>
+          <button type="button" className="settings-secondary" onClick={() => setAll(false)}>
+            全員解除
+          </button>
+        </div>
+        <div
+          style={{
+            maxHeight: "240px",
+            overflowY: "auto",
+            border: "1px solid var(--border, #ccc)",
+            borderRadius: "4px",
+            padding: "0.5rem",
+          }}
+        >
+          {visibleEmployees.length === 0 && !loadErr ? (
+            <span className="settings-hint">表示する従業員がありません</span>
+          ) : (
+            visibleEmployees.map((e) => (
+              <label
+                key={e.id}
+                style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.25rem", cursor: "pointer" }}
+              >
+                <input type="checkbox" checked={Boolean(selected[e.id])} onChange={() => toggle(e.id)} />
+                {e.familyName}　{e.givenName}
+                {e.status === "RETIRED" ? (
+                  <span className="settings-hint" style={{ marginLeft: "0.25rem" }}>
+                    （退職）
+                  </span>
+                ) : null}
+              </label>
+            ))
+          )}
+        </div>
+        <p style={{ marginTop: "0.75rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
+          <button type="button" className="settings-primary" disabled={busy} onClick={() => void print()}>
+            {busy ? "取得中…" : "従事者名簿を印刷"}
+          </button>
+          <Link to="/settings">設定（従業員・車両）へ</Link>
+        </p>
+        {printErr ? (
+          <p className="settings-hint" style={{ color: "var(--danger, #b00020)", marginTop: "0.5rem" }}>
+            {printErr}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export default function DocumentsPage(): JSX.Element {
+  const [tab, setTab] = useState("nippo");
 
   const tabItems: TabDef[] = [
     {
@@ -245,32 +375,7 @@ export default function DocumentsPage(): JSX.Element {
     {
       id: "meibo",
       label: "従業員名簿",
-      children: (
-        <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
-          <PanelHint>
-            従事者の氏名・ふりがな・住所・連絡先・免許・緊急連絡先などは「設定」の従業員登録に入力すると、この名簿の印刷に反映されます（免許証の表裏は写真アップロードがある場合のみ印刷枠に表示されます）。
-          </PanelHint>
-          <p style={{ marginTop: "0.75rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
-            <button type="button" className="settings-primary" disabled={rosterBusy} onClick={() => void openEmployeeRosterPrint()}>
-              {rosterBusy ? "取得中…" : "従事者名簿を印刷"}
-            </button>
-            <label style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={includeRetired}
-                onChange={(e) => setIncludeRetired(e.target.checked)}
-              />
-              退職者も含める
-            </label>
-            <Link to="/settings">設定（従業員・車両）へ</Link>
-          </p>
-          {rosterErr ? (
-            <p className="settings-hint" style={{ color: "var(--danger, #b00020)", marginTop: "0.5rem" }}>
-              {rosterErr}
-            </p>
-          ) : null}
-        </div>
-      ),
+      children: <EmployeeRosterPrintBlock />,
     },
     {
       id: "seiyaku",

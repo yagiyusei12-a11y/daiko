@@ -10,9 +10,49 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_JOMMU_RANGE_DAYS = 400;
 const MAX_JOMMU_REPORTS = 200;
 const MAX_CREW_IDS = 80;
+const MAX_ROSTER_EMPLOYEES = 100;
 
 export async function registerDocumentsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
+
+  app.post("/documents/employee-roster-print", async (req, reply) => {
+    const { tenantId } = jwtUser(req);
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const includeRetired = Boolean(b.includeRetired);
+    const rawIds = b.employeeIds;
+    if (!Array.isArray(rawIds)) {
+      return reply.code(400).send({ error: "employeeIds は文字列の配列で指定してください" });
+    }
+    const employeeIds = [...new Set(rawIds.map((x) => String(x).trim()).filter(Boolean))];
+    if (employeeIds.length === 0) {
+      return reply.code(400).send({ error: "employeeIds を 1 人以上指定してください" });
+    }
+    if (employeeIds.length > MAX_ROSTER_EMPLOYEES) {
+      return reply.code(400).send({ error: `一度に印刷できるのは ${MAX_ROSTER_EMPLOYEES} 人までです` });
+    }
+
+    const statusWhere = includeRetired ? {} : ({ status: "ACTIVE" as const } as const);
+    const rows = await prisma.employee.findMany({
+      where: { tenantId, id: { in: employeeIds }, ...statusWhere },
+    });
+    if (rows.length !== employeeIds.length) {
+      return reply.code(400).send({
+        error: "無効な従業員 id が含まれるか、「在籍のみ」のときに退職者が含まれています",
+      });
+    }
+
+    const byId = new Map(rows.map((e) => [e.id, e]));
+    const employeesOrdered = employeeIds.map((id) => byId.get(id)).filter((e): e is (typeof rows)[0] => e != null);
+
+    const settings = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+    const operatorName = settings?.legalTradeName?.trim() ?? "";
+    const html = buildEmployeeRosterPrintHtml({
+      employees: employeesOrdered,
+      printedAt: new Date(),
+      operatorName: operatorName || null,
+    });
+    return reply.type("text/html; charset=utf-8").send(html);
+  });
 
   app.post("/documents/daily-reports-jommu-print", async (req, reply) => {
     const { tenantId } = jwtUser(req);
