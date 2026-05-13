@@ -332,7 +332,8 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         .header("Content-Disposition", `attachment; filename="${safe}.pdf"`)
         .send(buf);
     } catch (e) {
-      req.log.error(e);
+      const msg = e instanceof Error ? e.message : String(e);
+      req.log.error({ err: e, jommuPdf: true, message: msg }, "jommu kirokubo pdf failed");
       return reply.code(500).send({ error: "乗務記録簿 PDF の生成に失敗しました" });
     }
   });

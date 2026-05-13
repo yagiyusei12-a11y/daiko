@@ -7,6 +7,7 @@ import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import ExcelJS from "exceljs";
 import { PDFDocument } from "pdf-lib";
@@ -41,6 +42,22 @@ export function isLibreOfficeConfigured(): boolean {
   return getLibreOfficeExecutable() !== null;
 }
 
+function strFromExecOut(x: string | Buffer | undefined): string {
+  if (x === undefined) return "";
+  return typeof x === "string" ? x : x.toString("utf8");
+}
+
+type ExecErr = NodeJS.ErrnoException & { stderr?: Buffer | string; stdout?: Buffer | string; code?: string | number | null };
+
+function execErrDetails(err: unknown): string {
+  if (!err || typeof err !== "object") return String(err);
+  const e = err as ExecErr;
+  const stderr = strFromExecOut(e.stderr).trim();
+  const stdout = strFromExecOut(e.stdout).trim();
+  const parts = [e.message, stderr && `stderr: ${stderr}`, stdout && `stdout: ${stdout}`].filter(Boolean);
+  return parts.join(" | ");
+}
+
 async function xlsxBufferToPdf(xlsxBuffer: Buffer): Promise<Buffer> {
   const soffice = getLibreOfficeExecutable();
   if (!soffice) {
@@ -48,21 +65,37 @@ async function xlsxBufferToPdf(xlsxBuffer: Buffer): Promise<Buffer> {
   }
 
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "daiko-jommu-"));
+  const loProfile = path.join(dir, "libreoffice-profile");
+  await fs.mkdir(loProfile, { recursive: true });
+  const userInst = pathToFileURL(loProfile).href;
+
   const base = `jommu-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const xlsxPath = path.join(dir, `${base}.xlsx`);
   const pdfPath = path.join(dir, `${base}.pdf`);
 
   await fs.writeFile(xlsxPath, xlsxBuffer);
 
+  const childEnv = {
+    ...process.env,
+    /** systemd / Node 子プロセスで LO が書き込み可能な場所に固定（プロファイル・キャッシュ用） */
+    HOME: dir,
+    TMPDIR: dir,
+    TMP: dir,
+    TEMP: dir,
+    /** 実サーバーではディスプレイ無し。headless 用 VCL プラグインを明示する。 */
+    SAL_USE_VCLPLUGIN: process.env.SAL_USE_VCLPLUGIN ?? "headless",
+  };
+
   try {
-    await execFileAsync(
+    const { stderr } = await execFileAsync(
       soffice,
       [
+        `-env:UserInstallation=${userInst}`,
         "--headless",
         "--invisible",
         "--nologo",
-        "--nodefault",
         "--nolockcheck",
+        "--norestore",
         "--convert-to",
         "pdf",
         "--outdir",
@@ -72,16 +105,43 @@ async function xlsxBufferToPdf(xlsxBuffer: Buffer): Promise<Buffer> {
       {
         timeout: 120_000,
         maxBuffer: 20 * 1024 * 1024,
+        env: childEnv,
       },
     );
-    return await fs.readFile(pdfPath);
+    try {
+      return await fs.readFile(pdfPath);
+    } catch (readErr) {
+      let listing = "";
+      try {
+        listing = (await fs.readdir(dir)).join(", ");
+      } catch {
+        listing = "(readdir failed)";
+      }
+      const warn = strFromExecOut(stderr).trim();
+      const msg =
+        `LibreOffice が PDF を出力しませんでした（期待: ${pdfPath}）。` +
+        ` 作業ディレクトリ内: [${listing}]` +
+        (warn ? ` soffice stderr: ${warn}` : "");
+      const wrapped = new Error(msg);
+      (wrapped as Error & { cause?: unknown }).cause = readErr;
+      throw wrapped;
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("LibreOffice が PDF")) throw e;
+    const wrapped = new Error(`soffice の実行に失敗しました: ${execErrDetails(e)}`);
+    (wrapped as Error & { cause?: unknown }).cause = e;
+    throw wrapped;
   } finally {
     await fs.rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 
 export async function renderJommuKirokuboPdf(model: JommuKirokuboModel): Promise<Buffer> {
-  const tpl = await fs.readFile(templatePath());
+  const tplPath = templatePath();
+  if (!existsSync(tplPath)) {
+    throw new Error(`乗務記録簿テンプレが見つかりません: ${tplPath}（cwd=${process.cwd()}）`);
+  }
+  const tpl = await fs.readFile(tplPath);
   const wb = new ExcelJS.Workbook();
   // @ts-expect-error exceljs の xlsx.load の Buffer 型と Node の Buffer が一致しない（実行時は問題なし）
   await wb.xlsx.load(tpl);
