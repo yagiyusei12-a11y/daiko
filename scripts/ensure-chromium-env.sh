@@ -13,11 +13,12 @@ have_browser() {
   command -v chromium-browser >/dev/null 2>&1 && return 0
   [[ -x /usr/bin/chromium ]] && return 0
   [[ -x /usr/bin/chromium-browser ]] && return 0
+  [[ -x /snap/bin/chromium ]] && return 0
   return 1
 }
 
 if ! have_browser; then
-  log "Chromium が見つからないため apt でインストールを試みます（要 sudo）…"
+  log "Chromium が見つからないため apt でインストールを試みます（要 sudo）。初回は Snap 取得で数分かかることがあります。"
   set +e
   sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
   apt_st=$?
@@ -26,15 +27,15 @@ if ! have_browser; then
     set -e
     exit 0
   fi
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y chromium-browser
-  if [[ $? -ne 0 ]]; then
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y chromium
+  # 可能なら chromium のみ（環境によっては snap より軽い）。失敗時は従来の chromium-browser（Snap 同梱の遷移パッケージ）。
+  if ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y chromium; then
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y chromium-browser
   fi
   set -e
 fi
 
 CHROME_PATH=""
-for p in /usr/bin/chromium /usr/bin/chromium-browser; do
+for p in /usr/bin/chromium /usr/bin/chromium-browser /snap/bin/chromium; do
   if [[ -x "$p" ]]; then
     CHROME_PATH="$p"
     break
@@ -48,7 +49,7 @@ if [[ -z "$CHROME_PATH" ]] && command -v chromium-browser >/dev/null 2>&1; then
 fi
 
 if [[ -z "$CHROME_PATH" ]]; then
-  log "WARN: 実行ファイルが見つかりません。apt で chromium-browser または chromium を入れ、CHROMIUM_EXECUTABLE を .env に手動設定してください。"
+  log "WARN: 実行ファイルが見つかりません。apt で chromium または chromium-browser を入れ、CHROMIUM_EXECUTABLE を .env に手動設定してください。"
   exit 0
 fi
 
