@@ -280,6 +280,8 @@ model TimeCardPunch {
   businessDate String
   kind         TimeCardPunchKind
   punchedAt    DateTime         @default(now())
+  /// 出勤（CLOCK_IN）時のアルコールチェック記録
+  alcoholCheckJson Json?
 
   @@index([tenantId, businessDate, employeeId])
 }

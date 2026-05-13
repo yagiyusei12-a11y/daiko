@@ -1,8 +1,58 @@
 import type { FastifyInstance } from "fastify";
+import type { Prisma } from "@prisma/client";
 import { TimeCardPunchKind } from "@prisma/client";
 import { authenticate, jwtUser } from "../auth/pre.js";
 import { loadUserAccess } from "../lib/permissions.js";
 import { prisma } from "../db.js";
+import { coerceBusinessBasicsFromCustomJson, type BusinessBasicsV2 } from "../lib/business-basics.js";
+
+async function buildAlcoholCheckJsonForClockIn(
+  tenantId: string,
+  basics: BusinessBasicsV2,
+  raw: unknown,
+): Promise<{ ok: true; json: Prisma.InputJsonValue | null } | { ok: false; error: string }> {
+  if (basics.breathalyzers.length === 0) {
+    return { ok: true, json: null };
+  }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, error: "出勤時はアルコールチェック情報が必要です" };
+  }
+  const ac = raw as Record<string, unknown>;
+  const breathalyzerId = String(ac.breathalyzerId ?? "").trim();
+  const verifierEmployeeId = String(ac.verifierEmployeeId ?? "").trim();
+  const verificationMethod = String(ac.verificationMethod ?? "").trim();
+  if (!breathalyzerId || !verifierEmployeeId || !verificationMethod) {
+    return { ok: false, error: "アルコール探知機・確認者・確認方法をすべて指定してください" };
+  }
+  const dev = basics.breathalyzers.find((d) => d.id === breathalyzerId);
+  if (!dev) return { ok: false, error: "アルコール探知機の指定が不正です" };
+  if (!dev.verificationMethods.includes(verificationMethod)) {
+    return { ok: false, error: "確認方法がこのアルコール探知機の一覧にありません" };
+  }
+  const verifier = await prisma.employee.findFirst({
+    where: { id: verifierEmployeeId, tenantId, safetyDrivingManager: true, status: "ACTIVE" },
+    select: { id: true, familyName: true, givenName: true },
+  });
+  if (!verifier) {
+    return { ok: false, error: "確認者は安全運転管理者から選んでください" };
+  }
+  const alcoholDetected = Boolean(ac.alcoholDetected);
+  let instructionsNote: string | null = null;
+  if (ac.instructionsNote !== undefined && ac.instructionsNote !== null && String(ac.instructionsNote).trim()) {
+    instructionsNote = String(ac.instructionsNote).trim().slice(0, 2000);
+  }
+  const json = {
+    breathalyzerId,
+    breathalyzerName: dev.name,
+    verifierEmployeeId,
+    verifierName: `${verifier.familyName} ${verifier.givenName}`,
+    verificationMethod,
+    alcoholDetected,
+    instructionsNote,
+    recordedAt: new Date().toISOString(),
+  };
+  return { ok: true, json: json as unknown as Prisma.InputJsonValue };
+}
 
 const YM_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -492,7 +542,7 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
     const punches = await prisma.timeCardPunch.findMany({
       where: { tenantId, employeeId, businessDate },
       orderBy: { punchedAt: "asc" },
-      select: { id: true, kind: true, punchedAt: true },
+      select: { id: true, kind: true, punchedAt: true, alcoholCheckJson: true },
     });
 
     return {
@@ -502,6 +552,7 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
         id: p.id,
         kind: p.kind,
         punchedAt: p.punchedAt.toISOString(),
+        alcoholCheck: p.alcoholCheckJson,
       })),
     };
   });
@@ -537,20 +588,31 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
     });
     if (!emp) return reply.code(404).send({ error: "従業員が見つかりません" });
 
+    let alcoholCheckJson: Prisma.InputJsonValue | undefined;
+    if (kindStr === "CLOCK_IN") {
+      const settings = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+      const basics = coerceBusinessBasicsFromCustomJson(settings?.customJson);
+      const built = await buildAlcoholCheckJsonForClockIn(tenantId, basics, b.alcoholCheck);
+      if (!built.ok) return reply.code(400).send({ error: built.error });
+      if (built.json !== null) alcoholCheckJson = built.json;
+    }
+
     const row = await prisma.timeCardPunch.create({
       data: {
         tenantId,
         employeeId,
         businessDate,
         kind: kindStr as TimeCardPunchKind,
+        ...(alcoholCheckJson !== undefined ? { alcoholCheckJson } : {}),
       },
-      select: { id: true, kind: true, punchedAt: true },
+      select: { id: true, kind: true, punchedAt: true, alcoholCheckJson: true },
     });
 
     return {
       id: row.id,
       kind: row.kind,
       punchedAt: row.punchedAt.toISOString(),
+      alcoholCheck: row.alcoholCheckJson,
     };
   });
 

@@ -26,6 +26,17 @@ export type RegularHolidayNthWeekday = { id: string; kind: "nthWeekday"; nth: nu
 export type RegularHolidayMonthlyDay = { id: string; kind: "monthlyDay"; day: number };
 export type RegularHolidayEntry = RegularHolidayWeekly | RegularHolidayNthWeekday | RegularHolidayMonthlyDay;
 
+/** アルコール探知機（基本設定） */
+export type BreathalyzerEntry = {
+  id: string;
+  name: string;
+  /** 最終点検日 yyyy-MM-dd */
+  lastInspectionYmd: string | null;
+  verificationMethods: string[];
+};
+
+export const DEFAULT_BREATHALYZER_METHODS = ["対面", "電話"] as const;
+
 export type BusinessBasicsV1 = {
   version: 1;
   businessHours: BusinessHoursSlot[];
@@ -44,6 +55,7 @@ export type BusinessBasicsV2 = {
   paymentMethods: string[];
   regularHolidays: RegularHolidayEntry[];
   temporaryClosureDates: string[];
+  breathalyzers: BreathalyzerEntry[];
 };
 
 const DEFAULTS_V2: BusinessBasicsV2 = {
@@ -54,6 +66,7 @@ const DEFAULTS_V2: BusinessBasicsV2 = {
   paymentMethods: [],
   regularHolidays: [],
   temporaryClosureDates: [],
+  breathalyzers: [],
 };
 
 function newId(): string {
@@ -136,6 +149,31 @@ function coercePaymentMethods(raw: unknown): string[] {
   return [...new Set(out)];
 }
 
+function coerceBreathalyzers(raw: unknown): BreathalyzerEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const out: BreathalyzerEntry[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== "object") continue;
+    const o = x as Record<string, unknown>;
+    const id = typeof o.id === "string" && o.id.trim() ? o.id.trim() : newId();
+    const name = typeof o.name === "string" ? o.name.trim().slice(0, 120) : "";
+    if (!name) continue;
+    let lastInspectionYmd: string | null = null;
+    if (typeof o.lastInspectionYmd === "string" && YMD_RE.test(o.lastInspectionYmd)) lastInspectionYmd = o.lastInspectionYmd;
+    const methods: string[] = [];
+    if (Array.isArray(o.verificationMethods)) {
+      for (const m of o.verificationMethods) {
+        if (typeof m !== "string") continue;
+        const t = m.trim().slice(0, 40);
+        if (t) methods.push(t);
+      }
+    }
+    const verificationMethods = methods.length > 0 ? [...new Set(methods)] : [...DEFAULT_BREATHALYZER_METHODS];
+    out.push({ id, name, lastInspectionYmd, verificationMethods });
+  }
+  return out;
+}
+
 function coerceHoursMap(raw: unknown, keyKind: "weekday" | "date"): Record<string, BusinessHoursSlot[]> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const out: Record<string, BusinessHoursSlot[]> = {};
@@ -177,6 +215,7 @@ export function coerceBusinessBasicsFromCustomJson(customJson: unknown): Busines
       paymentMethods: [],
       regularHolidays: regular,
       temporaryClosureDates,
+      breathalyzers: coerceBreathalyzers(o.breathalyzers),
     };
   }
 
@@ -188,6 +227,7 @@ export function coerceBusinessBasicsFromCustomJson(customJson: unknown): Busines
     paymentMethods: coercePaymentMethods(o.paymentMethods),
     regularHolidays: regular,
     temporaryClosureDates,
+    breathalyzers: coerceBreathalyzers(o.breathalyzers),
   };
 }
 
@@ -284,6 +324,40 @@ export function parseBusinessBasicsPut(body: Record<string, unknown>): { ok: tru
     paymentMethods = coercePaymentMethods(body.paymentMethods);
   }
 
+  let breathalyzers: BreathalyzerEntry[] = [];
+  if (body.breathalyzers === undefined) {
+    breathalyzers = [];
+  } else if (!Array.isArray(body.breathalyzers)) {
+    return { ok: false, error: "breathalyzers は配列で指定してください" };
+  } else {
+    breathalyzers = [];
+    for (const x of body.breathalyzers) {
+      if (!x || typeof x !== "object") return { ok: false, error: "アルコール探知機の行が不正です" };
+      const o = x as Record<string, unknown>;
+      const id = typeof o.id === "string" && o.id.trim() ? o.id.trim() : newId();
+      const name = typeof o.name === "string" ? o.name.trim().slice(0, 120) : "";
+      if (!name) return { ok: false, error: "アルコール探知機の名称は必須です" };
+      let lastInspectionYmd: string | null = null;
+      if (o.lastInspectionYmd !== undefined && o.lastInspectionYmd !== null && o.lastInspectionYmd !== "") {
+        if (typeof o.lastInspectionYmd !== "string" || !YMD_RE.test(o.lastInspectionYmd)) {
+          return { ok: false, error: "点検日は yyyy-MM-dd 形式で指定してください" };
+        }
+        lastInspectionYmd = o.lastInspectionYmd;
+      }
+      if (!Array.isArray(o.verificationMethods) || o.verificationMethods.length === 0) {
+        return { ok: false, error: "アルコール探知機ごとに確認方法を1つ以上指定してください" };
+      }
+      const methods: string[] = [];
+      for (const m of o.verificationMethods) {
+        if (typeof m !== "string") return { ok: false, error: "確認方法は文字列の配列で指定してください" };
+        const t = m.trim().slice(0, 40);
+        if (!t) return { ok: false, error: "確認方法に空文字は使えません" };
+        methods.push(t);
+      }
+      breathalyzers.push({ id, name, lastInspectionYmd, verificationMethods: [...new Set(methods)] });
+    }
+  }
+
   return {
     ok: true,
     value: {
@@ -294,6 +368,7 @@ export function parseBusinessBasicsPut(body: Record<string, unknown>): { ok: tru
       paymentMethods,
       regularHolidays: regular,
       temporaryClosureDates: dates,
+      breathalyzers,
     },
   };
 }

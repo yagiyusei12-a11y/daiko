@@ -13,6 +13,15 @@ type RegularHolidayNthWeekday = { id: string; kind: "nthWeekday"; nth: number; w
 type RegularHolidayMonthlyDay = { id: string; kind: "monthlyDay"; day: number };
 type RegularHolidayEntry = RegularHolidayWeekly | RegularHolidayNthWeekday | RegularHolidayMonthlyDay;
 
+type BreathalyzerEntry = {
+  id: string;
+  name: string;
+  lastInspectionYmd: string | null;
+  verificationMethods: string[];
+};
+
+const DEFAULT_BREATH_METHODS = ["対面", "電話"];
+
 type BusinessBasicsV2 = {
   version: 2;
   businessHours: BusinessHoursSlot[];
@@ -21,6 +30,7 @@ type BusinessBasicsV2 = {
   paymentMethods: string[];
   regularHolidays: RegularHolidayEntry[];
   temporaryClosureDates: string[];
+  breathalyzers: BreathalyzerEntry[];
 };
 
 type BasicsApi = {
@@ -31,13 +41,21 @@ type BasicsApi = {
   paymentMethods?: string[];
   regularHolidays?: RegularHolidayEntry[];
   temporaryClosureDates?: string[];
+  breathalyzers?: BreathalyzerEntry[];
 };
 
 function newId(prefix: string): string {
   return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${prefix}_${Date.now()}`;
 }
 
+function tokyoTodayYmd(): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date()).slice(0, 10);
+}
+
 function fromApiBasics(a: BasicsApi): BusinessBasicsV2 {
+  const breath = Array.isArray(a.breathalyzers)
+    ? (a.breathalyzers as BreathalyzerEntry[]).filter((x) => x && typeof x.name === "string" && x.name.trim())
+    : [];
   if (a.version === 2) {
     return {
       version: 2,
@@ -47,6 +65,13 @@ function fromApiBasics(a: BasicsApi): BusinessBasicsV2 {
       paymentMethods: [...(a.paymentMethods ?? [])],
       regularHolidays: a.regularHolidays ?? [],
       temporaryClosureDates: a.temporaryClosureDates ?? [],
+      breathalyzers: breath.map((b) => ({
+        ...b,
+        verificationMethods:
+          Array.isArray(b.verificationMethods) && b.verificationMethods.length > 0
+            ? [...new Set(b.verificationMethods.map((m) => String(m).trim()).filter(Boolean))]
+            : [...DEFAULT_BREATH_METHODS],
+      })),
     };
   }
   return {
@@ -57,6 +82,13 @@ function fromApiBasics(a: BasicsApi): BusinessBasicsV2 {
     paymentMethods: [],
     regularHolidays: a.regularHolidays ?? [],
     temporaryClosureDates: a.temporaryClosureDates ?? [],
+    breathalyzers: breath.map((b) => ({
+      ...b,
+      verificationMethods:
+        Array.isArray(b.verificationMethods) && b.verificationMethods.length > 0
+          ? [...new Set(b.verificationMethods.map((m) => String(m).trim()).filter(Boolean))]
+          : [...DEFAULT_BREATH_METHODS],
+    })),
   };
 }
 
@@ -198,6 +230,7 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
   const [tempDialogOpen, setTempDialogOpen] = useState(false);
   const [tempYm, setTempYm] = useState(currentYearMonth);
   const [tempSelected, setTempSelected] = useState<Set<string>>(() => new Set());
+  const [bzMethodDraft, setBzMethodDraft] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLocalErr(null);
@@ -215,6 +248,12 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
 
   async function saveAll(): Promise<void> {
     if (!draft) return;
+    for (const br of draft.breathalyzers) {
+      if (!br.name.trim()) {
+        setLocalErr("アルコール探知機の名称が空の行があります。削除するか名称を入力してください。");
+        return;
+      }
+    }
     setBusy(true);
     setErr(null);
     setLocalErr(null);
@@ -227,6 +266,7 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
         paymentMethods: draft.paymentMethods,
         regularHolidays: draft.regularHolidays,
         temporaryClosureDates: draft.temporaryClosureDates,
+        breathalyzers: draft.breathalyzers,
       },
     });
     setBusy(false);
@@ -508,6 +548,135 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
           ))}
         </ul>
       )}
+      </div>
+
+      <div className="settings-section-panel">
+        <h3 className="settings-subtitle">アルコール探知機</h3>
+        <p className="settings-hint">
+          何台でも登録できます。「点検実施」を押すと当日（日本時間）を最終点検日として記録します。確認方法は出勤時のチェックで選べる候補です（初期値は対面・電話）。
+        </p>
+        {draft.breathalyzers.length === 0 ? (
+          <p className="settings-hint">まだ登録がありません。</p>
+        ) : (
+          <ul className="settings-sf-list">
+            {draft.breathalyzers.map((br) => (
+              <li
+                key={br.id}
+                className="settings-sf-row attend-shift-list-row"
+                style={{ flexDirection: "column", alignItems: "stretch", gap: "0.5rem" }}
+              >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", alignItems: "center" }}>
+                  <span className="settings-hint" style={{ minWidth: "3rem" }}>
+                    名称
+                  </span>
+                  <input
+                    type="text"
+                    style={{ flex: "1 1 10rem", minWidth: 0 }}
+                    value={br.name}
+                    maxLength={120}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        breathalyzers: draft.breathalyzers.map((x) => (x.id === br.id ? { ...x, name: e.target.value } : x)),
+                      })
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="settings-secondary"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        breathalyzers: draft.breathalyzers.map((x) =>
+                          x.id === br.id ? { ...x, lastInspectionYmd: tokyoTodayYmd() } : x,
+                        ),
+                      })
+                    }
+                  >
+                    点検実施
+                  </button>
+                  <span className="settings-hint">{br.lastInspectionYmd ? `最終点検: ${br.lastInspectionYmd}` : "点検未記録"}</span>
+                  <button
+                    type="button"
+                    className="settings-secondary"
+                    onClick={() => setDraft({ ...draft, breathalyzers: draft.breathalyzers.filter((x) => x.id !== br.id) })}
+                  >
+                    行を削除
+                  </button>
+                </div>
+                <div>
+                  <span className="settings-hint">確認方法</span>
+                  <ul className="settings-sf-list" style={{ marginTop: "0.25rem" }}>
+                    {br.verificationMethods.map((m) => (
+                      <li key={`${br.id}-${m}`} className="settings-sf-row attend-shift-list-row">
+                        <span className="settings-sf-name">{m}</span>
+                        <button
+                          type="button"
+                          className="settings-secondary"
+                          disabled={br.verificationMethods.length <= 1}
+                          onClick={() =>
+                            setDraft({
+                              ...draft,
+                              breathalyzers: draft.breathalyzers.map((x) =>
+                                x.id === br.id ? { ...x, verificationMethods: x.verificationMethods.filter((t) => t !== m) } : x,
+                              ),
+                            })
+                          }
+                        >
+                          削除
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="settings-toolbar" style={{ marginTop: "0.35rem", flexWrap: "wrap" }}>
+                    <input
+                      type="text"
+                      placeholder="候補を追加"
+                      value={bzMethodDraft[br.id] ?? ""}
+                      maxLength={40}
+                      onChange={(e) => setBzMethodDraft((d) => ({ ...d, [br.id]: e.target.value }))}
+                    />
+                    <button
+                      type="button"
+                      className="settings-secondary"
+                      onClick={() => {
+                        const t = (bzMethodDraft[br.id] ?? "").trim();
+                        if (!t) return;
+                        setDraft({
+                          ...draft,
+                          breathalyzers: draft.breathalyzers.map((x) => {
+                            if (x.id !== br.id) return x;
+                            if (x.verificationMethods.includes(t)) return x;
+                            return { ...x, verificationMethods: [...x.verificationMethods, t] };
+                          }),
+                        });
+                        setBzMethodDraft((d) => ({ ...d, [br.id]: "" }));
+                      }}
+                    >
+                      追加
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <button
+          type="button"
+          className="settings-secondary"
+          style={{ marginTop: "0.35rem" }}
+          onClick={() =>
+            setDraft({
+              ...draft,
+              breathalyzers: [
+                ...draft.breathalyzers,
+                { id: newId("bz"), name: "", lastInspectionYmd: null, verificationMethods: [...DEFAULT_BREATH_METHODS] },
+              ],
+            })
+          }
+        >
+          アルコール探知機を追加
+        </button>
       </div>
 
       <div className="settings-section-panel">

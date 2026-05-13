@@ -10,11 +10,29 @@ type EmployeeRow = {
   givenName: string;
   status: string;
   retiredAt: string | null;
+  safetyDrivingManager?: boolean;
+};
+
+type BreathalyzerEntry = {
+  id: string;
+  name: string;
+  lastInspectionYmd: string | null;
+  verificationMethods: string[];
 };
 
 type ShiftDaySlot = { start: string; end: string };
 
 type ConfirmedDayInfo = { startTime: string; endTime: string; duties: string[] };
+
+function formatAlcoholBrief(ac: unknown): string | null {
+  if (!ac || typeof ac !== "object") return null;
+  const o = ac as Record<string, unknown>;
+  const name = typeof o.breathalyzerName === "string" ? o.breathalyzerName : "";
+  const vm = typeof o.verificationMethod === "string" ? o.verificationMethod : "";
+  const det = Boolean(o.alcoholDetected);
+  if (!name) return null;
+  return `${name} / ${vm || "—"} / ${det ? "酒気帯びあり" : "酒気帯びなし"}`;
+}
 
 const SHIFT_DUTY_OPTIONS = ["客車", "随伴車", "電話", "スケジュール"] as const;
 
@@ -595,13 +613,25 @@ export default function AttendanceMenuPage(): JSX.Element {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
   const [tcEmployeeId, setTcEmployeeId] = useState("");
-  const [tcPunches, setTcPunches] = useState<Array<{ id: string; kind: string; punchedAt: string }>>([]);
+  const [tcPunches, setTcPunches] = useState<
+    Array<{ id: string; kind: string; punchedAt: string; alcoholCheck?: unknown }>
+  >([]);
   const [tcLoading, setTcLoading] = useState(false);
+  const [tcAlcoholOpen, setTcAlcoholOpen] = useState(false);
+  const [tcAlcoholErr, setTcAlcoholErr] = useState<string | null>(null);
+  const [tcBreathList, setTcBreathList] = useState<BreathalyzerEntry[]>([]);
+  const [alcBreathId, setAlcBreathId] = useState("");
+  const [alcVerifierId, setAlcVerifierId] = useState("");
+  const [alcMethod, setAlcMethod] = useState("");
+  const [alcDetected, setAlcDetected] = useState(false);
+  const [alcNote, setAlcNote] = useState("");
 
   const roster = useMemo(
     () => employees.filter((e) => e.status === "ACTIVE" && !e.retiredAt),
     [employees],
   );
+
+  const safetyManagers = useMemo(() => roster.filter((e) => e.safetyDrivingManager), [roster]);
 
   const loadEmployees = useCallback(async () => {
     const r = await apiFetch<{ employees: EmployeeRow[] }>("/settings/employees");
@@ -872,9 +902,9 @@ export default function AttendanceMenuPage(): JSX.Element {
   const loadTcPunches = useCallback(async () => {
     if (!tcEmployeeId || !tcDate) return;
     setTcLoading(true);
-    const r = await apiFetch<{ punches: Array<{ id: string; kind: string; punchedAt: string }> }>(
-      `/attendance/timecard/punches?employeeId=${encodeURIComponent(tcEmployeeId)}&businessDate=${encodeURIComponent(tcDate)}`,
-    );
+    const r = await apiFetch<{
+      punches: Array<{ id: string; kind: string; punchedAt: string; alcoholCheck?: unknown }>;
+    }>(`/attendance/timecard/punches?employeeId=${encodeURIComponent(tcEmployeeId)}&businessDate=${encodeURIComponent(tcDate)}`);
     setTcLoading(false);
     if (!r.ok) {
       setErr(r.error);
@@ -891,20 +921,81 @@ export default function AttendanceMenuPage(): JSX.Element {
     if (staffOnly && me?.employeeId) setTcEmployeeId(me.employeeId);
   }, [staffOnly, me?.employeeId]);
 
-  async function postTimecardPunch(kind: string): Promise<void> {
-    if (!tcEmployeeId || !tcDate) return;
+  useEffect(() => {
+    const d = tcBreathList.find((x) => x.id === alcBreathId);
+    if (d?.verificationMethods?.length) {
+      setAlcMethod((m) => (d.verificationMethods.includes(m) ? m : d.verificationMethods[0]));
+    }
+  }, [alcBreathId, tcBreathList]);
+
+  async function postTimecardPunch(kind: string, alcoholCheck?: Record<string, unknown> | null): Promise<boolean> {
+    if (!tcEmployeeId || !tcDate) return false;
     setTcLoading(true);
     setErr(null);
+    const body: Record<string, unknown> = { employeeId: tcEmployeeId, businessDate: tcDate, kind };
+    if (kind === "CLOCK_IN" && alcoholCheck) body.alcoholCheck = alcoholCheck;
     const r = await apiFetch("/attendance/timecard/punch", {
       method: "POST",
-      json: { employeeId: tcEmployeeId, businessDate: tcDate, kind },
+      json: body,
     });
     setTcLoading(false);
-    if (!r.ok) setErr(r.error);
-    else {
-      flashSaved();
-      void loadTcPunches();
+    if (!r.ok) {
+      setErr(r.error);
+      return false;
     }
+    flashSaved();
+    void loadTcPunches();
+    return true;
+  }
+
+  async function beginClockIn(): Promise<void> {
+    if (!tcEmployeeId || !tcDate) return;
+    setErr(null);
+    setTcAlcoholErr(null);
+    const r = await apiFetch<{ breathalyzers?: BreathalyzerEntry[] }>("/settings/basics");
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    const raw = r.data.breathalyzers;
+    const list = Array.isArray(raw) ? raw.filter((b) => b && typeof b.id === "string" && typeof b.name === "string") : [];
+    if (list.length === 0) {
+      void postTimecardPunch("CLOCK_IN");
+      return;
+    }
+    setTcBreathList(list);
+    const first = list[0];
+    setAlcBreathId(first.id);
+    setAlcVerifierId("");
+    setAlcMethod(first.verificationMethods?.[0] ?? "対面");
+    setAlcDetected(false);
+    setAlcNote("");
+    setTcAlcoholOpen(true);
+  }
+
+  async function submitAlcoholClockIn(): Promise<void> {
+    setTcAlcoholErr(null);
+    if (!alcBreathId || !alcVerifierId || !alcMethod) {
+      setTcAlcoholErr("アルコール探知機・確認者・確認方法を選んでください。");
+      return;
+    }
+    if (safetyManagers.length === 0) {
+      setTcAlcoholErr("安全運転管理者が名簿にいません。設定の名簿でフラグを付けてください。");
+      return;
+    }
+    const dev = tcBreathList.find((x) => x.id === alcBreathId);
+    if (!dev || !dev.verificationMethods.includes(alcMethod)) {
+      setTcAlcoholErr("確認方法が不正です。");
+      return;
+    }
+    const ok = await postTimecardPunch("CLOCK_IN", {
+      breathalyzerId: alcBreathId,
+      verifierEmployeeId: alcVerifierId,
+      verificationMethod: alcMethod,
+      alcoholDetected: alcDetected,
+      instructionsNote: alcNote.trim() || null,
+    });
+    if (ok) setTcAlcoholOpen(false);
   }
 
   async function deleteTimecardPunch(punchId: string): Promise<void> {
@@ -1142,7 +1233,7 @@ export default function AttendanceMenuPage(): JSX.Element {
               type="button"
               className="settings-primary"
               disabled={!tcEmployeeId || tcLoading}
-              onClick={() => void postTimecardPunch("CLOCK_IN")}
+              onClick={() => void beginClockIn()}
             >
               出勤
             </button>
@@ -1182,28 +1273,35 @@ export default function AttendanceMenuPage(): JSX.Element {
           ) : (
             <ul className="settings-sf-list">
               {tcPunches.map((p) => (
-                <li key={p.id} className="settings-sf-row attend-shift-list-row">
-                  <span className="settings-sf-name">
-                    {p.kind === "CLOCK_IN"
-                      ? "出勤"
-                      : p.kind === "CLOCK_OUT"
-                        ? "退勤"
-                        : p.kind === "BREAK_START"
-                          ? "休憩入"
-                          : p.kind === "BREAK_END"
-                            ? "休憩終"
-                            : p.kind}
-                  </span>
-                  <span className="settings-sf-meta">{new Date(p.punchedAt).toLocaleString("ja-JP")}</span>
-                  <button
-                    type="button"
-                    className="settings-secondary"
-                    style={{ marginLeft: "auto", flexShrink: 0 }}
-                    disabled={tcLoading}
-                    onClick={() => void deleteTimecardPunch(p.id)}
-                  >
-                    削除
-                  </button>
+                <li key={p.id} className="settings-sf-row attend-shift-list-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                  <div style={{ display: "flex", alignItems: "center", width: "100%", gap: "0.35rem" }}>
+                    <span className="settings-sf-name">
+                      {p.kind === "CLOCK_IN"
+                        ? "出勤"
+                        : p.kind === "CLOCK_OUT"
+                          ? "退勤"
+                          : p.kind === "BREAK_START"
+                            ? "休憩入"
+                            : p.kind === "BREAK_END"
+                              ? "休憩終"
+                              : p.kind}
+                    </span>
+                    <span className="settings-sf-meta">{new Date(p.punchedAt).toLocaleString("ja-JP")}</span>
+                    <button
+                      type="button"
+                      className="settings-secondary"
+                      style={{ marginLeft: "auto", flexShrink: 0 }}
+                      disabled={tcLoading}
+                      onClick={() => void deleteTimecardPunch(p.id)}
+                    >
+                      削除
+                    </button>
+                  </div>
+                  {p.kind === "CLOCK_IN" && formatAlcoholBrief(p.alcoholCheck) ? (
+                    <span className="settings-hint" style={{ marginTop: "0.15rem" }}>
+                      アルコール: {formatAlcoholBrief(p.alcoholCheck)}
+                    </span>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -1345,6 +1443,77 @@ export default function AttendanceMenuPage(): JSX.Element {
             <div className="pricing-modal-actions">
               <button type="button" disabled={adjustBusy} onClick={() => setAdjustDialogDate(null)}>
                 閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {tcAlcoholOpen ? (
+        <div
+          className="pricing-modal-backdrop"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setTcAlcoholOpen(false);
+          }}
+        >
+          <div
+            className="pricing-modal attend-shift-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tc-alc-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h2 id="tc-alc-title" className="pricing-modal-title">
+              出勤（アルコールチェック）
+            </h2>
+            <div className="attend-shift-dialog-scroll">
+              <Err msg={tcAlcoholErr} />
+              <div className="settings-form">
+                <label htmlFor="tc-alc-bz">アルコール探知機</label>
+                <select id="tc-alc-bz" value={alcBreathId} onChange={(e) => setAlcBreathId(e.target.value)}>
+                  {tcBreathList.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+                <label htmlFor="tc-alc-ver">確認者（安全運転管理者）</label>
+                <select id="tc-alc-ver" value={alcVerifierId} onChange={(e) => setAlcVerifierId(e.target.value)}>
+                  <option value="">選択</option>
+                  {safetyManagers.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.familyName} {e.givenName}
+                    </option>
+                  ))}
+                </select>
+                <label htmlFor="tc-alc-m">確認方法</label>
+                <select id="tc-alc-m" value={alcMethod} onChange={(e) => setAlcMethod(e.target.value)}>
+                  {(tcBreathList.find((x) => x.id === alcBreathId)?.verificationMethods ?? []).map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+                <span className="settings-hint">酒気帯びの有無</span>
+                <div className="settings-toolbar" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
+                  <label className="settings-inline-check">
+                    <input type="radio" name="alc-det" checked={!alcDetected} onChange={() => setAlcDetected(false)} /> なし
+                  </label>
+                  <label className="settings-inline-check">
+                    <input type="radio" name="alc-det" checked={alcDetected} onChange={() => setAlcDetected(true)} /> あり
+                  </label>
+                </div>
+                <label htmlFor="tc-alc-note">指示事項（任意）</label>
+                <textarea id="tc-alc-note" value={alcNote} onChange={(e) => setAlcNote(e.target.value)} rows={2} maxLength={2000} />
+              </div>
+            </div>
+            <div className="pricing-modal-actions">
+              <button type="button" className="settings-primary" disabled={tcLoading} onClick={() => void submitAlcoholClockIn()}>
+                出勤を記録
+              </button>
+              <button type="button" disabled={tcLoading} onClick={() => setTcAlcoholOpen(false)}>
+                キャンセル
               </button>
             </div>
           </div>
