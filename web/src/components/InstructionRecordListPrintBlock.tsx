@@ -5,10 +5,16 @@ import {
   type InstructionRow,
   firstDayOfMonth,
   formatInstructionDate,
+  groupRecordsBySession,
   lastDayOfMonth,
 } from "../lib/instruction-records-ui";
 
 import "../instruction-records-print.css";
+
+function dashIfEmpty(s: string): string {
+  const t = s.trim();
+  return t ? s : "—";
+}
 
 /** 書類ページ「指導記録簿」タブ用：期間絞り込み・一覧・印刷 */
 export default function InstructionRecordListPrintBlock(): JSX.Element {
@@ -50,7 +56,8 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
     window.setTimeout(() => document.body.classList.remove("instruction-records-printing"), 2500);
   };
 
-  const sortedForPrint = useMemo(() => [...records].sort((a, b) => a.date.localeCompare(b.date)), [records]);
+  const sortedRows = useMemo(() => [...records].sort((a, b) => a.date.localeCompare(b.date)), [records]);
+  const printSheets = useMemo(() => groupRecordsBySession(sortedRows), [sortedRows]);
 
   return (
     <div className="instruction-list">
@@ -75,7 +82,7 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
       </div>
 
       <p className="settings-hint no-print" style={{ marginTop: 0 }}>
-        登録はメニュー「指導」から行えます。ここでは期間を指定して一覧表示し、A4横で印刷できます。
+        登録はメニュー「指導」から行えます。ここでは期間を指定して一覧表示し、A4縦で印刷できます。
       </p>
 
       <div className="instruction-screen-table-wrap no-print">
@@ -84,6 +91,8 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
             <tr>
               <th>No</th>
               <th>指導日時</th>
+              <th>実施場所</th>
+              <th>担当者</th>
               <th>氏名</th>
               <th>指導事項</th>
               <th>特記事項</th>
@@ -93,15 +102,17 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
           <tbody>
             {records.length === 0 ? (
               <tr>
-                <td colSpan={6} className="instruction-table-empty">
+                <td colSpan={8} className="instruction-table-empty">
                   該当する指導記録がありません
                 </td>
               </tr>
             ) : (
-              records.map((r, i) => (
+              sortedRows.map((r, i) => (
                 <tr key={r.id}>
                   <td>{i + 1}</td>
                   <td>{formatInstructionDate(r.date)}</td>
+                  <td className="instruction-cell-pre">{dashIfEmpty(r.instructionVenue ?? "")}</td>
+                  <td className="instruction-cell-pre">{dashIfEmpty(r.instructorNames ?? "")}</td>
                   <td>
                     {r.employeeFamilyName} {r.employeeGivenName}
                   </td>
@@ -116,36 +127,53 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
       </div>
 
       <div className="instruction-print-sheet">
-        <h1 className="instruction-print-title">指導記録簿</h1>
-        <p className="instruction-print-meta">
-          期間: {from} ～ {to}（東京） / 件数: {sortedForPrint.length}
+        <p className="instruction-print-global-meta">
+          出力期間: {from} ～ {to}（東京） / 指導実施 {printSheets.length} 件
         </p>
-        <table className="instruction-table instruction-table--print">
-          <thead>
-            <tr>
-              <th className="col-no">No</th>
-              <th className="col-date">指導日時</th>
-              <th className="col-name">氏名</th>
-              <th className="col-body">指導事項</th>
-              <th className="col-body">特記事項</th>
-              <th className="col-body">備考</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedForPrint.map((r, i) => (
-              <tr key={`p-${r.id}`}>
-                <td>{i + 1}</td>
-                <td>{formatInstructionDate(r.date)}</td>
-                <td>
-                  {r.employeeFamilyName} {r.employeeGivenName}
-                </td>
-                <td className="instruction-cell-pre">{r.instructionItems}</td>
-                <td className="instruction-cell-pre">{r.specialNotes}</td>
-                <td className="instruction-cell-pre">{r.remarks}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {printSheets.map((g) => (
+          <article key={g.key} className="instruction-doc-page">
+            <header className="instruction-doc-banner">
+              <h1 className="instruction-doc-heading">従事者に対する指導記録簿</h1>
+            </header>
+
+            <table className="instruction-doc-table">
+              <tbody>
+                <tr>
+                  <th scope="row">指導実施日時</th>
+                  <td>{formatInstructionDate(g.dateIso)}</td>
+                </tr>
+                <tr>
+                  <th scope="row">指導実施場所</th>
+                  <td className="instruction-doc-td-pre">{dashIfEmpty(g.instructionVenue)}</td>
+                </tr>
+                <tr>
+                  <th scope="row">指導担当者名（複数）</th>
+                  <td className="instruction-doc-td-pre">{dashIfEmpty(g.instructorNames)}</td>
+                </tr>
+                <tr>
+                  <th scope="row">指導を受けた者</th>
+                  <td className="instruction-doc-td-pre">{g.recipientNames.join("、")}</td>
+                </tr>
+                <tr className="instruction-doc-row-tall">
+                  <th scope="row">指導項目</th>
+                  <td className="instruction-doc-td-pre">{g.instructionItems.trim() ? g.instructionItems : "—"}</td>
+                </tr>
+                <tr className="instruction-doc-row-mid">
+                  <th scope="row">特記事項</th>
+                  <td className="instruction-doc-td-pre">{g.specialNotes.trim() ? g.specialNotes : "—"}</td>
+                </tr>
+                <tr className="instruction-doc-row-mid">
+                  <th scope="row">備考</th>
+                  <td className="instruction-doc-td-pre">{g.remarks.trim() ? g.remarks : "—"}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <footer className="instruction-doc-footer">
+              <span>事業者名義にて保管してください</span>
+            </footer>
+          </article>
+        ))}
       </div>
     </div>
   );

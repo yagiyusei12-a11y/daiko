@@ -264,6 +264,12 @@ model InstructionRecord {
   employee         Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   /// 指導日時
   date             DateTime
+  /// 同一保存操作で作成された行をまとめる（印刷で受講者を一覧するため）
+  sessionGroupId   String?
+  /// 指導実施場所
+  instructionVenue String   @default("")
+  /// 指導担当者名（複数行可）
+  instructorNames  String   @default("") @db.Text
   /// 指導事項
   instructionItems String   @db.Text
   /// 特記事項
@@ -275,6 +281,7 @@ model InstructionRecord {
 
   @@index([tenantId, date])
   @@index([tenantId, employeeId])
+  @@index([tenantId, sessionGroupId])
 }
 
 /// シフト調整で確定した日単位の勤務（担当業務は JSON 文字列配列）

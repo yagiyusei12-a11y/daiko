@@ -66,6 +66,10 @@
   line-height: 1.45;
 }
 
+.instruction-textarea--short {
+  min-height: 3.5rem;
+}
+
 .instruction-actions {
   margin-top: 0.75rem;
 }
@@ -117,66 +121,109 @@
 .instruction-cell-pre {
   white-space: pre-wrap;
   word-break: break-word;
-  max-width: 18rem;
+  max-width: 14rem;
 }
 
-/* 印刷用シート（画面上は非表示） */
+/* 印刷用（画面上は非表示） */
 @media screen {
   .instruction-print-sheet {
     display: none;
   }
 }
 
-.instruction-table--print {
+.instruction-print-global-meta {
+  font-size: 9pt;
+  color: #4a5568;
+  text-align: right;
+  margin: 0 0 0.5rem;
+  padding: 0 0.15rem;
+}
+
+.instruction-doc-page + .instruction-doc-page {
+  margin-top: 1.5rem;
+}
+
+.instruction-doc-page {
+  box-sizing: border-box;
+  max-width: 210mm;
+  margin: 0 auto;
+  padding: 0;
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
+  color: #1a1d26;
+  background: #fff;
+}
+
+.instruction-doc-banner {
+  border: 2px solid #1e3a5f;
+  border-bottom: none;
+  background: linear-gradient(180deg, #2c4a6e 0%, #1e3a5f 100%);
+  padding: 0.65rem 1rem;
+}
+
+.instruction-doc-heading {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-align: center;
+  color: #fff;
+}
+
+.instruction-doc-table {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  font-size: 9pt;
+  font-size: 10pt;
+  border: 2px solid #1e3a5f;
 }
 
-.instruction-table--print th,
-.instruction-table--print td {
-  border: 1px solid #000;
-  padding: 0.2rem 0.25rem;
+.instruction-doc-table th {
+  width: 26%;
+  padding: 0.45rem 0.55rem;
+  text-align: left;
   vertical-align: top;
+  font-weight: 600;
+  color: #1e3a5f;
+  background: #eef2f7;
+  border: 1px solid #1e3a5f;
+  border-top: none;
+}
+
+.instruction-doc-table td {
+  padding: 0.45rem 0.6rem;
+  vertical-align: top;
+  border: 1px solid #1e3a5f;
+  border-top: none;
+  background: #fff;
+  line-height: 1.5;
+}
+
+.instruction-doc-td-pre {
+  white-space: pre-wrap;
   word-break: break-word;
 }
 
-.instruction-table--print thead th {
-  font-weight: 700;
-  text-align: center;
-  background: #f0f0f0;
+.instruction-doc-row-tall td {
+  min-height: 14rem;
 }
 
-.instruction-table--print .col-no {
-  width: 4%;
-}
-.instruction-table--print .col-date {
-  width: 12%;
-}
-.instruction-table--print .col-name {
-  width: 10%;
-}
-.instruction-table--print .col-body {
-  width: 24%;
+.instruction-doc-row-mid td {
+  min-height: 4.5rem;
 }
 
-.instruction-print-title {
-  font-size: 14pt;
-  margin: 0 0 0.35rem;
-  text-align: center;
-}
-
-.instruction-print-meta {
-  font-size: 9pt;
-  margin: 0 0 0.5rem;
-  text-align: center;
+.instruction-doc-footer {
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.25rem 0;
+  font-size: 8.5pt;
+  color: #5c6473;
+  text-align: right;
+  border-top: 1px solid #c5ccd8;
 }
 
 @media print {
   @page {
-    size: A4 landscape;
-    margin: 8mm;
+    size: A4 portrait;
+    margin: 12mm 14mm;
   }
 
   body.instruction-records-printing * {
@@ -194,14 +241,25 @@
     top: 0;
     width: 100%;
     display: block !important;
+    background: #fff;
   }
 
-  body.instruction-records-printing .instruction-table--print {
-    page-break-inside: auto;
+  body.instruction-records-printing .instruction-doc-page + .instruction-doc-page {
+    margin-top: 0;
+    page-break-before: always;
   }
 
-  body.instruction-records-printing .instruction-table--print tr {
+  body.instruction-records-printing .instruction-doc-page {
+    max-width: none;
+    margin: 0;
     page-break-inside: avoid;
-    page-break-after: auto;
+  }
+
+  body.instruction-records-printing .instruction-doc-row-tall td {
+    min-height: auto;
+  }
+
+  body.instruction-records-printing .instruction-doc-row-mid td {
+    min-height: auto;
   }
 }

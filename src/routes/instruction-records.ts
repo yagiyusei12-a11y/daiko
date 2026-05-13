@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { authenticate, jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
@@ -7,6 +8,8 @@ const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_TEXT = 100_000;
 const MAX_LIST = 500;
 const MAX_BATCH_CREATE = 80;
+const MAX_VENUE = 500;
+const MAX_INSTRUCTOR_NAMES = 4000;
 
 export async function registerInstructionRecordsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
@@ -43,10 +46,13 @@ export async function registerInstructionRecordsRoutes(app: FastifyInstance): Pr
     return {
       records: rows.map((r) => ({
         id: r.id,
+        sessionGroupId: r.sessionGroupId,
         employeeId: r.employeeId,
         employeeFamilyName: r.employee.familyName,
         employeeGivenName: r.employee.givenName,
         date: r.date.toISOString(),
+        instructionVenue: r.instructionVenue,
+        instructorNames: r.instructorNames,
         instructionItems: r.instructionItems,
         specialNotes: r.specialNotes,
         remarks: r.remarks,
@@ -61,6 +67,8 @@ export async function registerInstructionRecordsRoutes(app: FastifyInstance): Pr
     const b = req.body || {};
 
     const dateRaw = String(b.date ?? "").trim();
+    const instructionVenue = String(b.instructionVenue ?? "").trim();
+    const instructorNames = String(b.instructorNames ?? "");
     const instructionItems = String(b.instructionItems ?? "");
     const specialNotes = String(b.specialNotes ?? "");
     const remarks = String(b.remarks ?? "");
@@ -87,6 +95,12 @@ export async function registerInstructionRecordsRoutes(app: FastifyInstance): Pr
       return reply.code(400).send({ error: "指導日時の形式が不正です" });
     }
 
+    if (instructionVenue.length > MAX_VENUE) {
+      return reply.code(400).send({ error: "指導実施場所が長すぎます" });
+    }
+    if (instructorNames.length > MAX_INSTRUCTOR_NAMES) {
+      return reply.code(400).send({ error: "指導担当者名が長すぎます" });
+    }
     if (instructionItems.length > MAX_TEXT || specialNotes.length > MAX_TEXT || remarks.length > MAX_TEXT) {
       return reply.code(400).send({ error: "入力が長すぎます" });
     }
@@ -99,12 +113,17 @@ export async function registerInstructionRecordsRoutes(app: FastifyInstance): Pr
       return reply.code(400).send({ error: "無効な従業員が含まれるか、在籍でない方が含まれています" });
     }
 
+    const sessionGroupId = randomUUID();
+
     const rows = await prisma.$transaction(
       employeeIds.map((employeeId) =>
         prisma.instructionRecord.create({
           data: {
             tenantId,
             employeeId,
+            sessionGroupId,
+            instructionVenue,
+            instructorNames,
             date,
             instructionItems,
             specialNotes,
@@ -115,6 +134,6 @@ export async function registerInstructionRecordsRoutes(app: FastifyInstance): Pr
       ),
     );
 
-    return { ids: rows.map((r) => r.id), count: rows.length };
+    return { ids: rows.map((r) => r.id), count: rows.length, sessionGroupId };
   });
 }

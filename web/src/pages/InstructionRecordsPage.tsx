@@ -23,6 +23,8 @@ export default function InstructionRecordsPage(): JSX.Element {
   const [employees, setEmployees] = useState<EmployeeOpt[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [dateLocal, setDateLocal] = useState(() => toDatetimeLocalValue(new Date()));
+  const [instructionVenue, setInstructionVenue] = useState("");
+  const [instructorNames, setInstructorNames] = useState("");
   const [instructionItems, setInstructionItems] = useState(DEFAULT_INSTRUCTION_ITEMS);
   const [specialNotes, setSpecialNotes] = useState(DEFAULT_SPECIAL_NOTES);
   const [remarks, setRemarks] = useState(DEFAULT_REMARKS);
@@ -74,6 +76,8 @@ export default function InstructionRecordsPage(): JSX.Element {
       json: {
         employeeIds,
         date: parsed.toISOString(),
+        instructionVenue,
+        instructorNames,
         instructionItems,
         specialNotes,
         remarks,
@@ -85,16 +89,18 @@ export default function InstructionRecordsPage(): JSX.Element {
       return;
     }
     setDateLocal(toDatetimeLocalValue(new Date()));
+    setInstructionVenue("");
+    setInstructorNames("");
     setInstructionItems(DEFAULT_INSTRUCTION_ITEMS);
     setSpecialNotes(DEFAULT_SPECIAL_NOTES);
     setRemarks(DEFAULT_REMARKS);
     setSelectedIds(new Set());
-  }, [selectedIds, dateLocal, instructionItems, specialNotes, remarks]);
+  }, [selectedIds, dateLocal, instructionVenue, instructorNames, instructionItems, specialNotes, remarks]);
 
   return (
     <Card title="指導記録簿">
       <p className="settings-hint">
-        従業員への指導内容を登録します。一覧・印刷（A4横）は「書類」メニューの「指導記録簿」タブから行えます。
+        従業員への指導内容を登録します。一覧・印刷（A4縦・帳票形式）は「書類」メニューの「指導記録簿」タブから行えます。
       </p>
       <div className="instruction-form">
         <Err msg={err} />
@@ -140,6 +146,31 @@ export default function InstructionRecordsPage(): JSX.Element {
             />
           </label>
         </div>
+        <label className="field field--block">
+          <span className="field-label">指導実施場所</span>
+          <input
+            className="field-control"
+            type="text"
+            value={instructionVenue}
+            onChange={(e) => setInstructionVenue(e.target.value)}
+            disabled={busy}
+            placeholder="例：本社会議室、車庫前"
+            maxLength={500}
+            autoComplete="off"
+          />
+        </label>
+        <label className="field field--block">
+          <span className="field-label">指導担当者名（複数行可）</span>
+          <textarea
+            className="field-control instruction-textarea instruction-textarea--short"
+            rows={3}
+            value={instructorNames}
+            onChange={(e) => setInstructorNames(e.target.value)}
+            disabled={busy}
+            placeholder={"例：山田 太郎\n佐藤 花子"}
+            maxLength={4000}
+          />
+        </label>
         <label className="field field--block">
           <span className="field-label">指導事項</span>
           <textarea
