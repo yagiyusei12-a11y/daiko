@@ -84,6 +84,17 @@ if [[ -z "$CHROME_PATH" ]]; then
   exit 0
 fi
 
+# --- 日本語 PDF 用フォント（Linux ヘッドレスでは無いと日本語が□になる）---
+log "日本語フォント（fonts-noto-cjk）を確保します…"
+set +e
+sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
+if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y fonts-noto-cjk; then
+  log "fonts-noto-cjk を確認しました。"
+else
+  log "WARN: fonts-noto-cjk を入れられませんでした。PDF の日本語が正しく出ないことがあります。"
+fi
+set -e
+
 if [[ ! -f "$ENV_FILE" ]]; then
   log "WARN: $ENV_FILE がありません。スキップします。"
   exit 0

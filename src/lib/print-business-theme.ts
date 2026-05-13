@@ -56,7 +56,7 @@ export const PRINT_BUSINESS_BASE_CSS = `
   }
 }
 body.pd-body {
-  font-family: "BIZ UDPGothic","BIZ UD Gothic","Hiragino Kaku Gothic ProN","Yu Gothic UI",YuGothic,"Meiryo UI",Meiryo,"MS Gothic",sans-serif;
+  font-family: "Noto Sans CJK JP","Noto Sans JP","BIZ UDPGothic","BIZ UD Gothic","Hiragino Kaku Gothic ProN","Yu Gothic UI",YuGothic,"Meiryo UI",Meiryo,"MS Gothic",sans-serif;
   font-size: 9.5pt;
   line-height: 1.45;
   color: var(--pd-body);

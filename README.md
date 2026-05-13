@@ -78,6 +78,8 @@ npm run dev
 
 未設定のとき PDF 系エンドポイントは **503** を返し、従来どおりの「ブラウザで開いて印刷」（HTML）は利用できます。
 
+日本語が PDF 上で **□（豆腐）** になる場合は、VPS に **Noto CJK** が入っていません。`ensure-chromium-env.sh` がデプロイ時に **`fonts-noto-cjk`** を入れるので、再デプロイで解消します（手動なら `sudo apt-get install -y fonts-noto-cjk`）。
+
 ### 本番 DB を白紙にする（テナント・業務データをすべて消す）
 
 **同じ VPS・同じドメイン・同じ `.env`（`DATABASE_URL`）・同じデプロイ手順のまま**、アプリの DB だけを初期状態に戻す手順です。`.env.deploy` を作り直す必要はありません（ローカルからの `npm run deploy:vps` も従来どおり）。

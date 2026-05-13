@@ -27,7 +27,7 @@ const YAKKAN_CSS = `${PRINT_BUSINESS_BASE_CSS}
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
-  font-family: "BIZ UDPMincho","BIZ UD Mincho","Hiragino Mincho ProN",YuMincho,"Yu Mincho","MS Mincho",serif;
+  font-family: "Noto Serif CJK JP","Noto Serif JP","BIZ UDPMincho","BIZ UD Mincho","Hiragino Mincho ProN",YuMincho,"Yu Mincho","MS Mincho",serif;
 }
 `;
 

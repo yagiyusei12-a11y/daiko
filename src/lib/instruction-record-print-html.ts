@@ -89,7 +89,7 @@ html, body { margin: 0; padding: 0; background: #fff; }
   display: flex;
   flex-direction: column;
   page-break-after: auto;
-  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
+  font-family: "Noto Sans CJK JP", "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", sans-serif;
   color: #1a1d26;
   background: #fff;
 }
