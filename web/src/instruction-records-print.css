@@ -1,0 +1,176 @@
+/* 指導記録簿（画面） */
+.instruction-form .field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.instruction-form .field--block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.instruction-form .field-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text, #1a1a1a);
+}
+
+.instruction-form .field-control {
+  font: inherit;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radius-sm, 4px);
+  max-width: 100%;
+}
+
+.instruction-textarea {
+  width: 100%;
+  min-height: 6rem;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.45;
+}
+
+.instruction-actions {
+  margin-top: 0.75rem;
+}
+
+.instruction-filter {
+  align-items: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.instruction-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.instruction-screen-table-wrap {
+  overflow: auto;
+  max-width: 100%;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radius-sm, 4px);
+}
+
+.instruction-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.instruction-table--screen th,
+.instruction-table--screen td {
+  border: 1px solid var(--color-border, #ccc);
+  padding: 0.35rem 0.45rem;
+  vertical-align: top;
+}
+
+.instruction-table--screen thead th {
+  background: var(--color-surface-muted, #f3f3f3);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.instruction-table-empty {
+  text-align: center;
+  color: var(--color-muted, #666);
+  padding: 1.5rem !important;
+}
+
+.instruction-cell-pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 18rem;
+}
+
+/* 印刷用シート（画面上は非表示） */
+@media screen {
+  .instruction-print-sheet {
+    display: none;
+  }
+}
+
+.instruction-table--print {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 9pt;
+}
+
+.instruction-table--print th,
+.instruction-table--print td {
+  border: 1px solid #000;
+  padding: 0.2rem 0.25rem;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.instruction-table--print thead th {
+  font-weight: 700;
+  text-align: center;
+  background: #f0f0f0;
+}
+
+.instruction-table--print .col-no {
+  width: 4%;
+}
+.instruction-table--print .col-date {
+  width: 12%;
+}
+.instruction-table--print .col-name {
+  width: 10%;
+}
+.instruction-table--print .col-body {
+  width: 24%;
+}
+
+.instruction-print-title {
+  font-size: 14pt;
+  margin: 0 0 0.35rem;
+  text-align: center;
+}
+
+.instruction-print-meta {
+  font-size: 9pt;
+  margin: 0 0 0.5rem;
+  text-align: center;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  body.instruction-records-printing * {
+    visibility: hidden;
+  }
+
+  body.instruction-records-printing .instruction-print-sheet,
+  body.instruction-records-printing .instruction-print-sheet * {
+    visibility: visible;
+  }
+
+  body.instruction-records-printing .instruction-print-sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    display: block !important;
+  }
+
+  body.instruction-records-printing .instruction-table--print {
+    page-break-inside: auto;
+  }
+
+  body.instruction-records-printing .instruction-table--print tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+}

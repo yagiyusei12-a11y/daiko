@@ -944,7 +944,11 @@ export default function DocumentsPage(): JSX.Element {
       label: "指導記録簿",
       children: (
         <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
-          <PanelHint>指導記録の一覧様式の出力は、今後このタブから行える予定です。</PanelHint>
+          <PanelHint>
+            指導記録の登録・一覧・印刷は、メニュー「
+            <Link to="/instruction-records">指導</Link>
+            」から行えます。
+          </PanelHint>
         </div>
       ),
     },

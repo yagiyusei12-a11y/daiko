@@ -7,6 +7,7 @@ import DailyReportDetailPage from "./pages/DailyReportDetailPage";
 import DailyReportsMenuPage from "./pages/DailyReportsMenuPage";
 import AttendanceMenuPage from "./pages/AttendanceMenuPage";
 import DocumentsPage from "./pages/DocumentsPage";
+import InstructionRecordsPage from "./pages/InstructionRecordsPage";
 import DashboardPage from "./pages/DashboardPage";
 import SettingsMenuPage from "./pages/SettingsMenuPage";
 
@@ -23,6 +24,7 @@ export default function App(): JSX.Element {
         <Route path="daily-reports/:reportId" element={<DailyReportDetailPage />} />
         <Route path="attendance" element={<AttendanceMenuPage />} />
         <Route path="documents" element={<DocumentsPage />} />
+        <Route path="instruction-records" element={<InstructionRecordsPage />} />
         <Route path="settings" element={<SettingsMenuPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

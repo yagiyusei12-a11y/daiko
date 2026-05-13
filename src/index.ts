@@ -15,6 +15,7 @@ import { registerAttendanceRoutes } from "./routes/attendance.js";
 import { registerDashboardRoutes } from "./routes/dashboard.js";
 import { registerDispatchRoutes } from "./routes/dispatch.js";
 import { registerDocumentsRoutes } from "./routes/documents.js";
+import { registerInstructionRecordsRoutes } from "./routes/instruction-records.js";
 import { registerLiffBookingRoutes } from "./routes/liff-booking.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -88,6 +89,7 @@ await app.register(registerDailyReportRoutes, { prefix: v1 });
 await app.register(registerDashboardRoutes, { prefix: `${v1}/dashboard` });
 await app.register(registerDispatchRoutes, { prefix: `${v1}/dispatch` });
 await app.register(registerLiffBookingRoutes, { prefix: `${v1}/liff` });
+await app.register(registerInstructionRecordsRoutes, { prefix: `${v1}/instruction-records` });
 await app.register(registerDocumentsRoutes, { prefix: v1 });
 
 app.get("/api/v1/openapi.json", async () => app.swagger());

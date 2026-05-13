@@ -10,6 +10,7 @@ const navItems: { to: string; label: string; match: "schedule" | "prefix" }[] = 
   { to: "/schedule", label: "スケジュール", match: "schedule" },
   { to: "/attendance", label: "勤怠", match: "prefix" },
   { to: "/documents", label: "書類", match: "prefix" },
+  { to: "/instruction-records", label: "指導", match: "prefix" },
   { to: "/settings", label: "設定", match: "prefix" },
 ];
 

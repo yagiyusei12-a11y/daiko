@@ -87,6 +87,7 @@ model Tenant {
   timeCardPunches     TimeCardPunch[]
   vehicleOdometerLogs VehicleOdometerLog[]
   lineChannels        TenantLineChannel[]
+  instructionRecords  InstructionRecord[]
 }
 
 /// デモ用サンプル投入のバッチ（payload に作成した主キー一覧を保持し、削除時に利用）
@@ -249,8 +250,31 @@ model Employee {
   confirmedShiftDays       ConfirmedShiftDay[]
   timeCardPunches          TimeCardPunch[]
   dispatchReservationsAsDriver DispatchReservation[] @relation("DispatchReservationDriver")
+  instructionRecords           InstructionRecord[]
 
   @@index([tenantId, status])
+}
+
+/// 指導記録簿（従業員別の指導内容の登録・一覧・印刷用）
+model InstructionRecord {
+  id               String   @id @default(cuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employeeId       String
+  employee         Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  /// 指導日時
+  date             DateTime
+  /// 指導事項
+  instructionItems String   @db.Text
+  /// 特記事項
+  specialNotes     String   @db.Text
+  /// 備考
+  remarks          String   @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([tenantId, date])
+  @@index([tenantId, employeeId])
 }
 
 /// シフト調整で確定した日単位の勤務（担当業務は JSON 文字列配列）
