@@ -14,6 +14,7 @@ import { coerceTillFromCustomJson, mergeTillIntoCustomJson, parseTillPut } from 
 import { coercePricingPrefs, mergePricingPrefsUpdate } from "../lib/pricing-prefs.js";
 import { prisma } from "../db.js";
 import { reverseGeocodeTownJaCached } from "../lib/reverse-geocode-cache.js";
+import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
 
 type JsonObj = Record<string, unknown>;
 
@@ -457,6 +458,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
         detailJson: v.detailJson,
         legalCoverageStartOn: v.legalCoverageStartOn ? ymd(v.legalCoverageStartOn) : null,
         active: v.active,
+        currentOdometer: v.currentOdometer,
       })),
     };
   });
@@ -495,6 +497,15 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
         detailJson: detail as Prisma.InputJsonValue,
       },
     });
+    if (b.currentOdometer !== undefined && b.currentOdometer !== null && String(b.currentOdometer) !== "") {
+      const val = Math.max(0, Math.floor(Number(b.currentOdometer) || 0));
+      await appendVehicleOdometerAndSetCurrent(prisma, {
+        tenantId,
+        vehicleId: v.id,
+        value: val,
+        source: "SETTINGS",
+      });
+    }
     return { id: v.id };
   });
 
@@ -551,7 +562,54 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
         ...(b.active !== undefined ? { active: Boolean(b.active) } : {}),
       },
     });
+
+    if (b.currentOdometer !== undefined) {
+      if (b.currentOdometer === null || b.currentOdometer === "") {
+        await prisma.vehicle.update({ where: { id }, data: { currentOdometer: null } });
+      } else {
+        const val = Math.max(0, Math.floor(Number(b.currentOdometer) || 0));
+        if (row.currentOdometer !== val) {
+          await appendVehicleOdometerAndSetCurrent(prisma, {
+            tenantId,
+            vehicleId: id,
+            value: val,
+            source: "SETTINGS",
+          });
+        }
+      }
+    }
     return { ok: true };
+  });
+
+  app.get<{ Params: { id: string }; Querystring: { limit?: string } }>("/vehicles/:id/odometer-logs", async (req, reply) => {
+    const { tenantId } = jwtUser(req);
+    const id = String(req.params.id || "");
+    const veh = await prisma.vehicle.findFirst({ where: { id, tenantId }, select: { id: true } });
+    if (!veh) return reply.code(404).send({ error: "not found" });
+    const lim = Math.min(200, Math.max(1, Math.floor(Number(req.query?.limit) || 80)));
+    const rows = await prisma.vehicleOdometerLog.findMany({
+      where: { tenantId, vehicleId: id },
+      orderBy: { createdAt: "desc" },
+      take: lim,
+      select: {
+        id: true,
+        value: true,
+        source: true,
+        businessDate: true,
+        dailyReportId: true,
+        createdAt: true,
+      },
+    });
+    return {
+      logs: rows.map((r) => ({
+        id: r.id,
+        value: r.value,
+        source: r.source,
+        businessDate: r.businessDate,
+        dailyReportId: r.dailyReportId,
+        createdAt: r.createdAt.toISOString(),
+      })),
+    };
   });
 
   app.delete<{ Params: { id: string } }>("/vehicles/:id", async (req, reply) => {
@@ -559,7 +617,9 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const id = String(req.params.id || "");
     const row = await prisma.vehicle.findFirst({ where: { id, tenantId } });
     if (!row) return reply.code(404).send({ error: "not found" });
-    const n = await prisma.dailyReport.count({ where: { tenantId, vehicleId: id } });
+    const n = await prisma.dailyReport.count({
+      where: { tenantId, OR: [{ vehicleId: id }, { escortVehicleId: id }] },
+    });
     if (n > 0) return reply.code(409).send({ error: "vehicle has daily reports" });
     await prisma.vehicle.delete({ where: { id } });
     return { ok: true };

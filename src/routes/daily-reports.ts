@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { authenticate, jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
 import { coercePricingPrefs, mergeLegSurchargesJson, tripSurchargeDefaults } from "../lib/pricing-prefs.js";
+import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
 
 function asObj(v: unknown): Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -106,6 +107,35 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         meterEnd,
       },
     });
+
+    if (escortVehicleId && escortOdometerStartM != null) {
+      const cur = await prisma.vehicle.findUnique({ where: { id: escortVehicleId }, select: { currentOdometer: true } });
+      if (cur?.currentOdometer !== escortOdometerStartM) {
+        await appendVehicleOdometerAndSetCurrent(prisma, {
+          tenantId,
+          vehicleId: escortVehicleId,
+          value: escortOdometerStartM,
+          source: "DAILY_REPORT",
+          dailyReportId: dr.id,
+          businessDate,
+        });
+      }
+    }
+    if (vehicleId) {
+      const cand = meterEnd ?? meterStart;
+      const cur = await prisma.vehicle.findUnique({ where: { id: vehicleId }, select: { currentOdometer: true } });
+      if (cur?.currentOdometer !== cand) {
+        await appendVehicleOdometerAndSetCurrent(prisma, {
+          tenantId,
+          vehicleId,
+          value: cand,
+          source: "DAILY_REPORT",
+          dailyReportId: dr.id,
+          businessDate,
+        });
+      }
+    }
+
     return { id: dr.id };
   });
 
@@ -170,7 +200,75 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       }
     }
 
+    if (b.meterStart !== undefined) {
+      data.meterStart = Math.max(0, Math.floor(Number(b.meterStart) || 0));
+    }
+    if (b.meterEnd !== undefined) {
+      data.meterEnd = Math.max(0, Math.floor(Number(b.meterEnd) || 0));
+    }
+
     await prisma.dailyReport.update({ where: { id }, data });
+
+    const after = await prisma.dailyReport.findFirst({
+      where: { id, tenantId },
+      select: {
+        businessDate: true,
+        vehicleId: true,
+        escortVehicleId: true,
+        meterStart: true,
+        meterEnd: true,
+        escortOdometerStartM: true,
+        escortOdometerEndM: true,
+      },
+    });
+    if (after) {
+      if (b.escortOdometerStartM !== undefined || b.escortOdometerEndM !== undefined) {
+        const vid = after.escortVehicleId;
+        if (vid) {
+          const cand = after.escortOdometerEndM ?? after.escortOdometerStartM;
+          if (cand != null) {
+            const cur = await prisma.vehicle.findUnique({ where: { id: vid }, select: { currentOdometer: true } });
+            if (cur?.currentOdometer !== cand) {
+              await appendVehicleOdometerAndSetCurrent(prisma, {
+                tenantId,
+                vehicleId: vid,
+                value: cand,
+                source: "DAILY_REPORT",
+                dailyReportId: id,
+                businessDate: after.businessDate,
+              });
+            }
+          }
+        }
+      }
+      if (b.meterStart !== undefined || b.meterEnd !== undefined) {
+        const vid = after.vehicleId;
+        if (vid) {
+          const cand = after.meterEnd ?? after.meterStart;
+          const cur = await prisma.vehicle.findUnique({ where: { id: vid }, select: { currentOdometer: true } });
+          if (cur?.currentOdometer !== cand) {
+            await appendVehicleOdometerAndSetCurrent(prisma, {
+              tenantId,
+              vehicleId: vid,
+              value: cand,
+              source: "DAILY_REPORT",
+              dailyReportId: id,
+              businessDate: after.businessDate,
+            });
+          }
+        }
+      }
+    }
+
+    return { ok: true };
+  });
+
+  app.delete<{ Params: { id: string } }>("/daily-reports/:id", async (req, reply) => {
+    const { tenantId } = jwtUser(req);
+    const id = String(req.params.id || "");
+    const dr = await prisma.dailyReport.findFirst({ where: { id, tenantId } });
+    if (!dr) return reply.code(404).send({ error: "not found" });
+    await prisma.dailyReport.delete({ where: { id } });
     return { ok: true };
   });
 

@@ -810,6 +810,24 @@ td {
   font-weight: 400;
 }
 
+.settings-list-item-split {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.settings-list-item-split .settings-list-btn {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
+.settings-list-delete-btn {
+  flex: 0 0 auto;
+  align-self: center;
+  white-space: nowrap;
+}
+
 .settings-photo-preview {
   max-width: 100%;
   max-height: 10rem;

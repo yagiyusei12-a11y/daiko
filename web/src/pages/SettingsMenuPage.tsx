@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../auth";
 import { apiFetch } from "../api";
 import { useSavedToast } from "../saved-toast";
@@ -91,7 +92,14 @@ type VehicleRow = {
   detailJson: unknown;
   legalCoverageStartOn: string | null;
   active: boolean;
+  currentOdometer: number | null;
 };
+
+function formatOdoLogSource(source: string): string {
+  if (source === "DAILY_REPORT") return "日報";
+  if (source === "SETTINGS") return "設定";
+  return source;
+}
 
 function extStr(ext: unknown, k: string): string {
   if (!ext || typeof ext !== "object") return "";
@@ -179,7 +187,15 @@ export default function SettingsMenuPage(): JSX.Element {
     insuranceCompany: "",
     insurancePeriodFrom: "",
     insurancePeriodTo: "",
+    currentOdometer: "",
   });
+
+  const [odoHistoryOpen, setOdoHistoryOpen] = useState(false);
+  const [odoHistoryLoading, setOdoHistoryLoading] = useState(false);
+  const [odoHistoryErr, setOdoHistoryErr] = useState<string | null>(null);
+  const [odoHistoryRows, setOdoHistoryRows] = useState<
+    { id: string; value: number; source: string; businessDate: string | null; dailyReportId: string | null; createdAt: string }[]
+  >([]);
 
   const loadMeta = useCallback(async () => {
     const r = await apiFetch<{
@@ -211,6 +227,26 @@ export default function SettingsMenuPage(): JSX.Element {
     if (r.ok) setVehicles(r.data.vehicles);
     else setErr(r.error);
   }, []);
+
+  const loadOdoHistory = useCallback(async () => {
+    if (!vehSel || vehSel === "new") return;
+    setOdoHistoryLoading(true);
+    setOdoHistoryErr(null);
+    const r = await apiFetch<{
+      logs: { id: string; value: number; source: string; businessDate: string | null; dailyReportId: string | null; createdAt: string }[];
+    }>(`/settings/vehicles/${vehSel}/odometer-logs?limit=100`);
+    setOdoHistoryLoading(false);
+    if (!r.ok) {
+      setOdoHistoryErr(r.error);
+      setOdoHistoryRows([]);
+      return;
+    }
+    setOdoHistoryRows(r.data.logs);
+  }, [vehSel]);
+
+  useEffect(() => {
+    if (odoHistoryOpen && vehSel && vehSel !== "new") void loadOdoHistory();
+  }, [odoHistoryOpen, vehSel, loadOdoHistory]);
 
   useEffect(() => {
     void loadMeta();
@@ -338,6 +374,7 @@ export default function SettingsMenuPage(): JSX.Element {
         insuranceCompany: "",
         insurancePeriodFrom: "",
         insurancePeriodTo: "",
+        currentOdometer: "",
       });
       return;
     }
@@ -354,6 +391,7 @@ export default function SettingsMenuPage(): JSX.Element {
       insuranceCompany: String(ins.companyName ?? ""),
       insurancePeriodFrom: String(ins.periodFrom ?? ""),
       insurancePeriodTo: String(ins.periodTo ?? ""),
+      currentOdometer: v.currentOdometer != null ? String(v.currentOdometer) : "",
     });
   };
 
@@ -430,13 +468,20 @@ export default function SettingsMenuPage(): JSX.Element {
     setBusy(true);
     setErr(null);
     setMsg(null);
-    const body = {
-      ...vehForm,
+    const { currentOdometer: _odoStr, ...vehRest } = vehForm;
+    const body: Record<string, unknown> = {
+      ...vehRest,
       inspectionValidTo: vehForm.inspectionValidTo || "",
       insuranceCompany: vehForm.insuranceCompany,
       insurancePeriodFrom: vehForm.insurancePeriodFrom || "",
       insurancePeriodTo: vehForm.insurancePeriodTo || "",
     };
+    const odoTrim = vehForm.currentOdometer.trim();
+    if (odoTrim !== "") {
+      body.currentOdometer = Math.max(0, Math.floor(Number(odoTrim) || 0));
+    } else if (vehSel !== "new") {
+      body.currentOdometer = null;
+    }
     if (vehSel === "new") {
       const r = await apiFetch<{ id: string }>("/settings/vehicles", { method: "POST", json: body });
       setBusy(false);
@@ -817,6 +862,25 @@ export default function SettingsMenuPage(): JSX.Element {
               value={vehForm.insurancePeriodTo}
               onChange={(e) => setVehForm({ ...vehForm, insurancePeriodTo: e.target.value })}
             />
+            <label>メーター（現在ODO）</label>
+            <p className="settings-hint" style={{ marginTop: 0 }}>
+              日報で随伴車・客車メーターを保存するたびに上書きされます。ここから直接直す場合も履歴に残ります。
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+              <input
+                type="number"
+                min={0}
+                style={{ flex: "1 1 10rem", minWidth: 0 }}
+                value={vehForm.currentOdometer}
+                onChange={(e) => setVehForm({ ...vehForm, currentOdometer: e.target.value })}
+                placeholder="未設定"
+              />
+              {vehSel && vehSel !== "new" ? (
+                <button type="button" className="settings-secondary" onClick={() => setOdoHistoryOpen(true)}>
+                  履歴
+                </button>
+              ) : null}
+            </div>
             <div className="settings-actions">
               <button type="button" className="settings-primary" disabled={busy} onClick={() => void saveVehicle()}>
                 保存
@@ -857,6 +921,69 @@ export default function SettingsMenuPage(): JSX.Element {
         </p>
       ) : null}
       <Tabs items={tabItems} activeId={tab} onActiveChange={setTab} aria-label="設定の種類" />
+      {odoHistoryOpen && vehSel && vehSel !== "new" ? (
+        <div
+          className="pricing-modal-backdrop"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setOdoHistoryOpen(false);
+          }}
+        >
+          <div
+            className="pricing-modal attend-shift-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="odo-hist-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h2 id="odo-hist-title" className="pricing-modal-title">
+              ODO 更新履歴（{vehicles.find((x) => x.id === vehSel)?.label ?? ""}）
+            </h2>
+            <Err msg={odoHistoryErr} />
+            <div className="attend-shift-dialog-scroll">
+              {odoHistoryLoading ? <p className="settings-hint">読み込み中…</p> : null}
+              {!odoHistoryLoading && odoHistoryRows.length === 0 ? <p className="settings-hint">履歴はまだありません。</p> : null}
+              {!odoHistoryLoading && odoHistoryRows.length > 0 ? (
+                <table className="trip-history-table" style={{ minWidth: "100%" }}>
+                  <thead>
+                    <tr>
+                      <th>記録日時</th>
+                      <th>ODO</th>
+                      <th>区分</th>
+                      <th>事業日</th>
+                      <th>日報</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {odoHistoryRows.map((row) => (
+                      <tr key={row.id}>
+                        <td>{new Date(row.createdAt).toLocaleString("ja-JP")}</td>
+                        <td>{row.value.toLocaleString("ja-JP")}</td>
+                        <td>{formatOdoLogSource(row.source)}</td>
+                        <td>{row.businessDate ?? "—"}</td>
+                        <td>
+                          {row.dailyReportId ? (
+                            <Link to={`/daily-reports/${row.dailyReportId}`} onClick={() => setOdoHistoryOpen(false)}>
+                              開く
+                            </Link>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : null}
+            </div>
+            <div className="pricing-modal-actions">
+              <button type="button" onClick={() => setOdoHistoryOpen(false)}>
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </Card>
   );
 }

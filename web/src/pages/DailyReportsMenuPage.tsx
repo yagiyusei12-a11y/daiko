@@ -73,6 +73,16 @@ export default function DailyReportsMenuPage(): JSX.Element {
     }
   }
 
+  async function deleteReport(reportId: string, mainName: string): Promise<void> {
+    if (!window.confirm(`「${mainName}」の日報を削除しますか？\n運行データもすべて失われます。`)) return;
+    setBusy(true);
+    setErr(null);
+    const r = await apiFetch(`/daily-reports/${reportId}`, { method: "DELETE" });
+    setBusy(false);
+    if (!r.ok) setErr(r.error);
+    else void load();
+  }
+
   return (
     <Card title="日報">
       <Err msg={err} />
@@ -101,13 +111,22 @@ export default function DailyReportsMenuPage(): JSX.Element {
         ) : (
           <ul className="settings-list">
             {reports.map((r) => (
-              <li key={r.id}>
-                <Link className="settings-list-btn" to={`/daily-reports/${r.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+              <li key={r.id} className="settings-list-item-split">
+                <Link className="settings-list-btn" to={`/daily-reports/${r.id}`} style={{ textDecoration: "none", color: "inherit", flex: 1 }}>
                   <span>{r.mainEmployeeName}</span>
                   <span className="settings-list-meta">
                     メーター {r.meterStart}→{r.meterEnd}
                   </span>
                 </Link>
+                <button
+                  type="button"
+                  className="settings-secondary settings-list-delete-btn"
+                  disabled={busy}
+                  aria-label={`${r.mainEmployeeName}の日報を削除`}
+                  onClick={() => void deleteReport(r.id, r.mainEmployeeName)}
+                >
+                  削除
+                </button>
               </li>
             ))}
           </ul>
