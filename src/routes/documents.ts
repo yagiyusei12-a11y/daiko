@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { authenticate, jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
 import { buildEmployeeRosterPrintHtml } from "../lib/employee-roster-print-html.js";
@@ -8,6 +8,7 @@ import { loadJommuKirokuboModelForDailyReport } from "../lib/jommu-daily-report-
 import { buildDaikoLaw14SeiyakuPrintHtml } from "../lib/daiko-law14-seiyaku-print-html.js";
 import { buildDaikoNinteiCertificatePrintHtml } from "../lib/daiko-nintei-certificate-print-html.js";
 import { buildDaikoYakkanPrintHtml } from "../lib/daiko-yakkan-print-html.js";
+import { isChromiumConfiguredForPdf, renderHtmlToPdf } from "../lib/html-to-pdf.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_JOMMU_RANGE_DAYS = 400;
@@ -22,6 +23,39 @@ const MAX_NINTEI_CERT_RAW = 120;
 const MAX_NINTEI_NAME = 300;
 const MAX_NINTEI_LOCATION = 800;
 const MAX_YAKKAN_BODY = 500_000;
+
+function wantsPdfOutput(b: Record<string, unknown>): boolean {
+  return String(b.outputFormat ?? "").trim().toLowerCase() === "pdf";
+}
+
+async function sendHtmlOrPdf(
+  reply: FastifyReply,
+  req: { log: { error: (e: unknown) => void } },
+  b: Record<string, unknown>,
+  html: string,
+  filenameStem: string,
+) {
+  if (!wantsPdfOutput(b)) {
+    return reply.type("text/html; charset=utf-8").send(html);
+  }
+  if (!isChromiumConfiguredForPdf()) {
+    return reply.code(503).send({
+      error:
+        "PDF 出力はサーバーに Chromium のインストールと環境変数 CHROMIUM_EXECUTABLE の設定が必要です。管理者に連絡するか、outputFormat を省略してブラウザ印刷をご利用ください。",
+    });
+  }
+  try {
+    const buf = await renderHtmlToPdf(html);
+    const safe = filenameStem.replace(/[^\w.-]+/g, "_").slice(0, 120) || "document";
+    return reply
+      .type("application/pdf")
+      .header("Content-Disposition", `attachment; filename="${safe}.pdf"`)
+      .send(buf);
+  } catch (e) {
+    req.log.error(e);
+    return reply.code(500).send({ error: "PDF の生成に失敗しました。時間をおいて再度お試しください。" });
+  }
+}
 
 export async function registerDocumentsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
@@ -62,7 +96,7 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
       printedAt: new Date(),
       operatorName: operatorName || null,
     });
-    return reply.type("text/html; charset=utf-8").send(html);
+    return sendHtmlOrPdf(reply, req, b, html, "employee-roster");
   });
 
   app.post("/documents/daiko-law14-seiyaku-print", async (req, reply) => {
@@ -139,7 +173,7 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
       pledgeBody,
       sheets: parsed.map((p) => ({ signerName: p.signerName, signerAddress: p.signerAddress })),
     });
-    return reply.type("text/html; charset=utf-8").send(html);
+    return sendHtmlOrPdf(reply, req, b, html, "daiko-law14-seiyaku");
   });
 
   app.post("/documents/daiko-nintei-certificate-print", async (req, reply) => {
@@ -173,7 +207,7 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
       nameOrTitle,
       location,
     });
-    return reply.type("text/html; charset=utf-8").send(html);
+    return sendHtmlOrPdf(reply, req, b, html, "daiko-nintei-certificate");
   });
 
   app.post("/documents/daiko-yakkan-print", async (req, reply) => {
@@ -186,7 +220,7 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
       return reply.code(400).send({ error: "約款の本文が長すぎます" });
     }
     const html = buildDaikoYakkanPrintHtml({ bodyText });
-    return reply.type("text/html; charset=utf-8").send(html);
+    return sendHtmlOrPdf(reply, req, b, html, "daiko-yakkan");
   });
 
   app.post("/documents/daily-reports-jommu-print", async (req, reply) => {
@@ -273,7 +307,7 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
 
     const title = `乗務記録簿（${from}〜${to}）`;
     const html = buildJommuKirokuboHtmlBundle(ok, title);
-    return reply.type("text/html; charset=utf-8").send(html);
+    return sendHtmlOrPdf(reply, req, b, html, `daily-reports-jommu_${from}_${to}`);
   });
 
   app.get<{ Querystring: { includeRetired?: string } }>(

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiFetch, apiFetchText } from "../api";
+import { apiFetch, apiFetchBlob, apiFetchText } from "../api";
+import { downloadBrowserBlob } from "../lib/download-blob";
 import { DAIKO_LAW14_DEFAULT_PLEDGE_BODY } from "../lib/daikoLaw14DefaultPledge";
 import { DAIKO_STANDARD_YAKKAN_DEFAULT_BODY } from "../lib/daikoYakkanDefaultBody";
 import InstructionRecordListPrintBlock from "../components/InstructionRecordListPrintBlock";
@@ -115,6 +116,30 @@ function DailyReportJommuPrintBlock(): JSX.Element {
     w.document.close();
   }
 
+  async function savePdf(): Promise<void> {
+    setPrintErr(null);
+    if (dateFrom > dateTo) {
+      setPrintErr("開始日は終了日以前にしてください");
+      return;
+    }
+    const crewIds = employees.filter((e) => selected[e.id]).map((e) => e.id);
+    if (crewIds.length === 0) {
+      setPrintErr("PDF に出力する従業員を 1 人以上選んでください");
+      return;
+    }
+    setBusy(true);
+    const r = await apiFetchBlob("/documents/daily-reports-jommu-print", {
+      method: "POST",
+      json: { from: dateFrom, to: dateTo, crewScope, crewIds, outputFormat: "pdf" },
+    });
+    setBusy(false);
+    if (!r.ok) {
+      setPrintErr(r.error);
+      return;
+    }
+    downloadBrowserBlob(r.blob, r.filename ?? `daily-reports-jommu_${dateFrom}_${dateTo}.pdf`);
+  }
+
   return (
     <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
       <PanelHint>
@@ -187,8 +212,11 @@ function DailyReportJommuPrintBlock(): JSX.Element {
           </div>
         </div>
         <p style={{ marginTop: "0.75rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
-          <button type="button" className="settings-primary" disabled={busy} onClick={() => void print()}>
-            {busy ? "取得中…" : "乗務記録簿を印刷（まとめて）"}
+          <button type="button" className="settings-primary" disabled={busy} onClick={() => void savePdf()}>
+            {busy ? "生成中…" : "PDFで保存"}
+          </button>
+          <button type="button" className="settings-secondary" disabled={busy} onClick={() => void print()}>
+            {busy ? "取得中…" : "ブラウザで開いて印刷"}
           </button>
           <Link to="/daily-reports">日報一覧へ</Link>
         </p>
@@ -299,6 +327,26 @@ function EmployeeRosterPrintBlock(): JSX.Element {
     w.document.close();
   }
 
+  async function savePdf(): Promise<void> {
+    setPrintErr(null);
+    const employeeIds = visibleEmployees.filter((e) => selected[e.id]).map((e) => e.id);
+    if (employeeIds.length === 0) {
+      setPrintErr("PDF に出力する従業員を 1 人以上選んでください");
+      return;
+    }
+    setBusy(true);
+    const r = await apiFetchBlob("/documents/employee-roster-print", {
+      method: "POST",
+      json: { includeRetired, employeeIds, outputFormat: "pdf" },
+    });
+    setBusy(false);
+    if (!r.ok) {
+      setPrintErr(r.error);
+      return;
+    }
+    downloadBrowserBlob(r.blob, r.filename ?? "employee-roster.pdf");
+  }
+
   return (
     <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
       <PanelHint>
@@ -351,8 +399,11 @@ function EmployeeRosterPrintBlock(): JSX.Element {
           )}
         </div>
         <p style={{ marginTop: "0.75rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
-          <button type="button" className="settings-primary" disabled={busy} onClick={() => void print()}>
-            {busy ? "取得中…" : "従事者名簿を印刷"}
+          <button type="button" className="settings-primary" disabled={busy} onClick={() => void savePdf()}>
+            {busy ? "生成中…" : "PDFで保存"}
+          </button>
+          <button type="button" className="settings-secondary" disabled={busy} onClick={() => void print()}>
+            {busy ? "取得中…" : "ブラウザで開いて印刷"}
           </button>
           <Link to="/settings">設定（従業員・車両）へ</Link>
         </p>
@@ -553,6 +604,52 @@ function DaikoLaw14SeiyakuPrintBlock(): JSX.Element {
     w.document.close();
   }
 
+  async function savePdf(): Promise<void> {
+    setPrintErr(null);
+    const chosen = visibleEmployees.filter((e) => selected[e.id]);
+    if (chosen.length === 0) {
+      setPrintErr("PDF に出力する従業員を 1 人以上選んでください");
+      return;
+    }
+    if (!pledgeBody.trim()) {
+      setPrintErr("誓約の本文を入力してください");
+      return;
+    }
+    const sheets = chosen.map((e) => {
+      const row = edits[e.id];
+      return {
+        employeeId: e.id,
+        signerName: (row?.name ?? `${e.familyName}　${e.givenName}`).trim(),
+        signerAddress: (row?.address ?? (e.address ?? "").trim()).trim(),
+      };
+    });
+    for (const s of sheets) {
+      if (!s.signerName) {
+        setPrintErr("氏名が空の行があります。表で修正してください。");
+        return;
+      }
+    }
+    setBusy(true);
+    const r = await apiFetchBlob("/documents/daiko-law14-seiyaku-print", {
+      method: "POST",
+      json: {
+        companyLine,
+        representativeLine,
+        pledgeYmd,
+        pledgeBody,
+        includeRetired,
+        sheets,
+        outputFormat: "pdf",
+      },
+    });
+    setBusy(false);
+    if (!r.ok) {
+      setPrintErr(r.error);
+      return;
+    }
+    downloadBrowserBlob(r.blob, r.filename ?? "daiko-law14-seiyaku.pdf");
+  }
+
   const selectedList = visibleEmployees.filter((e) => selected[e.id]);
 
   return (
@@ -667,8 +764,11 @@ function DaikoLaw14SeiyakuPrintBlock(): JSX.Element {
           </div>
         ) : null}
         <p style={{ marginTop: "0.85rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
-          <button type="button" className="settings-primary" disabled={busy} onClick={() => void print()}>
-            {busy ? "取得中…" : "誓約書を印刷（A4 縦）"}
+          <button type="button" className="settings-primary" disabled={busy} onClick={() => void savePdf()}>
+            {busy ? "生成中…" : "PDFで保存"}
+          </button>
+          <button type="button" className="settings-secondary" disabled={busy} onClick={() => void print()}>
+            {busy ? "取得中…" : "ブラウザで開いて印刷"}
           </button>
           <Link to="/settings">設定（事業者・従業員）へ</Link>
         </p>
@@ -786,6 +886,28 @@ function NinteiCertificatePrintBlock(): JSX.Element {
     w.document.close();
   }
 
+  async function savePdf(): Promise<void> {
+    setPrintErr(null);
+    setBusy(true);
+    const r = await apiFetchBlob("/documents/daiko-nintei-certificate-print", {
+      method: "POST",
+      json: {
+        issuingAuthorityDisplay,
+        certificationNumberMiddle,
+        certificationDateYmd,
+        nameOrTitle,
+        location,
+        outputFormat: "pdf",
+      },
+    });
+    setBusy(false);
+    if (!r.ok) {
+      setPrintErr(r.error);
+      return;
+    }
+    downloadBrowserBlob(r.blob, r.filename ?? "daiko-nintei-certificate.pdf");
+  }
+
   return (
     <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
       <PanelHint>
@@ -823,8 +945,11 @@ function NinteiCertificatePrintBlock(): JSX.Element {
         <label>所在地</label>
         <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} />
         <p style={{ marginTop: "0.85rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
-          <button type="button" className="settings-primary" disabled={busy} onClick={() => void print()}>
-            {busy ? "取得中…" : "認定証を印刷（A4 縦）"}
+          <button type="button" className="settings-primary" disabled={busy} onClick={() => void savePdf()}>
+            {busy ? "生成中…" : "PDFで保存"}
+          </button>
+          <button type="button" className="settings-secondary" disabled={busy} onClick={() => void print()}>
+            {busy ? "取得中…" : "ブラウザで開いて印刷"}
           </button>
           <Link to="/settings">設定（事業者情報）へ</Link>
         </p>
@@ -881,6 +1006,25 @@ function YakkanPrintBlock(): JSX.Element {
     w.document.close();
   }
 
+  async function savePdf(): Promise<void> {
+    setPrintErr(null);
+    if (!bodyText.trim()) {
+      setPrintErr("約款の本文が空です");
+      return;
+    }
+    setBusy(true);
+    const r = await apiFetchBlob("/documents/daiko-yakkan-print", {
+      method: "POST",
+      json: { bodyText, outputFormat: "pdf" },
+    });
+    setBusy(false);
+    if (!r.ok) {
+      setPrintErr(r.error);
+      return;
+    }
+    downloadBrowserBlob(r.blob, r.filename ?? "daiko-yakkan.pdf");
+  }
+
   return (
     <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
       <PanelHint>
@@ -896,8 +1040,11 @@ function YakkanPrintBlock(): JSX.Element {
           style={{ width: "100%", minHeight: "22rem", fontFamily: "inherit", fontSize: "0.9rem", lineHeight: 1.55 }}
         />
         <p style={{ marginTop: "0.85rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
-          <button type="button" className="settings-primary" disabled={busy} onClick={() => void print()}>
-            {busy ? "取得中…" : "約款を印刷（A4 縦）"}
+          <button type="button" className="settings-primary" disabled={busy} onClick={() => void savePdf()}>
+            {busy ? "生成中…" : "PDFで保存"}
+          </button>
+          <button type="button" className="settings-secondary" disabled={busy} onClick={() => void print()}>
+            {busy ? "取得中…" : "ブラウザで開いて印刷"}
           </button>
           <Link to="/settings">設定（事業者情報）へ</Link>
         </p>

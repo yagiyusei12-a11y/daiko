@@ -2,6 +2,9 @@ import type { FastifyInstance } from "fastify";
 import type { Prisma } from "@prisma/client";
 import { authenticate, jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
+import { isChromiumConfiguredForPdf, renderHtmlToPdf } from "../lib/html-to-pdf.js";
+import { buildInstructionRecordsPdfHtml } from "../lib/instruction-record-print-html.js";
+import { formatInstructionRecordsForApi, parseEmployeeIdArrayJson } from "../lib/instruction-records-format.js";
 import { tokyoDayRangeUtc } from "../lib/tokyo-datetime.js";
 
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -10,93 +13,6 @@ const MAX_LIST = 500;
 const MAX_RECIPIENTS = 80;
 const MAX_INSTRUCTORS = 30;
 const MAX_VENUE = 500;
-
-function parseEmployeeIdArrayJson(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  return [...new Set(raw.map((x) => String(x).trim()).filter(Boolean))];
-}
-
-function employeeName(e: { familyName: string; givenName: string }): string {
-  return `${e.familyName} ${e.givenName}`.trim();
-}
-
-type InstructionRowDb = {
-  id: string;
-  date: Date;
-  instructionVenue: string;
-  recipientEmployeeIds: unknown;
-  instructorEmployeeIds: unknown;
-  instructionItems: string;
-  specialNotes: string;
-  remarks: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-async function formatInstructionRecordsForApi(
-  tenantId: string,
-  rows: InstructionRowDb[],
-): Promise<
-  Array<{
-    id: string;
-    date: string;
-    instructionVenue: string;
-    recipientEmployeeIds: string[];
-    recipients: { id: string; familyName: string; givenName: string }[];
-    recipientLabel: string;
-    instructorEmployeeIds: string[];
-    instructors: { id: string; familyName: string; givenName: string }[];
-    instructorLabel: string;
-    instructionItems: string;
-    specialNotes: string;
-    remarks: string;
-    createdAt: string;
-    updatedAt: string;
-  }>
-> {
-  const all = new Set<string>();
-  for (const r of rows) {
-    for (const id of parseEmployeeIdArrayJson(r.recipientEmployeeIds)) all.add(id);
-    for (const id of parseEmployeeIdArrayJson(r.instructorEmployeeIds)) all.add(id);
-  }
-  const emps =
-    all.size > 0
-      ? await prisma.employee.findMany({
-          where: { tenantId, id: { in: [...all] } },
-          select: { id: true, familyName: true, givenName: true },
-        })
-      : [];
-  const map = new Map(emps.map((e) => [e.id, e]));
-
-  return rows.map((r) => {
-    const recipientIds = parseEmployeeIdArrayJson(r.recipientEmployeeIds);
-    const instructorIds = parseEmployeeIdArrayJson(r.instructorEmployeeIds);
-    const recipients = recipientIds
-      .map((id) => map.get(id))
-      .filter((e): e is (typeof emps)[0] => e != null)
-      .map((e) => ({ id: e.id, familyName: e.familyName, givenName: e.givenName }));
-    const instructors = instructorIds
-      .map((id) => map.get(id))
-      .filter((e): e is (typeof emps)[0] => e != null)
-      .map((e) => ({ id: e.id, familyName: e.familyName, givenName: e.givenName }));
-    return {
-      id: r.id,
-      date: r.date.toISOString(),
-      instructionVenue: r.instructionVenue,
-      recipientEmployeeIds: recipientIds,
-      recipients,
-      recipientLabel: recipients.map((e) => employeeName(e)).join("、"),
-      instructorEmployeeIds: instructorIds,
-      instructors,
-      instructorLabel: instructors.map((e) => employeeName(e)).join("、"),
-      instructionItems: r.instructionItems,
-      specialNotes: r.specialNotes,
-      remarks: r.remarks,
-      createdAt: r.createdAt.toISOString(),
-      updatedAt: r.updatedAt.toISOString(),
-    };
-  });
-}
 
 async function validateRecipientAndInstructorIds(
   tenantId: string,
@@ -125,6 +41,49 @@ async function validateRecipientAndInstructorIds(
 
 export async function registerInstructionRecordsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
+
+  app.post<{ Body: Record<string, unknown> }>("/export-pdf", async (req, reply) => {
+    const { tenantId } = jwtUser(req);
+    const b = req.body || {};
+    const from = String(b.from ?? "").trim();
+    const to = String(b.to ?? "").trim();
+    if (!YMD_RE.test(from) || !YMD_RE.test(to)) {
+      return reply.code(400).send({ error: "from / to は yyyy-MM-dd の両方で指定してください" });
+    }
+    const rFrom = tokyoDayRangeUtc(from);
+    const rTo = tokyoDayRangeUtc(to);
+    if (!rFrom || !rTo) return reply.code(400).send({ error: "日付が不正です" });
+    if (rFrom.start.getTime() > rTo.start.getTime()) {
+      return reply.code(400).send({ error: "開始日は終了日以前にしてください" });
+    }
+
+    const rows = await prisma.instructionRecord.findMany({
+      where: { tenantId, date: { gte: rFrom.start, lt: rTo.end } },
+      orderBy: [{ date: "asc" }, { id: "asc" }],
+      take: MAX_LIST,
+    });
+    const formatted = await formatInstructionRecordsForApi(tenantId, rows);
+    if (formatted.length === 0) {
+      return reply.code(400).send({ error: "該当期間に指導記録がありません" });
+    }
+    if (!isChromiumConfiguredForPdf()) {
+      return reply.code(503).send({
+        error:
+          "PDF 出力はサーバーに Chromium のインストールと環境変数 CHROMIUM_EXECUTABLE の設定が必要です。管理者に連絡するか、ブラウザの印刷機能をお使いください。",
+      });
+    }
+    const html = buildInstructionRecordsPdfHtml(formatted);
+    try {
+      const buf = await renderHtmlToPdf(html);
+      return reply
+        .type("application/pdf")
+        .header("Content-Disposition", 'attachment; filename="instruction-records.pdf"')
+        .send(buf);
+    } catch (e) {
+      req.log.error(e);
+      return reply.code(500).send({ error: "PDF の生成に失敗しました。時間をおいて再度お試しください。" });
+    }
+  });
 
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/:id", async (req, reply) => {
     const { tenantId } = jwtUser(req);

@@ -57,6 +57,25 @@ npm run dev
 - 既存で `~/order/daiko` にあった場合: **pull でサブフォルダが消える前に** `.env` のバックアップ、`mv ~/order/daiko ~/daiko` などで専用 clone に移し、systemd の `WorkingDirectory` / `EnvironmentFile` を合わせる
 - デプロイ: `scripts/deploy-vps.ps1`（`.env.deploy` に `DAIKO_VPS_*`）。リモートでは `migrate deploy` のあと **`npm run db:seed`** で帳票テンプレ（9 種＋酒気スタブ）を投入する（**アプリ API は認証のみ**でもシードは従来どおり実行されます）。
 
+### 書類の PDF 出力（サーバー側 Chromium）
+
+書類タブの「PDFで保存」は API が **ヘッドレス Chromium** で HTML を PDF 化します。VPS では次を一度設定してください。
+
+1. **Chromium をインストール**（Ubuntu の例。ディストリビューションに合わせてパッージ名は読み替えてください）
+
+   ```bash
+   sudo apt-get update && sudo apt-get install -y chromium-browser
+   # または: sudo apt-get install -y chromium
+   ```
+
+2. 実行ファイルのパスを確認する（例: `/usr/bin/chromium-browser` または `/usr/bin/chromium`）。
+
+3. **環境変数 `CHROMIUM_EXECUTABLE`** にその絶対パスを設定する。`daiko-app` の systemd ユニットが `EnvironmentFile=` で読む **VPS 上の `.env`**（または `Environment=CHROMIUM_EXECUTABLE=...`）に 1 行追加し、`sudo systemctl daemon-reload && sudo systemctl restart daiko-app` する。
+
+4. （任意）生成がタイムアウトする場合は **`DAIKO_PDF_TIMEOUT_MS`**（ミリ秒、既定 120000）を `.env` に追加する。
+
+未設定のとき PDF 系エンドポイントは **503** を返し、従来どおりの「ブラウザで開いて印刷」（HTML）は利用できます。
+
 ### 本番 DB を白紙にする（テナント・業務データをすべて消す）
 
 **同じ VPS・同じドメイン・同じ `.env`（`DATABASE_URL`）・同じデプロイ手順のまま**、アプリの DB だけを初期状態に戻す手順です。`.env.deploy` を作り直す必要はありません（ローカルからの `npm run deploy:vps` も従来どおり）。

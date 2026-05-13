@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { apiFetch } from "../api";
+import { apiFetch, apiFetchBlob } from "../api";
 import { Err } from "../ui";
 import { InstructionRecordEditDialog } from "./InstructionRecordEditDialog";
 import { type InstructionRow, firstDayOfMonth, formatInstructionDate, lastDayOfMonth } from "../lib/instruction-records-ui";
+import { downloadBrowserBlob } from "../lib/download-blob";
 
 import "../instruction-records-print.css";
 
@@ -20,6 +21,7 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
   const [to, setTo] = useState(() => lastDayOfMonth(now));
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [records, setRecords] = useState<InstructionRow[]>([]);
   const [employees, setEmployees] = useState<EmployeeOpt[]>([]);
   const [editRecord, setEditRecord] = useState<InstructionRow | null>(null);
@@ -62,6 +64,25 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
     window.setTimeout(() => document.body.classList.remove("instruction-records-printing"), 2500);
   };
 
+  const savePdf = async () => {
+    setErr(null);
+    if (records.length === 0) {
+      setErr("該当する指導記録がありません。期間を確認するか、先に絞り込みしてください。");
+      return;
+    }
+    setPdfBusy(true);
+    const r = await apiFetchBlob("/instruction-records/export-pdf", {
+      method: "POST",
+      json: { from, to },
+    });
+    setPdfBusy(false);
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    downloadBrowserBlob(r.blob, r.filename ?? "instruction-records.pdf");
+  };
+
   const sortedRows = useMemo(() => [...records].sort((a, b) => a.date.localeCompare(b.date)), [records]);
 
   return (
@@ -88,14 +109,18 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
           <button type="button" className="settings-secondary" disabled={busy} onClick={() => void load()}>
             {busy ? "検索中…" : "絞り込み"}
           </button>
-          <button type="button" className="settings-primary" disabled={busy || records.length === 0} onClick={onPrint}>
-            印刷
+          <button type="button" className="settings-primary" disabled={pdfBusy || records.length === 0} onClick={() => void savePdf()}>
+            {pdfBusy ? "PDF生成中…" : "PDFで保存"}
+          </button>
+          <button type="button" className="settings-secondary" disabled={busy || records.length === 0} onClick={onPrint}>
+            ブラウザで印刷
           </button>
         </div>
       </div>
 
       <p className="settings-hint no-print" style={{ marginTop: 0 }}>
-        登録はメニュー「指導」から行えます。複数人をまとめて登録すると1件のデータになります。印刷は1件につきA4縦1枚です。
+        登録はメニュー「指導」から行えます。複数人をまとめて登録すると1件のデータになります。PDFはサーバーで生成します（Chromium
+        未設定時はエラーになります）。ブラウザ印刷は1件につきA4縦1枚です。
       </p>
 
       <div className="instruction-screen-table-wrap no-print">
