@@ -1041,6 +1041,68 @@ td {
   max-height: min(92vh, 52rem);
 }
 
+.trip-history-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.trip-history-table {
+  width: 100%;
+  min-width: 36rem;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.trip-history-table th,
+.trip-history-table td {
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.trip-history-table th {
+  font-weight: 600;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.trip-history-th-narrow,
+.trip-history-td-yen {
+  white-space: nowrap;
+  text-align: right !important;
+}
+
+.trip-history-tr {
+  cursor: pointer;
+}
+
+.trip-history-tr:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.trip-history-tr--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.trip-history-tr--disabled:hover {
+  background: transparent;
+}
+
+.trip-history-cell-clip {
+  max-width: 7.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 720px) {
+  .trip-history-cell-clip {
+    max-width: 11rem;
+  }
+}
+
 /* シフト申請: カレンダー〜時刻入力を1つのスクロール領域に。親の .pricing-modal > .settings-form { flex:1 } が直子に二重で当たり高さ0になるのを避ける */
 .attend-shift-dialog-scroll {
   flex: 1;

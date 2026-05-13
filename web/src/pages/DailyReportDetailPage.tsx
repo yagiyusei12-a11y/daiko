@@ -141,6 +141,24 @@ function formatKm(k: number): string {
   return s;
 }
 
+function formatTripStartDisplay(departedIso: string): string {
+  const d = new Date(departedIso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+}
+
+function viaSummaryFromTrip(trip: TripLegFull): string {
+  const v = viaStopsFromTrip(trip).filter(Boolean);
+  if (v.length === 0) return "—";
+  return v.join(" · ");
+}
+
 function travelMinutesBetween(depLocal: string, arrLocal: string): number | null {
   const a = new Date(depLocal);
   const b = new Date(arrLocal);
@@ -596,6 +614,9 @@ export default function DailyReportDetailPage(): JSX.Element {
   const [schedulePickLoading, setSchedulePickLoading] = useState(false);
   const [schedulePayload, setSchedulePayload] = useState<SchedulePayloadMini | null>(null);
 
+  const [editTripOpen, setEditTripOpen] = useState(false);
+  const [editTripId, setEditTripId] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     if (!reportId) return;
     const r = await apiFetch<{
@@ -659,6 +680,7 @@ export default function DailyReportDetailPage(): JSX.Element {
 
   async function openNewTripDialog(): Promise<void> {
     if (!reportId) return;
+    closeEditTripDialog();
     setAddTripBusy(true);
     setErr(null);
     const r = await apiFetch<{ id: string }>(`/daily-reports/${reportId}/trips`, { method: "POST", json: {} });
@@ -680,6 +702,17 @@ export default function DailyReportDetailPage(): JSX.Element {
     setDialogTripId(null);
     setSchedulePrefill(null);
     setSchedulePickOpen(false);
+  }
+
+  function closeEditTripDialog(): void {
+    setEditTripOpen(false);
+    setEditTripId(null);
+  }
+
+  function openEditTripDialog(id: string): void {
+    if (addTripOpen) return;
+    setEditTripId(id);
+    setEditTripOpen(true);
   }
 
   async function openSchedulePicker(): Promise<void> {
@@ -750,11 +783,11 @@ export default function DailyReportDetailPage(): JSX.Element {
     return schedulePayload.reservations.filter((x) => x.driverEmployeeId === report.mainEmployeeId);
   }, [schedulePayload, report]);
 
-  const inlineTrips = useMemo(() => {
-    if (!report) return [];
-    if (addTripOpen && dialogTripId) return report.trips.filter((t) => t.id !== dialogTripId);
-    return report.trips;
-  }, [report, addTripOpen, dialogTripId]);
+  const editTrip = useMemo(() => {
+    if (!report || !editTripOpen || !editTripId) return null;
+    return report.trips.find((t) => t.id === editTripId) ?? null;
+  }, [report, editTripOpen, editTripId]);
+
   if (!report || !defaults) {
     return (
       <Card title="日報">
@@ -833,22 +866,72 @@ export default function DailyReportDetailPage(): JSX.Element {
 
       {report.trips.length === 0 ? <p className="settings-hint">運行がまだありません。「運行を追加」から入力してください。</p> : null}
 
-      {inlineTrips.map((t) => (
-        <TripWizard
-          key={t.id}
-          reportId={reportId!}
-          trip={t}
-          tariffVersions={tariffVersions}
-          defaults={defaults}
-          features={features}
-          sectionTitle="運行"
-          onSubmitted={async () => {
-            await load();
-            setContinueOpen(true);
-            setContinueStep("choose");
-          }}
-        />
-      ))}
+      {report.trips.length > 0 ? (
+        <div className="settings-section-panel trip-history-wrap" style={{ marginBottom: "1rem" }}>
+          <h3 className="settings-subtitle" style={{ marginTop: 0 }}>
+            運行一覧
+          </h3>
+          <p className="settings-hint" style={{ marginTop: 0 }}>
+            行をタップすると修正ダイアログが開きます{addTripOpen ? "（運行追加中は一覧から開けません）" : ""}。
+          </p>
+          <table className="trip-history-table">
+            <thead>
+              <tr>
+                <th>開始時刻</th>
+                <th>依頼者名</th>
+                <th>開始場所</th>
+                <th>経由地</th>
+                <th>到着場所</th>
+                <th className="trip-history-th-narrow">金額</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.trips.map((t) => {
+                const rowDisabled = addTripOpen;
+                const startLabel = formatTripStartDisplay(t.departedAt);
+                const viaLabel = viaSummaryFromTrip(t);
+                return (
+                  <tr
+                    key={t.id}
+                    className={rowDisabled ? "trip-history-tr trip-history-tr--disabled" : "trip-history-tr"}
+                    tabIndex={rowDisabled ? -1 : 0}
+                    role="button"
+                    aria-disabled={rowDisabled}
+                    onClick={() => {
+                      if (rowDisabled) return;
+                      openEditTripDialog(t.id);
+                    }}
+                    onKeyDown={(e) => {
+                      if (rowDisabled) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openEditTripDialog(t.id);
+                      }
+                    }}
+                  >
+                    <td className="trip-history-cell-clip" title={startLabel}>
+                      {startLabel}
+                    </td>
+                    <td className="trip-history-cell-clip" title={t.clientName || "（未入力）"}>
+                      {t.clientName?.trim() ? t.clientName : "（未入力）"}
+                    </td>
+                    <td className="trip-history-cell-clip" title={t.origin}>
+                      {t.origin?.trim() ? t.origin : "—"}
+                    </td>
+                    <td className="trip-history-cell-clip" title={viaLabel}>
+                      {viaLabel}
+                    </td>
+                    <td className="trip-history-cell-clip" title={t.destination}>
+                      {t.destination?.trim() ? t.destination : "—"}
+                    </td>
+                    <td className="trip-history-td-yen">{t.fareYen.toLocaleString("ja-JP")}円</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
       {addTripOpen && dialogTripId && defaults && dialogTrip ? (
         <div
@@ -894,6 +977,51 @@ export default function DailyReportDetailPage(): JSX.Element {
             </div>
             <div className="pricing-modal-actions">
               <button type="button" className="settings-secondary" onClick={() => closeAddTripDialog()}>
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editTripOpen && editTripId && defaults && editTrip ? (
+        <div
+          className="pricing-modal-backdrop"
+          style={{ zIndex: 106 }}
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closeEditTripDialog();
+          }}
+        >
+          <div
+            className="pricing-modal attend-shift-dialog trip-add-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dr-edit-trip-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h2 id="dr-edit-trip-title" className="pricing-modal-title">
+              運行を修正
+            </h2>
+            <p className="settings-hint">内容を変更して「送信」で保存します。</p>
+            <div className="attend-shift-dialog-scroll" style={{ paddingTop: "0.35rem" }}>
+              <TripWizard
+                reportId={reportId!}
+                trip={editTrip}
+                tariffVersions={tariffVersions}
+                defaults={defaults}
+                features={features}
+                sectionTitle="運行入力"
+                onSubmitted={async () => {
+                  closeEditTripDialog();
+                  await load();
+                  setContinueOpen(true);
+                  setContinueStep("choose");
+                }}
+              />
+            </div>
+            <div className="pricing-modal-actions">
+              <button type="button" className="settings-secondary" onClick={() => closeEditTripDialog()}>
                 閉じる
               </button>
             </div>
