@@ -1,10 +1,188 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiFetchText } from "../api";
+import { apiFetch, apiFetchText } from "../api";
 import { Card, Tabs, type TabDef } from "../ui";
 
 function PanelHint({ children }: { children: React.ReactNode }): JSX.Element {
   return <p className="settings-hint" style={{ marginTop: 0 }}>{children}</p>;
+}
+
+function tokyoYmd(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
+function firstOfMonthTokyoYmd(): string {
+  const ymd = tokyoYmd(new Date());
+  return `${ymd.slice(0, 8)}01`;
+}
+
+type EmpPick = { id: string; familyName: string; givenName: string; status: string };
+
+function DailyReportJommuPrintBlock(): JSX.Element {
+  const [dateFrom, setDateFrom] = useState(firstOfMonthTokyoYmd);
+  const [dateTo, setDateTo] = useState(() => tokyoYmd(new Date()));
+  const [crewScope, setCrewScope] = useState<"all" | "second">("all");
+  const [employees, setEmployees] = useState<EmpPick[]>([]);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [printErr, setPrintErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const reload = useCallback(async () => {
+    setLoadErr(null);
+    const path =
+      crewScope === "second" ? "/settings/employees?forPassengerDriver=1" : "/settings/employees";
+    const r = await apiFetch<{ employees: EmpPick[] }>(path);
+    if (!r.ok) {
+      setLoadErr(r.error);
+      setEmployees([]);
+      setSelected({});
+      return;
+    }
+    const list = (r.data.employees ?? []).filter((e) => e.status === "ACTIVE");
+    setEmployees(list);
+    const next: Record<string, boolean> = {};
+    for (const e of list) next[e.id] = true;
+    setSelected(next);
+  }, [crewScope]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  function toggle(id: string): void {
+    setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  function setAll(on: boolean): void {
+    setSelected((prev) => {
+      const next = { ...prev };
+      for (const e of employees) next[e.id] = on;
+      return next;
+    });
+  }
+
+  async function print(): Promise<void> {
+    setPrintErr(null);
+    if (dateFrom > dateTo) {
+      setPrintErr("開始日は終了日以前にしてください");
+      return;
+    }
+    const crewIds = employees.filter((e) => selected[e.id]).map((e) => e.id);
+    if (crewIds.length === 0) {
+      setPrintErr("印刷する従業員を 1 人以上選んでください");
+      return;
+    }
+    setBusy(true);
+    const r = await apiFetchText("/documents/daily-reports-jommu-print", {
+      method: "POST",
+      json: { from: dateFrom, to: dateTo, crewScope, crewIds },
+    });
+    setBusy(false);
+    if (!r.ok) {
+      setPrintErr(r.error);
+      return;
+    }
+    const w = window.open("", "_blank", "noopener,noreferrer");
+    if (!w) {
+      setPrintErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
+      return;
+    }
+    w.document.open();
+    w.document.write(r.text);
+    w.document.close();
+  }
+
+  return (
+    <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
+      <PanelHint>
+        指定期間・対象従業員（客車担当の日報）に基づき、乗務記録簿形式の HTML をまとめて開きます。出勤・退勤打刻と随伴車の ODO ログが揃っていると、各日報のフッター距離が埋まりやすくなります。
+      </PanelHint>
+      <div className="settings-form" style={{ marginTop: "0.75rem", maxWidth: "36rem" }}>
+        <label>期間（開始）</label>
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        <label>期間（終了）</label>
+        <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        <fieldset style={{ marginTop: "0.5rem", border: "none", padding: 0 }}>
+          <legend className="settings-hint" style={{ marginBottom: "0.35rem" }}>
+            対象従業員（客車担当）
+          </legend>
+          <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", cursor: "pointer" }}>
+            <input
+              type="radio"
+              name="crewScope"
+              checked={crewScope === "all"}
+              onChange={() => setCrewScope("all")}
+            />
+            在籍の全従業員から選ぶ
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", cursor: "pointer", marginTop: "0.25rem" }}>
+            <input
+              type="radio"
+              name="crewScope"
+              checked={crewScope === "second"}
+              onChange={() => setCrewScope("second")}
+            />
+            第二種免許を登録した従業員のみから選ぶ
+          </label>
+        </fieldset>
+        {loadErr ? (
+          <p className="settings-hint" style={{ color: "var(--danger, #b00020)", marginTop: "0.5rem" }}>
+            {loadErr}
+          </p>
+        ) : null}
+        <div style={{ marginTop: "0.75rem" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.35rem" }}>
+            <button type="button" className="settings-secondary" onClick={() => setAll(true)}>
+              全員チェック
+            </button>
+            <button type="button" className="settings-secondary" onClick={() => setAll(false)}>
+              全員解除
+            </button>
+          </div>
+          <div
+            style={{
+              maxHeight: "220px",
+              overflowY: "auto",
+              border: "1px solid var(--border, #ccc)",
+              borderRadius: "4px",
+              padding: "0.5rem",
+            }}
+          >
+            {employees.length === 0 && !loadErr ? (
+              <span className="settings-hint">対象となる従業員がありません</span>
+            ) : (
+              employees.map((e) => (
+                <label
+                  key={e.id}
+                  style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.25rem", cursor: "pointer" }}
+                >
+                  <input type="checkbox" checked={Boolean(selected[e.id])} onChange={() => toggle(e.id)} />
+                  {e.familyName}　{e.givenName}
+                </label>
+              ))
+            )}
+          </div>
+        </div>
+        <p style={{ marginTop: "0.75rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
+          <button type="button" className="settings-primary" disabled={busy} onClick={() => void print()}>
+            {busy ? "取得中…" : "乗務記録簿を印刷（まとめて）"}
+          </button>
+          <Link to="/daily-reports">日報一覧へ</Link>
+        </p>
+        {printErr ? (
+          <p className="settings-hint" style={{ color: "var(--danger, #b00020)", marginTop: "0.5rem" }}>
+            {printErr}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 export default function DocumentsPage(): JSX.Element {
@@ -37,16 +215,7 @@ export default function DocumentsPage(): JSX.Element {
     {
       id: "nippo",
       label: "日報",
-      children: (
-        <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
-          <PanelHint>
-            アプリ内の運行・売上の日報は「日報」メニューで作成・編集します。乗務記録簿形式の印刷は、各日報の詳細画面の「乗務記録簿を印刷」から開いてください（出勤・退勤打刻と随伴車の ODO ログが揃うとフッターの距離が埋まります）。
-          </PanelHint>
-          <p style={{ marginTop: "0.75rem" }}>
-            <Link to="/daily-reports">日報一覧へ</Link>
-          </p>
-        </div>
-      ),
+      children: <DailyReportJommuPrintBlock />,
     },
     {
       id: "meibo",

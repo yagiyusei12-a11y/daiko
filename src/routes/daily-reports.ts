@@ -1,12 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import type { Prisma } from "@prisma/client";
-import { TimeCardPunchKind } from "@prisma/client";
 import { authenticate, jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
 import { coercePricingPrefs, mergeLegSurchargesJson, tripSurchargeDefaults } from "../lib/pricing-prefs.js";
 import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
 import { hasSecondClassDriverLicense } from "../lib/employee-license.js";
-import { buildJommuKirokuboHtml, type JommuKirokuboModel, type JommuTripRow } from "../lib/jommu-kirokubo-html.js";
+import { buildJommuKirokuboHtml } from "../lib/jommu-kirokubo-html.js";
+import { loadJommuKirokuboModelForDailyReport } from "../lib/jommu-daily-report-model.js";
 
 function asObj(v: unknown): Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -22,57 +22,6 @@ function parseViaStopsJsonBody(v: unknown): { ok: true; stops: string[] } | { ok
     if (t) stops.push(t);
   }
   return { ok: true, stops };
-}
-
-function hmTokyo(d: Date): string {
-  if (Number.isNaN(d.getTime())) return "";
-  return new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "Asia/Tokyo",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(d);
-}
-
-function viaTextFromTripRow(t: { viaStopsJson: unknown; viaNote: string | null }): string {
-  const raw = t.viaStopsJson;
-  if (Array.isArray(raw)) {
-    const xs = raw.filter((x): x is string => typeof x === "string").map((s) => s.trim()).filter(Boolean);
-    if (xs.length > 0) return xs.join(" · ");
-  }
-  if (t.viaNote) {
-    return t.viaNote
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .join(" · ");
-  }
-  return "";
-}
-
-function verifierFromAlcoholJson(j: unknown): string | null {
-  if (!j || typeof j !== "object" || Array.isArray(j)) return null;
-  const v = (j as Record<string, unknown>).verifierName;
-  return typeof v === "string" && v.trim() ? v.trim() : null;
-}
-
-function formatKmFromMeters(m: number): string {
-  if (!Number.isFinite(m) || m < 0) return "";
-  const km = m / 1000;
-  const s = km.toFixed(1).replace(/\.0$/, "");
-  return s;
-}
-
-function escortVehicleDrivenLabel(v: { label: string; plate: string | null } | null): string {
-  if (!v) return "—";
-  const p = v.plate?.trim();
-  if (p) return `${p}（${v.label}）`;
-  return v.label.trim() || "—";
-}
-
-function escortVehicleNoField(v: { label: string; plate: string | null } | null): string {
-  if (!v) return "";
-  return (v.plate?.trim() || v.label || "").trim();
 }
 
 export async function registerDailyReportRoutes(app: FastifyInstance): Promise<void> {
@@ -367,107 +316,8 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
   app.get<{ Params: { id: string } }>("/daily-reports/:id/jommu-print.html", async (req, reply) => {
     const { tenantId } = jwtUser(req);
     const id = String(req.params.id || "");
-    const report = await prisma.dailyReport.findFirst({
-      where: { id, tenantId },
-      include: {
-        trips: { orderBy: { id: "asc" } },
-        mainEmployee: { select: { familyName: true, givenName: true } },
-        escortVehicle: { select: { label: true, plate: true } },
-        tenant: { select: { name: true } },
-      },
-    });
-    if (!report) return reply.code(404).send({ error: "not found" });
-
-    const settings = await prisma.tenantSettings.findUnique({ where: { tenantId } });
-    const operatorName = (settings?.legalTradeName?.trim() || report.tenant.name).trim();
-
-    const punches = await prisma.timeCardPunch.findMany({
-      where: { tenantId, employeeId: report.mainEmployeeId, businessDate: report.businessDate },
-      orderBy: { punchedAt: "asc" },
-    });
-    const clockInAt = punches.find((p) => p.kind === TimeCardPunchKind.CLOCK_IN)?.punchedAt ?? null;
-    const clockOutPunches = punches.filter((p) => p.kind === TimeCardPunchKind.CLOCK_OUT);
-    const clockOutAt = clockOutPunches.length ? clockOutPunches[clockOutPunches.length - 1]!.punchedAt : null;
-
-    let safetyManagerName = "";
-    for (const p of punches) {
-      if (p.kind !== TimeCardPunchKind.CLOCK_IN) continue;
-      const n = verifierFromAlcoholJson(p.alcoholCheckJson);
-      if (n) {
-        safetyManagerName = n;
-        break;
-      }
-    }
-    if (!safetyManagerName) {
-      safetyManagerName = settings?.legalSafetyManagerName?.trim() || "";
-    }
-
-    const vid = report.escortVehicleId;
-    let odoStartKm: string | null = null;
-    let odoEndKm: string | null = null;
-    if (vid && clockInAt) {
-      const startLog = await prisma.vehicleOdometerLog.findFirst({
-        where: { tenantId, vehicleId: vid, createdAt: { gte: clockInAt } },
-        orderBy: { createdAt: "asc" },
-      });
-      if (startLog) odoStartKm = String(startLog.value);
-      if (clockOutAt) {
-        const endLog = await prisma.vehicleOdometerLog.findFirst({
-          where: { tenantId, vehicleId: vid, createdAt: { lte: clockOutAt } },
-          orderBy: { createdAt: "desc" },
-        });
-        if (endLog) odoEndKm = String(endLog.value);
-      }
-    }
-
-    let totalOdoKm: string | null = null;
-    if (odoStartKm != null && odoEndKm != null) {
-      const a = Number(odoStartKm);
-      const b = Number(odoEndKm);
-      if (Number.isFinite(a) && Number.isFinite(b) && b >= a) totalOdoKm = String(b - a);
-    }
-
-    const vehicleDriven = escortVehicleDrivenLabel(report.escortVehicle);
-    const escortNo = escortVehicleNoField(report.escortVehicle);
-
-    let sumDistanceM = 0;
-    let sumFare = 0;
-    const tripRows: JommuTripRow[] = report.trips.map((t) => {
-      sumDistanceM += t.distanceM;
-      const fare = t.fareOverrideYen != null ? t.fareOverrideYen : t.fareYen;
-      sumFare += fare;
-      return {
-        clientName: t.clientName || "",
-        charterVehicleNo: t.charterVehicleNo?.trim() || "",
-        origin: t.origin || "",
-        departedHm: hmTokyo(t.departedAt),
-        viaText: viaTextFromTripRow(t),
-        destination: t.destination || "",
-        arrivedHm: hmTokyo(t.arrivedAt),
-        distanceKm: formatKmFromMeters(t.distanceM),
-        fareYen: fare.toLocaleString("ja-JP"),
-        vehicleDriven,
-      };
-    });
-
-    const [y, m, d] = report.businessDate.split("-");
-    const model: JommuKirokuboModel = {
-      businessDateYmd: report.businessDate,
-      yParts: { y: y ?? "", m: m ?? "", d: d ?? "" },
-      crewName: `${report.mainEmployee.familyName} ${report.mainEmployee.givenName}`.trim(),
-      clockInHm: clockInAt ? hmTokyo(clockInAt) : null,
-      clockOutHm: clockOutAt ? hmTokyo(clockOutAt) : null,
-      escortVehicleNo: escortNo,
-      operatorName,
-      safetyManagerStampName: safetyManagerName,
-      trips: tripRows,
-      odoStartKm,
-      odoEndKm,
-      totalOdoKm,
-      actualDistanceKmSum: formatKmFromMeters(sumDistanceM) || "0",
-      salesTotalYen: sumFare.toLocaleString("ja-JP"),
-    };
-
+    const model = await loadJommuKirokuboModelForDailyReport(tenantId, id);
+    if (!model) return reply.code(404).send({ error: "not found" });
     const html = buildJommuKirokuboHtml(model);
     return reply.type("text/html; charset=utf-8").send(html);
   });

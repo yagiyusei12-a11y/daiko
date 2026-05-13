@@ -83,24 +83,32 @@ export async function apiFetch<T>(
   return { ok: true, data: body as T };
 }
 
-/** JSON 以外（HTML 等）の本文をそのまま返す */
+/** JSON 以外（HTML 等）の本文をそのまま返す。`json` を渡すと POST（Content-Type: application/json） */
 export async function apiFetchText(
   path: string,
+  init: RequestInit & { json?: unknown } = {},
 ): Promise<{ ok: true; text: string } | { ok: false; status: number; error: string }> {
-  const token = getAccessToken();
-  const headers = new Headers();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const { json, headers: hdr, ...rest } = init;
   const url = path.startsWith("http") ? path : `${API}${path.startsWith("/") ? path : `/${path}`}`;
-  let res = await fetch(url, { headers });
 
+  const doFetch = (): Promise<Response> => {
+    const headers = new Headers(hdr);
+    const token = getAccessToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    if (json !== undefined) {
+      headers.set("Content-Type", "application/json");
+    }
+    return fetch(url, {
+      ...rest,
+      headers,
+      body: json !== undefined ? JSON.stringify(json) : rest.body,
+    });
+  };
+
+  let res = await doFetch();
   if (res.status === 401 && !url.includes("/auth/refresh")) {
     const refreshed = await tryRefresh();
-    if (refreshed) {
-      const h2 = new Headers();
-      const t2 = getAccessToken();
-      if (t2) h2.set("Authorization", `Bearer ${t2}`);
-      res = await fetch(url, { headers: h2 });
-    }
+    if (refreshed) res = await doFetch();
   }
 
   const text = await res.text();

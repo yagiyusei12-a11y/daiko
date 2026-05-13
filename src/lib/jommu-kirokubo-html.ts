@@ -44,6 +44,8 @@ const PRINT_CSS = `
 @page { size: A4; margin: 12mm; }
 @media print { .no-print { display: none !important; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
 body { font-family: "MS Gothic","Yu Gothic","Noto Sans JP",sans-serif; font-size: 11px; color: #000; margin: 0; padding: 12px; max-width: 900px; margin-inline: auto; }
+.jommu-sheet { page-break-after: always; break-after: page; padding-bottom: 8px; }
+.jommu-sheet:last-of-type { page-break-after: auto; break-after: auto; }
 h1 { font-size: 14px; margin: 0 0 8px; text-align: center; letter-spacing: 0.05em; }
 table { border-collapse: collapse; width: 100%; }
 th, td { border: 1px solid #000; padding: 4px 5px; vertical-align: middle; }
@@ -59,8 +61,7 @@ th { background: #f3f3f3; font-weight: 600; text-align: center; }
 .toolbar button { padding: 6px 12px; font-size: 12px; cursor: pointer; }
 `;
 
-export function buildJommuKirokuboHtml(model: JommuKirokuboModel): string {
-  const { yParts } = model;
+function renderJommuTripRows(model: JommuKirokuboModel): string {
   const rowCount = Math.max(10, model.trips.length);
   const rows: string[] = [];
   for (let i = 0; i < rowCount; i++) {
@@ -79,13 +80,13 @@ export function buildJommuKirokuboHtml(model: JommuKirokuboModel): string {
   <td>${t ? esc(t.vehicleDriven) : ""}</td>
 </tr>`);
   }
+  return rows.join("\n");
+}
 
-  return `<!DOCTYPE html><html lang="ja"><head>
-<meta charset="utf-8"/>
-<title>乗務記録簿 ${esc(model.businessDateYmd)}</title>
-<style>${PRINT_CSS}</style>
-</head><body>
-<div class="toolbar no-print"><button type="button" onclick="window.print()">印刷</button></div>
+function renderJommuSheet(model: JommuKirokuboModel): string {
+  const { yParts } = model;
+  const rows = renderJommuTripRows(model);
+  return `<div class="jommu-sheet">
 <h1>乗務記録簿</h1>
 <table class="meta">
   <tr>
@@ -120,7 +121,7 @@ export function buildJommuKirokuboHtml(model: JommuKirokuboModel): string {
     </tr>
   </thead>
   <tbody>
-    ${rows.join("\n")}
+    ${rows}
   </tbody>
 </table>
 
@@ -141,6 +142,35 @@ export function buildJommuKirokuboHtml(model: JommuKirokuboModel): string {
     <td class="t-right">${esc(model.salesTotalYen)}</td>
   </tr>
 </table>
+</div>`;
+}
+
+/** 複数日報分を 1 つの HTML にまとめる（各日報が 1 枚の用紙相当）。 */
+export function buildJommuKirokuboHtmlBundle(models: JommuKirokuboModel[], documentTitle: string): string {
+  if (models.length === 0) {
+    return `<!DOCTYPE html><html lang="ja"><head>
+<meta charset="utf-8"/>
+<title>${esc(documentTitle)}</title>
+<style>${PRINT_CSS}</style>
+</head><body>
+<div class="toolbar no-print"><button type="button" onclick="window.print()">印刷</button></div>
+<p class="note">条件に一致する日報がありません。</p>
 <p class="note no-print">ブラウザの印刷ダイアログから PDF 保存できます。</p>
 </body></html>`;
+  }
+
+  const sheets = models.map(renderJommuSheet).join("\n");
+  return `<!DOCTYPE html><html lang="ja"><head>
+<meta charset="utf-8"/>
+<title>${esc(documentTitle)}</title>
+<style>${PRINT_CSS}</style>
+</head><body>
+<div class="toolbar no-print"><button type="button" onclick="window.print()">印刷</button></div>
+${sheets}
+<p class="note no-print">ブラウザの印刷ダイアログから PDF 保存できます。</p>
+</body></html>`;
+}
+
+export function buildJommuKirokuboHtml(model: JommuKirokuboModel): string {
+  return buildJommuKirokuboHtmlBundle([model], `乗務記録簿 ${model.businessDateYmd}`);
 }
