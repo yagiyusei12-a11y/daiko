@@ -680,6 +680,162 @@ function DaikoLaw14SeiyakuPrintBlock(): JSX.Element {
   );
 }
 
+type NinteiCompanyRow = {
+  tenantName: string;
+  legalTradeName: string | null;
+  legalPostalCode: string | null;
+  legalPrefecture: string | null;
+  legalStreetAddress: string | null;
+  legalCertificationNumber: string | null;
+  legalCertificationDate: string | null;
+  legalPublicSafetyCommission: string | null;
+};
+
+function formatPostalForNintei(zip: string | null | undefined): string {
+  const z = (zip ?? "").replace(/\D/g, "");
+  if (z.length === 7) return `〒${z.slice(0, 3)}-${z.slice(3)}`;
+  return (zip ?? "").trim();
+}
+
+function defaultIssuingAuthority(c: NinteiCompanyRow): string {
+  const ps = c.legalPublicSafetyCommission?.trim();
+  if (ps) return /公安委員会/u.test(ps) ? ps : `${ps}公安委員会`;
+  const pref = c.legalPrefecture?.trim();
+  return pref ? `${pref}公安委員会` : "";
+}
+
+function defaultLocationLine(c: NinteiCompanyRow): string {
+  return [formatPostalForNintei(c.legalPostalCode), c.legalPrefecture?.trim(), c.legalStreetAddress?.trim()]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+}
+
+function NinteiCertificatePrintBlock(): JSX.Element {
+  const [issuingAuthorityDisplay, setIssuingAuthorityDisplay] = useState("");
+  const [certificationNumberMiddle, setCertificationNumberMiddle] = useState("");
+  const [certificationDateYmd, setCertificationDateYmd] = useState("");
+  const [nameOrTitle, setNameOrTitle] = useState("");
+  const [location, setLocation] = useState("");
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [printErr, setPrintErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const appliedDefaultsRef = useRef(false);
+
+  const reload = useCallback(async () => {
+    setLoadErr(null);
+    const r = await apiFetch<NinteiCompanyRow>("/settings/company");
+    if (!r.ok) {
+      setLoadErr(r.error);
+      return;
+    }
+    const c = r.data;
+    if (!appliedDefaultsRef.current) {
+      setIssuingAuthorityDisplay(defaultIssuingAuthority(c));
+      setCertificationNumberMiddle((c.legalCertificationNumber ?? "").trim());
+      setCertificationDateYmd(c.legalCertificationDate ?? "");
+      setNameOrTitle((c.legalTradeName?.trim() || c.tenantName || "").trim());
+      setLocation(defaultLocationLine(c));
+      appliedDefaultsRef.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  async function print(): Promise<void> {
+    setPrintErr(null);
+    const w = window.open("", "_blank");
+    if (!w) {
+      setPrintErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
+      return;
+    }
+    w.document.open();
+    w.document.write(
+      '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>取得中</title></head><body><p>取得中…</p></body></html>',
+    );
+    w.document.close();
+
+    setBusy(true);
+    const r = await apiFetchText("/documents/daiko-nintei-certificate-print", {
+      method: "POST",
+      json: {
+        issuingAuthorityDisplay,
+        certificationNumberMiddle,
+        certificationDateYmd,
+        nameOrTitle,
+        location,
+      },
+    });
+    setBusy(false);
+    if (!r.ok) {
+      const msg = r.error.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+      w.document.open();
+      w.document.write(
+        `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>エラー</title><style>body{font-family:sans-serif;padding:1rem}</style></head><body><p>${msg}</p><p><button type="button" onclick="window.close()">閉じる</button></p></body></html>`,
+      );
+      w.document.close();
+      setPrintErr(r.error);
+      return;
+    }
+    w.document.open();
+    w.document.write(r.text);
+    w.document.close();
+  }
+
+  return (
+    <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
+      <PanelHint>
+        事業者マスタ（設定の事業者情報）から初期表示します。この画面での修正は印刷にだけ使われ、保存されません。印刷ダイアログで A4
+        縦を選んでください。
+      </PanelHint>
+      {loadErr ? (
+        <p className="settings-hint" style={{ color: "var(--danger, #b00020)", marginTop: "0.5rem" }}>
+          {loadErr}
+        </p>
+      ) : null}
+      <div className="settings-form" style={{ marginTop: "0.75rem", maxWidth: "36rem" }}>
+        <label>認定をした公安委員会</label>
+        <input
+          type="text"
+          value={issuingAuthorityDisplay}
+          onChange={(e) => setIssuingAuthorityDisplay(e.target.value)}
+          placeholder="例: 兵庫県公安委員会"
+        />
+        <label>認定番号（「第」「号」のあいだの数字・記号）</label>
+        <div className="settings-inline-cert">
+          <span aria-hidden>第</span>
+          <input
+            className="settings-cert-core"
+            value={certificationNumberMiddle}
+            onChange={(e) => setCertificationNumberMiddle(e.target.value)}
+            placeholder="1234"
+          />
+          <span aria-hidden>号</span>
+        </div>
+        <label>認定年月日</label>
+        <input type="date" value={certificationDateYmd} onChange={(e) => setCertificationDateYmd(e.target.value)} />
+        <label>氏名又は名称</label>
+        <input type="text" value={nameOrTitle} onChange={(e) => setNameOrTitle(e.target.value)} />
+        <label>所在地</label>
+        <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} />
+        <p style={{ marginTop: "0.85rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
+          <button type="button" className="settings-primary" disabled={busy} onClick={() => void print()}>
+            {busy ? "取得中…" : "認定証を印刷（A4 縦）"}
+          </button>
+          <Link to="/settings">設定（事業者情報）へ</Link>
+        </p>
+        {printErr ? (
+          <p className="settings-hint" style={{ color: "var(--danger, #b00020)", marginTop: "0.5rem" }}>
+            {printErr}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function DocumentsPage(): JSX.Element {
   const [tab, setTab] = useState("nippo");
 
@@ -702,14 +858,7 @@ export default function DocumentsPage(): JSX.Element {
     {
       id: "nintei",
       label: "認定証",
-      children: (
-        <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
-          <PanelHint>認定事項の記載イメージを出力する機能は、今後このタブから行える予定です。事業者情報は「設定」の事業者情報に入力してください。</PanelHint>
-          <p style={{ marginTop: "0.75rem" }}>
-            <Link to="/settings">設定へ</Link>
-          </p>
-        </div>
-      ),
+      children: <NinteiCertificatePrintBlock />,
     },
     {
       id: "yakkan",

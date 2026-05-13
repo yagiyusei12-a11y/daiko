@@ -6,6 +6,7 @@ import { hasSecondClassDriverLicense } from "../lib/employee-license.js";
 import { buildJommuKirokuboHtmlBundle, type JommuKirokuboModel } from "../lib/jommu-kirokubo-html.js";
 import { loadJommuKirokuboModelForDailyReport } from "../lib/jommu-daily-report-model.js";
 import { buildDaikoLaw14SeiyakuPrintHtml } from "../lib/daiko-law14-seiyaku-print-html.js";
+import { buildDaikoNinteiCertificatePrintHtml } from "../lib/daiko-nintei-certificate-print-html.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_JOMMU_RANGE_DAYS = 400;
@@ -15,6 +16,10 @@ const MAX_ROSTER_EMPLOYEES = 100;
 const MAX_SEIYAKU_SHEETS = 60;
 const MAX_SEIYAKU_LINE = 800;
 const MAX_SEIYAKU_BODY = 30_000;
+const MAX_NINTEI_ISSUING = 300;
+const MAX_NINTEI_CERT_RAW = 120;
+const MAX_NINTEI_NAME = 300;
+const MAX_NINTEI_LOCATION = 800;
 
 export async function registerDocumentsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
@@ -131,6 +136,40 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
       pledgeYmd,
       pledgeBody,
       sheets: parsed.map((p) => ({ signerName: p.signerName, signerAddress: p.signerAddress })),
+    });
+    return reply.type("text/html; charset=utf-8").send(html);
+  });
+
+  app.post("/documents/daiko-nintei-certificate-print", async (req, reply) => {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const issuingAuthorityDisplay = String(b.issuingAuthorityDisplay ?? "").trim();
+    const certificationNumberMiddle = String(b.certificationNumberMiddle ?? "");
+    const certificationDateYmd = String(b.certificationDateYmd ?? "").trim();
+    const nameOrTitle = String(b.nameOrTitle ?? "").trim();
+    const location = String(b.location ?? "").trim();
+
+    if (issuingAuthorityDisplay.length > MAX_NINTEI_ISSUING) {
+      return reply.code(400).send({ error: "認定をした公安委員会の欄が長すぎます" });
+    }
+    if (certificationNumberMiddle.length > MAX_NINTEI_CERT_RAW) {
+      return reply.code(400).send({ error: "認定番号の欄が長すぎます" });
+    }
+    if (certificationDateYmd && !ISO_DATE.test(certificationDateYmd)) {
+      return reply.code(400).send({ error: "認定年月日は YYYY-MM-DD で指定するか、空にしてください" });
+    }
+    if (nameOrTitle.length > MAX_NINTEI_NAME) {
+      return reply.code(400).send({ error: "氏名又は名称の欄が長すぎます" });
+    }
+    if (location.length > MAX_NINTEI_LOCATION) {
+      return reply.code(400).send({ error: "所在地の欄が長すぎます" });
+    }
+
+    const html = buildDaikoNinteiCertificatePrintHtml({
+      issuingAuthorityDisplay,
+      certificationNumberMiddle,
+      certificationDateYmd: ISO_DATE.test(certificationDateYmd) ? certificationDateYmd : "",
+      nameOrTitle,
+      location,
     });
     return reply.type("text/html; charset=utf-8").send(html);
   });

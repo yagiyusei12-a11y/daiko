@@ -67,6 +67,7 @@ type CompanyDto = {
   legalPrefecture: string | null;
   legalStreetAddress: string | null;
   legalPhone: string | null;
+  legalPublicSafetyCommission: string | null;
   legalCertificationNumber: string | null;
   legalCertificationDate: string | null;
 };
@@ -425,6 +426,7 @@ export default function SettingsMenuPage(): JSX.Element {
         legalPrefecture: company.legalPrefecture,
         legalStreetAddress: company.legalStreetAddress,
         legalPhone: company.legalPhone,
+        legalPublicSafetyCommission: company.legalPublicSafetyCommission,
         legalCertificationNumber: company.legalCertificationNumber,
         legalCertificationDate: company.legalCertificationDate || null,
       },
@@ -643,6 +645,12 @@ export default function SettingsMenuPage(): JSX.Element {
       <input
         value={company.legalPhone ?? ""}
         onChange={(e) => setCompany({ ...company, legalPhone: e.target.value })}
+      />
+      <label>認定をした公安委員会</label>
+      <input
+        value={company.legalPublicSafetyCommission ?? ""}
+        onChange={(e) => setCompany({ ...company, legalPublicSafetyCommission: e.target.value || null })}
+        placeholder="例: 兵庫県公安委員会"
       />
       <label>認定番号</label>
       <div className="settings-inline-cert">

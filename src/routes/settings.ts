@@ -172,6 +172,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
       legalPhone: s?.legalPhone ?? null,
       legalCertificationNumber: s?.legalCertificationNumber ?? null,
       legalCertificationDate: s?.legalCertificationDate ? ymd(s.legalCertificationDate) : null,
+      legalPublicSafetyCommission: s?.legalPublicSafetyCommission ?? null,
     };
   });
 
@@ -190,6 +191,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     assign("legalPrefecture", str("legalPrefecture"));
     assign("legalStreetAddress", str("legalStreetAddress"));
     assign("legalPhone", str("legalPhone"));
+    assign("legalPublicSafetyCommission", str("legalPublicSafetyCommission"));
     assign("legalCertificationNumber", str("legalCertificationNumber"));
     if (b.legalCertificationDate !== undefined) {
       if (b.legalCertificationDate === null || b.legalCertificationDate === "") {
