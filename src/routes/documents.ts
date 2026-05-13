@@ -5,12 +5,16 @@ import { buildEmployeeRosterPrintHtml } from "../lib/employee-roster-print-html.
 import { hasSecondClassDriverLicense } from "../lib/employee-license.js";
 import { buildJommuKirokuboHtmlBundle, type JommuKirokuboModel } from "../lib/jommu-kirokubo-html.js";
 import { loadJommuKirokuboModelForDailyReport } from "../lib/jommu-daily-report-model.js";
+import { buildDaikoLaw14SeiyakuPrintHtml } from "../lib/daiko-law14-seiyaku-print-html.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_JOMMU_RANGE_DAYS = 400;
 const MAX_JOMMU_REPORTS = 200;
 const MAX_CREW_IDS = 80;
 const MAX_ROSTER_EMPLOYEES = 100;
+const MAX_SEIYAKU_SHEETS = 60;
+const MAX_SEIYAKU_LINE = 800;
+const MAX_SEIYAKU_BODY = 30_000;
 
 export async function registerDocumentsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
@@ -50,6 +54,83 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
       employees: employeesOrdered,
       printedAt: new Date(),
       operatorName: operatorName || null,
+    });
+    return reply.type("text/html; charset=utf-8").send(html);
+  });
+
+  app.post("/documents/daiko-law14-seiyaku-print", async (req, reply) => {
+    const { tenantId } = jwtUser(req);
+    const b = (req.body ?? {}) as Record<string, unknown>;
+
+    const companyLine = String(b.companyLine ?? "").trim();
+    const representativeLine = String(b.representativeLine ?? "").trim();
+    const pledgeYmd = String(b.pledgeYmd ?? "").trim();
+    const pledgeBody = String(b.pledgeBody ?? "");
+    const includeRetired = Boolean(b.includeRetired);
+
+    if (!companyLine) {
+      return reply.code(400).send({ error: "companyLine を入力してください" });
+    }
+    if (!representativeLine) {
+      return reply.code(400).send({ error: "representativeLine を入力してください" });
+    }
+    if (companyLine.length > MAX_SEIYAKU_LINE || representativeLine.length > MAX_SEIYAKU_LINE) {
+      return reply.code(400).send({ error: "宛名行が長すぎます" });
+    }
+    if (!ISO_DATE.test(pledgeYmd)) {
+      return reply.code(400).send({ error: "pledgeYmd は YYYY-MM-DD で指定してください" });
+    }
+    if (!pledgeBody.trim()) {
+      return reply.code(400).send({ error: "誓約の本文を入力してください" });
+    }
+    if (pledgeBody.length > MAX_SEIYAKU_BODY) {
+      return reply.code(400).send({ error: "誓約の本文が長すぎます" });
+    }
+
+    const rawSheets = b.sheets;
+    if (!Array.isArray(rawSheets) || rawSheets.length === 0) {
+      return reply.code(400).send({ error: "sheets は 1 件以上のオブジェクト配列で指定してください" });
+    }
+    if (rawSheets.length > MAX_SEIYAKU_SHEETS) {
+      return reply.code(400).send({ error: `一度に印刷できるのは ${MAX_SEIYAKU_SHEETS} 枚までです` });
+    }
+
+    type One = { employeeId: string; signerName: string; signerAddress: string };
+    const parsed: One[] = [];
+    for (const row of rawSheets) {
+      if (!row || typeof row !== "object" || Array.isArray(row)) {
+        return reply.code(400).send({ error: "sheets の各要素はオブジェクトにしてください" });
+      }
+      const o = row as Record<string, unknown>;
+      const employeeId = String(o.employeeId ?? "").trim();
+      const signerName = String(o.signerName ?? "").trim();
+      const signerAddress = String(o.signerAddress ?? "").trim();
+      if (!employeeId) return reply.code(400).send({ error: "各 sheet に employeeId を指定してください" });
+      if (!signerName) return reply.code(400).send({ error: "各 sheet に signerName を指定してください" });
+      if (signerName.length > 200 || signerAddress.length > 800) {
+        return reply.code(400).send({ error: "氏名・住所の文字数が上限を超えています" });
+      }
+      parsed.push({ employeeId, signerName, signerAddress });
+    }
+
+    const ids = [...new Set(parsed.map((p) => p.employeeId))];
+    const statusWhere = includeRetired ? {} : ({ status: "ACTIVE" as const } as const);
+    const rows = await prisma.employee.findMany({
+      where: { tenantId, id: { in: ids }, ...statusWhere },
+      select: { id: true },
+    });
+    if (rows.length !== ids.length) {
+      return reply.code(400).send({
+        error: "無効な従業員 id が含まれるか、「在籍のみ」のときに退職者が含まれています",
+      });
+    }
+
+    const html = buildDaikoLaw14SeiyakuPrintHtml({
+      companyLine,
+      representativeLine,
+      pledgeYmd,
+      pledgeBody,
+      sheets: parsed.map((p) => ({ signerName: p.signerName, signerAddress: p.signerAddress })),
     });
     return reply.type("text/html; charset=utf-8").send(html);
   });
