@@ -76,7 +76,7 @@ npm run dev
 
 4. （任意）生成がタイムアウトする場合は **`DAIKO_PDF_TIMEOUT_MS`**（ミリ秒、既定 120000）を `.env` に追加する。
 
-未設定のとき PDF 系エンドポイントは **503** を返し、従来どおりの「ブラウザで開いて印刷」（HTML）は利用できます。
+未設定のとき PDF 系エンドポイントは **503** を返します。
 
 日本語が PDF 上で **□（豆腐）** になる場合は、VPS に **Noto CJK** が入っていません。`ensure-chromium-env.sh` がデプロイ時に **`fonts-noto-cjk`** を入れるので、再デプロイで解消します（手動なら `sudo apt-get install -y fonts-noto-cjk`）。
 

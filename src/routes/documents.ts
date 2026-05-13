@@ -41,7 +41,7 @@ async function sendHtmlOrPdf(
   if (!isChromiumConfiguredForPdf()) {
     return reply.code(503).send({
       error:
-        "PDF 出力はサーバーに Chromium のインストールと環境変数 CHROMIUM_EXECUTABLE の設定が必要です。管理者に連絡するか、outputFormat を省略してブラウザ印刷をご利用ください。",
+        "PDF 出力はサーバーに Chromium のインストールと環境変数 CHROMIUM_EXECUTABLE の設定が必要です。管理者に連絡してください。",
     });
   }
   try {

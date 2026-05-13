@@ -126,7 +126,7 @@ export default function InstructionRecordsPage(): JSX.Element {
   return (
     <Card title="指導記録簿">
       <p className="settings-hint">
-        従業員への指導内容を登録します。指導を受ける者を複数選ぶと、1件の記録として保存されます。一覧・編集・削除・印刷（1件A4縦1枚）は「書類」メニューの「指導記録簿」タブから行えます。
+        従業員への指導内容を登録します。指導を受ける者を複数選ぶと、1件の記録として保存されます。一覧・編集・削除・PDFは「書類」メニューの「指導記録簿」タブから行えます。
       </p>
       <div className="instruction-form">
         <Err msg={err} />

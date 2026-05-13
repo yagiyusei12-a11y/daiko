@@ -69,7 +69,7 @@ export async function registerInstructionRecordsRoutes(app: FastifyInstance): Pr
     if (!isChromiumConfiguredForPdf()) {
       return reply.code(503).send({
         error:
-          "PDF 出力はサーバーに Chromium のインストールと環境変数 CHROMIUM_EXECUTABLE の設定が必要です。管理者に連絡するか、ブラウザの印刷機能をお使いください。",
+          "PDF 出力はサーバーに Chromium のインストールと環境変数 CHROMIUM_EXECUTABLE の設定が必要です。管理者に連絡してください。",
       });
     }
     const html = buildInstructionRecordsPdfHtml(formatted);

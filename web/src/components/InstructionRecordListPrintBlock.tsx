@@ -14,7 +14,7 @@ function dashIfEmpty(s: string): string {
 
 type EmployeeOpt = { id: string; familyName: string; givenName: string; status: string };
 
-/** 書類ページ「指導記録簿」タブ用：期間絞り込み・一覧・印刷（1件＝A4縦1枚）・編集・削除 */
+/** 書類ページ「指導記録簿」タブ用：期間絞り込み・一覧・PDF・編集・削除 */
 export default function InstructionRecordListPrintBlock(): JSX.Element {
   const now = useMemo(() => new Date(), []);
   const [from, setFrom] = useState(() => firstDayOfMonth(now));
@@ -49,20 +49,6 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
       if (r.ok) setEmployees(r.data.employees);
     })();
   }, []);
-
-  useEffect(() => {
-    const afterPrint = () => document.body.classList.remove("instruction-records-printing");
-    window.addEventListener("afterprint", afterPrint);
-    return () => {
-      window.removeEventListener("afterprint", afterPrint);
-    };
-  }, []);
-
-  const onPrint = () => {
-    document.body.classList.add("instruction-records-printing");
-    window.print();
-    window.setTimeout(() => document.body.classList.remove("instruction-records-printing"), 2500);
-  };
 
   const savePdf = async () => {
     setErr(null);
@@ -112,15 +98,12 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
           <button type="button" className="settings-primary" disabled={pdfBusy || records.length === 0} onClick={() => void savePdf()}>
             {pdfBusy ? "PDF生成中…" : "PDFで保存"}
           </button>
-          <button type="button" className="settings-secondary" disabled={busy || records.length === 0} onClick={onPrint}>
-            ブラウザで印刷
-          </button>
         </div>
       </div>
 
       <p className="settings-hint no-print" style={{ marginTop: 0 }}>
         登録はメニュー「指導」から行えます。複数人をまとめて登録すると1件のデータになります。PDFはサーバーで生成します（Chromium
-        未設定時はエラーになります）。ブラウザ印刷は1件につきA4縦1枚です。
+        未設定時はエラーになります）。
       </p>
 
       <div className="instruction-screen-table-wrap no-print">
@@ -166,51 +149,6 @@ export default function InstructionRecordListPrintBlock(): JSX.Element {
             )}
           </tbody>
         </table>
-      </div>
-
-      <div className="instruction-print-sheet">
-        {sortedRows.map((r) => (
-          <article key={r.id} className="instruction-doc-page">
-            <header className="instruction-doc-banner">
-              <h1 className="instruction-doc-heading">従事者に対する指導記録簿</h1>
-            </header>
-
-            <div className="instruction-doc-table-wrap">
-              <table className="instruction-doc-table">
-                <tbody>
-                  <tr>
-                    <th scope="row">指導実施日時</th>
-                    <td>{formatInstructionDate(r.date)}</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">指導実施場所</th>
-                    <td className="instruction-doc-td-pre">{dashIfEmpty(r.instructionVenue)}</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">指導担当者名（複数）</th>
-                    <td className="instruction-doc-td-pre">{dashIfEmpty(r.instructorLabel)}</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">指導を受けた者</th>
-                    <td className="instruction-doc-td-pre">{dashIfEmpty(r.recipientLabel)}</td>
-                  </tr>
-                  <tr className="instruction-doc-row-tall">
-                    <th scope="row">指導項目</th>
-                    <td className="instruction-doc-td-pre">{r.instructionItems.trim() ? r.instructionItems : "—"}</td>
-                  </tr>
-                  <tr className="instruction-doc-row-mid">
-                    <th scope="row">特記事項</th>
-                    <td className="instruction-doc-td-pre">{r.specialNotes.trim() ? r.specialNotes : "—"}</td>
-                  </tr>
-                  <tr className="instruction-doc-row-mid">
-                    <th scope="row">備考</th>
-                    <td className="instruction-doc-td-pre">{r.remarks.trim() ? r.remarks : "—"}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </article>
-        ))}
       </div>
     </div>
   );

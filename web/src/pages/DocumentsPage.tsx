@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiFetch, apiFetchBlob, apiFetchText } from "../api";
+import { apiFetch, apiFetchBlob } from "../api";
 import { downloadBrowserBlob } from "../lib/download-blob";
 import { DAIKO_LAW14_DEFAULT_PLEDGE_BODY } from "../lib/daikoLaw14DefaultPledge";
 import { DAIKO_STANDARD_YAKKAN_DEFAULT_BODY } from "../lib/daikoYakkanDefaultBody";
@@ -71,51 +71,6 @@ function DailyReportJommuPrintBlock(): JSX.Element {
     });
   }
 
-  async function print(): Promise<void> {
-    setPrintErr(null);
-    if (dateFrom > dateTo) {
-      setPrintErr("開始日は終了日以前にしてください");
-      return;
-    }
-    const crewIds = employees.filter((e) => selected[e.id]).map((e) => e.id);
-    if (crewIds.length === 0) {
-      setPrintErr("印刷する従業員を 1 人以上選んでください");
-      return;
-    }
-    // 非同期のあとに window.open すると空タブのままになるブラウザがあるため、同期で先に開く。
-    // noopener 付きだと参照が null になり document.write できず about:blank のまま残ることがあるため付けない。
-    const w = window.open("", "_blank");
-    if (!w) {
-      setPrintErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
-      return;
-    }
-    w.document.open();
-    w.document.write(
-      '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>取得中</title></head><body><p>取得中…</p></body></html>',
-    );
-    w.document.close();
-
-    setBusy(true);
-    const r = await apiFetchText("/documents/daily-reports-jommu-print", {
-      method: "POST",
-      json: { from: dateFrom, to: dateTo, crewScope, crewIds },
-    });
-    setBusy(false);
-    if (!r.ok) {
-      const msg = r.error.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-      w.document.open();
-      w.document.write(
-        `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>エラー</title><style>body{font-family:sans-serif;padding:1rem}</style></head><body><p>${msg}</p><p><button type="button" onclick="window.close()">閉じる</button></p></body></html>`,
-      );
-      w.document.close();
-      setPrintErr(r.error);
-      return;
-    }
-    w.document.open();
-    w.document.write(r.text);
-    w.document.close();
-  }
-
   async function savePdf(): Promise<void> {
     setPrintErr(null);
     if (dateFrom > dateTo) {
@@ -143,7 +98,7 @@ function DailyReportJommuPrintBlock(): JSX.Element {
   return (
     <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
       <PanelHint>
-        指定期間・対象従業員（客車担当の日報）に基づき、乗務記録簿形式の HTML をまとめて開きます。出勤・退勤打刻と随伴車の ODO ログが揃っていると、各日報のフッター距離が埋まりやすくなります。
+        指定期間・対象従業員（客車担当の日報）に基づき、乗務記録簿形式の PDF を生成します。出勤・退勤打刻と随伴車の ODO ログが揃っていると、各日報のフッター距離が埋まりやすくなります。
       </PanelHint>
       <div className="settings-form" style={{ marginTop: "0.75rem", maxWidth: "36rem" }}>
         <label>期間（開始）</label>
@@ -215,9 +170,6 @@ function DailyReportJommuPrintBlock(): JSX.Element {
           <button type="button" className="settings-primary" disabled={busy} onClick={() => void savePdf()}>
             {busy ? "生成中…" : "PDFで保存"}
           </button>
-          <button type="button" className="settings-secondary" disabled={busy} onClick={() => void print()}>
-            {busy ? "取得中…" : "ブラウザで開いて印刷"}
-          </button>
           <Link to="/daily-reports">日報一覧へ</Link>
         </p>
         {printErr ? (
@@ -288,45 +240,6 @@ function EmployeeRosterPrintBlock(): JSX.Element {
     });
   }
 
-  async function print(): Promise<void> {
-    setPrintErr(null);
-    const employeeIds = visibleEmployees.filter((e) => selected[e.id]).map((e) => e.id);
-    if (employeeIds.length === 0) {
-      setPrintErr("印刷する従業員を 1 人以上選んでください");
-      return;
-    }
-    const w = window.open("", "_blank");
-    if (!w) {
-      setPrintErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
-      return;
-    }
-    w.document.open();
-    w.document.write(
-      '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>取得中</title></head><body><p>取得中…</p></body></html>',
-    );
-    w.document.close();
-
-    setBusy(true);
-    const r = await apiFetchText("/documents/employee-roster-print", {
-      method: "POST",
-      json: { includeRetired, employeeIds },
-    });
-    setBusy(false);
-    if (!r.ok) {
-      const msg = r.error.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-      w.document.open();
-      w.document.write(
-        `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>エラー</title><style>body{font-family:sans-serif;padding:1rem}</style></head><body><p>${msg}</p><p><button type="button" onclick="window.close()">閉じる</button></p></body></html>`,
-      );
-      w.document.close();
-      setPrintErr(r.error);
-      return;
-    }
-    w.document.open();
-    w.document.write(r.text);
-    w.document.close();
-  }
-
   async function savePdf(): Promise<void> {
     setPrintErr(null);
     const employeeIds = visibleEmployees.filter((e) => selected[e.id]).map((e) => e.id);
@@ -350,7 +263,7 @@ function EmployeeRosterPrintBlock(): JSX.Element {
   return (
     <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
       <PanelHint>
-        従事者の氏名・ふりがな・住所・連絡先・免許・緊急連絡先などは「設定」の従業員登録に入力すると反映されます。一覧で複数人にチェックを入れてから印刷してください（免許証の表裏は写真アップロードがある場合のみ枠内に表示されます）。
+        従事者の氏名・ふりがな・住所・連絡先・免許・緊急連絡先などは「設定」の従業員登録に入力すると反映されます。一覧で複数人にチェックを入れてから PDF で保存してください（免許証の表裏は写真アップロードがある場合のみ枠内に表示されます）。
       </PanelHint>
       <label style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", cursor: "pointer", marginTop: "0.75rem" }}>
         <input type="checkbox" checked={includeRetired} onChange={(e) => setIncludeRetired(e.target.checked)} />
@@ -401,9 +314,6 @@ function EmployeeRosterPrintBlock(): JSX.Element {
         <p style={{ marginTop: "0.75rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
           <button type="button" className="settings-primary" disabled={busy} onClick={() => void savePdf()}>
             {busy ? "生成中…" : "PDFで保存"}
-          </button>
-          <button type="button" className="settings-secondary" disabled={busy} onClick={() => void print()}>
-            {busy ? "取得中…" : "ブラウザで開いて印刷"}
           </button>
           <Link to="/settings">設定（従業員・車両）へ</Link>
         </p>
@@ -539,71 +449,6 @@ function DaikoLaw14SeiyakuPrintBlock(): JSX.Element {
     });
   }
 
-  async function print(): Promise<void> {
-    setPrintErr(null);
-    const chosen = visibleEmployees.filter((e) => selected[e.id]);
-    if (chosen.length === 0) {
-      setPrintErr("印刷する従業員を 1 人以上選んでください");
-      return;
-    }
-    if (!pledgeBody.trim()) {
-      setPrintErr("誓約の本文を入力してください");
-      return;
-    }
-    const sheets = chosen.map((e) => {
-      const row = edits[e.id];
-      return {
-        employeeId: e.id,
-        signerName: (row?.name ?? `${e.familyName}　${e.givenName}`).trim(),
-        signerAddress: (row?.address ?? (e.address ?? "").trim()).trim(),
-      };
-    });
-    for (const s of sheets) {
-      if (!s.signerName) {
-        setPrintErr("氏名が空の行があります。表で修正してください。");
-        return;
-      }
-    }
-
-    const w = window.open("", "_blank");
-    if (!w) {
-      setPrintErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
-      return;
-    }
-    w.document.open();
-    w.document.write(
-      '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>取得中</title></head><body><p>取得中…</p></body></html>',
-    );
-    w.document.close();
-
-    setBusy(true);
-    const r = await apiFetchText("/documents/daiko-law14-seiyaku-print", {
-      method: "POST",
-      json: {
-        companyLine,
-        representativeLine,
-        pledgeYmd,
-        pledgeBody,
-        includeRetired,
-        sheets,
-      },
-    });
-    setBusy(false);
-    if (!r.ok) {
-      const msg = r.error.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-      w.document.open();
-      w.document.write(
-        `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>エラー</title><style>body{font-family:sans-serif;padding:1rem}</style></head><body><p>${msg}</p><p><button type="button" onclick="window.close()">閉じる</button></p></body></html>`,
-      );
-      w.document.close();
-      setPrintErr(r.error);
-      return;
-    }
-    w.document.open();
-    w.document.write(r.text);
-    w.document.close();
-  }
-
   async function savePdf(): Promise<void> {
     setPrintErr(null);
     const chosen = visibleEmployees.filter((e) => selected[e.id]);
@@ -656,7 +501,7 @@ function DaikoLaw14SeiyakuPrintBlock(): JSX.Element {
     <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
       <PanelHint>
         運転代行業法第１４条第１項各号の非該当を誓約する書面です。事業者情報は「設定」の事業者情報から、氏名・住所は従業員マスタから初期表示します。チェックした人数分、A4
-        縦で各１枚ずつ開きます。
+        縦で各１枚ずつ PDF にまとめます。
       </PanelHint>
       {loadErr ? (
         <p className="settings-hint" style={{ color: "var(--danger, #b00020)", marginTop: "0.5rem" }}>
@@ -682,7 +527,7 @@ function DaikoLaw14SeiyakuPrintBlock(): JSX.Element {
           退職者も一覧に含める
         </label>
         <p className="settings-hint" style={{ marginTop: "0.75rem", marginBottom: "0.35rem" }}>
-          従業員名簿から印刷する人を選び、下の表で氏名・住所を必要に応じて直してから印刷してください。
+          従業員名簿から出力する人を選び、下の表で氏名・住所を必要に応じて直してから PDF で保存してください。
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.35rem" }}>
           <button type="button" className="settings-secondary" onClick={() => setAll(true)}>
@@ -723,7 +568,7 @@ function DaikoLaw14SeiyakuPrintBlock(): JSX.Element {
         {selectedList.length > 0 ? (
           <div style={{ marginTop: "0.85rem" }}>
             <div className="settings-hint" style={{ marginBottom: "0.35rem" }}>
-              選択中の氏名・住所（印刷に反映）
+              選択中の氏名・住所（PDFに反映）
             </div>
             <div style={{ overflowX: "auto", border: "1px solid var(--border, #ccc)", borderRadius: "4px" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
@@ -766,9 +611,6 @@ function DaikoLaw14SeiyakuPrintBlock(): JSX.Element {
         <p style={{ marginTop: "0.85rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
           <button type="button" className="settings-primary" disabled={busy} onClick={() => void savePdf()}>
             {busy ? "生成中…" : "PDFで保存"}
-          </button>
-          <button type="button" className="settings-secondary" disabled={busy} onClick={() => void print()}>
-            {busy ? "取得中…" : "ブラウザで開いて印刷"}
           </button>
           <Link to="/settings">設定（事業者・従業員）へ</Link>
         </p>
@@ -846,46 +688,6 @@ function NinteiCertificatePrintBlock(): JSX.Element {
     void reload();
   }, [reload]);
 
-  async function print(): Promise<void> {
-    setPrintErr(null);
-    const w = window.open("", "_blank");
-    if (!w) {
-      setPrintErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
-      return;
-    }
-    w.document.open();
-    w.document.write(
-      '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>取得中</title></head><body><p>取得中…</p></body></html>',
-    );
-    w.document.close();
-
-    setBusy(true);
-    const r = await apiFetchText("/documents/daiko-nintei-certificate-print", {
-      method: "POST",
-      json: {
-        issuingAuthorityDisplay,
-        certificationNumberMiddle,
-        certificationDateYmd,
-        nameOrTitle,
-        location,
-      },
-    });
-    setBusy(false);
-    if (!r.ok) {
-      const msg = r.error.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-      w.document.open();
-      w.document.write(
-        `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>エラー</title><style>body{font-family:sans-serif;padding:1rem}</style></head><body><p>${msg}</p><p><button type="button" onclick="window.close()">閉じる</button></p></body></html>`,
-      );
-      w.document.close();
-      setPrintErr(r.error);
-      return;
-    }
-    w.document.open();
-    w.document.write(r.text);
-    w.document.close();
-  }
-
   async function savePdf(): Promise<void> {
     setPrintErr(null);
     setBusy(true);
@@ -911,8 +713,7 @@ function NinteiCertificatePrintBlock(): JSX.Element {
   return (
     <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
       <PanelHint>
-        事業者マスタ（設定の事業者情報）から初期表示します。この画面での修正は印刷にだけ使われ、保存されません。印刷ダイアログで A4
-        縦を選んでください。
+        事業者マスタ（設定の事業者情報）から初期表示します。この画面での修正は PDF 出力にのみ使われ、保存されません。
       </PanelHint>
       {loadErr ? (
         <p className="settings-hint" style={{ color: "var(--danger, #b00020)", marginTop: "0.5rem" }}>
@@ -948,9 +749,6 @@ function NinteiCertificatePrintBlock(): JSX.Element {
           <button type="button" className="settings-primary" disabled={busy} onClick={() => void savePdf()}>
             {busy ? "生成中…" : "PDFで保存"}
           </button>
-          <button type="button" className="settings-secondary" disabled={busy} onClick={() => void print()}>
-            {busy ? "取得中…" : "ブラウザで開いて印刷"}
-          </button>
           <Link to="/settings">設定（事業者情報）へ</Link>
         </p>
         {printErr ? (
@@ -967,44 +765,6 @@ function YakkanPrintBlock(): JSX.Element {
   const [bodyText, setBodyText] = useState(DAIKO_STANDARD_YAKKAN_DEFAULT_BODY);
   const [printErr, setPrintErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  async function print(): Promise<void> {
-    setPrintErr(null);
-    if (!bodyText.trim()) {
-      setPrintErr("約款の本文が空です");
-      return;
-    }
-    const w = window.open("", "_blank");
-    if (!w) {
-      setPrintErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
-      return;
-    }
-    w.document.open();
-    w.document.write(
-      '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>取得中</title></head><body><p>取得中…</p></body></html>',
-    );
-    w.document.close();
-
-    setBusy(true);
-    const r = await apiFetchText("/documents/daiko-yakkan-print", {
-      method: "POST",
-      json: { bodyText },
-    });
-    setBusy(false);
-    if (!r.ok) {
-      const msg = r.error.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-      w.document.open();
-      w.document.write(
-        `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>エラー</title><style>body{font-family:sans-serif;padding:1rem}</style></head><body><p>${msg}</p><p><button type="button" onclick="window.close()">閉じる</button></p></body></html>`,
-      );
-      w.document.close();
-      setPrintErr(r.error);
-      return;
-    }
-    w.document.open();
-    w.document.write(r.text);
-    w.document.close();
-  }
 
   async function savePdf(): Promise<void> {
     setPrintErr(null);
@@ -1028,7 +788,7 @@ function YakkanPrintBlock(): JSX.Element {
   return (
     <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
       <PanelHint>
-        標準自動車運転代行業約款（告示）の全文を初期表示しています。必要に応じて編集してから印刷してください（印刷画面のみ。マスタには保存されません）。
+        標準自動車運転代行業約款（告示）の全文を初期表示しています。必要に応じて編集してから PDF で保存してください（この画面の内容はマスタに保存されません）。
       </PanelHint>
       <div className="settings-form" style={{ marginTop: "0.75rem", maxWidth: "48rem" }}>
         <label>約款本文</label>
@@ -1042,9 +802,6 @@ function YakkanPrintBlock(): JSX.Element {
         <p style={{ marginTop: "0.85rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
           <button type="button" className="settings-primary" disabled={busy} onClick={() => void savePdf()}>
             {busy ? "生成中…" : "PDFで保存"}
-          </button>
-          <button type="button" className="settings-secondary" disabled={busy} onClick={() => void print()}>
-            {busy ? "取得中…" : "ブラウザで開いて印刷"}
           </button>
           <Link to="/settings">設定（事業者情報）へ</Link>
         </p>
@@ -1119,7 +876,7 @@ export default function DocumentsPage(): JSX.Element {
   return (
     <Card title="書類を作る">
       <p className="settings-hint" style={{ marginTop: 0 }}>
-        帳票・様式は種類ごとのタブに分けています。出力・印刷の本体機能は順次追加します。
+        帳票・様式は種類ごとのタブに分けています。出力機能は順次追加します。
       </p>
       <Tabs items={tabItems} activeId={tab} onActiveChange={setTab} aria-label="書類の種類" />
     </Card>

@@ -83,48 +83,6 @@ export async function apiFetch<T>(
   return { ok: true, data: body as T };
 }
 
-/** JSON 以外（HTML 等）の本文をそのまま返す。`json` を渡すと POST（Content-Type: application/json） */
-export async function apiFetchText(
-  path: string,
-  init: RequestInit & { json?: unknown } = {},
-): Promise<{ ok: true; text: string } | { ok: false; status: number; error: string }> {
-  const { json, headers: hdr, ...rest } = init;
-  const url = path.startsWith("http") ? path : `${API}${path.startsWith("/") ? path : `/${path}`}`;
-
-  const doFetch = (): Promise<Response> => {
-    const headers = new Headers(hdr);
-    const token = getAccessToken();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-    if (json !== undefined) {
-      headers.set("Content-Type", "application/json");
-    }
-    return fetch(url, {
-      ...rest,
-      headers,
-      body: json !== undefined ? JSON.stringify(json) : rest.body,
-    });
-  };
-
-  let res = await doFetch();
-  if (res.status === 401 && !url.includes("/auth/refresh")) {
-    const refreshed = await tryRefresh();
-    if (refreshed) res = await doFetch();
-  }
-
-  const text = await res.text();
-  if (!res.ok) {
-    let err = res.statusText;
-    try {
-      const o = JSON.parse(text) as { error?: string };
-      if (o?.error) err = String(o.error);
-    } catch {
-      if (text.length < 400) err = text;
-    }
-    return { ok: false, status: res.status, error: err };
-  }
-  return { ok: true, text };
-}
-
 /** PDF などバイナリ。401 時は refresh して 1 回だけ再試行。 */
 export async function apiFetchBlob(
   path: string,
