@@ -28,14 +28,31 @@ export const PRINT_BUSINESS_BASE_CSS = `
     border: none !important;
     padding: 0 !important;
     margin: 0 !important;
+    break-after: page;
+    page-break-after: always;
+  }
+  .pd-doc:last-of-type {
+    break-after: auto;
+    page-break-after: auto;
   }
 }
 @media screen {
+  /** 印刷プレビュー用ウィンドウが狭いと A4 幅が潰れるため、用紙相当の最低幅を確保する */
   body.pd-body {
     background: #e5e7eb;
     min-height: 100vh;
     padding: 18px 16px 32px;
     margin: 0;
+    min-width: 220mm;
+  }
+  /** 画面上では改ページが見えないため、枚ごとに区切りを付ける */
+  body.pd-body .pd-doc {
+    margin-bottom: 40px !important;
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.1);
+    border-radius: 2px;
+  }
+  body.pd-body .pd-doc:last-of-type {
+    margin-bottom: 20px !important;
   }
 }
 body.pd-body {
@@ -67,9 +84,7 @@ body.pd-body {
   margin: 0 auto 20px;
   padding: 0;
   background: var(--pd-paper);
-  page-break-after: always;
 }
-.pd-doc:last-of-type { page-break-after: auto; }
 .pd-hint {
   text-align: center;
   font-size: 10px;

@@ -149,7 +149,7 @@ export function buildDaikoNinteiCertificatePrintHtml(args: {
 
   return `<!DOCTYPE html><html lang="ja"><head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="viewport" content="width=1280"/>
 <title>自動車運転代行業 認定証</title>
 <style>${NINTEI_CSS}</style>
 </head><body class="pd-body">

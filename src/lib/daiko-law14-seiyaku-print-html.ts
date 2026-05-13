@@ -228,7 +228,7 @@ export function buildDaikoLaw14SeiyakuPrintHtml(args: {
 
   return `<!DOCTYPE html><html lang="ja"><head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="viewport" content="width=1280"/>
 <title>運転代行業法第14条第1項 誓約書</title>
 <style>${SEIYAKU_CSS}</style>
 </head><body class="pd-body">
