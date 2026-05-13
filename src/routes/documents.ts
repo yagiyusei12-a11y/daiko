@@ -7,6 +7,7 @@ import { buildJommuKirokuboHtmlBundle, type JommuKirokuboModel } from "../lib/jo
 import { loadJommuKirokuboModelForDailyReport } from "../lib/jommu-daily-report-model.js";
 import { buildDaikoLaw14SeiyakuPrintHtml } from "../lib/daiko-law14-seiyaku-print-html.js";
 import { buildDaikoNinteiCertificatePrintHtml } from "../lib/daiko-nintei-certificate-print-html.js";
+import { buildDaikoYakkanPrintHtml } from "../lib/daiko-yakkan-print-html.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_JOMMU_RANGE_DAYS = 400;
@@ -20,6 +21,7 @@ const MAX_NINTEI_ISSUING = 300;
 const MAX_NINTEI_CERT_RAW = 120;
 const MAX_NINTEI_NAME = 300;
 const MAX_NINTEI_LOCATION = 800;
+const MAX_YAKKAN_BODY = 500_000;
 
 export async function registerDocumentsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
@@ -171,6 +173,19 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
       nameOrTitle,
       location,
     });
+    return reply.type("text/html; charset=utf-8").send(html);
+  });
+
+  app.post("/documents/daiko-yakkan-print", async (req, reply) => {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const bodyText = String(b.bodyText ?? "");
+    if (!bodyText.trim()) {
+      return reply.code(400).send({ error: "約款の本文を入力してください" });
+    }
+    if (bodyText.length > MAX_YAKKAN_BODY) {
+      return reply.code(400).send({ error: "約款の本文が長すぎます" });
+    }
+    const html = buildDaikoYakkanPrintHtml({ bodyText });
     return reply.type("text/html; charset=utf-8").send(html);
   });
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch, apiFetchText } from "../api";
 import { DAIKO_LAW14_DEFAULT_PLEDGE_BODY } from "../lib/daikoLaw14DefaultPledge";
+import { DAIKO_STANDARD_YAKKAN_DEFAULT_BODY } from "../lib/daikoYakkanDefaultBody";
 import { Card, Tabs, type TabDef } from "../ui";
 
 function PanelHint({ children }: { children: React.ReactNode }): JSX.Element {
@@ -836,6 +837,79 @@ function NinteiCertificatePrintBlock(): JSX.Element {
   );
 }
 
+function YakkanPrintBlock(): JSX.Element {
+  const [bodyText, setBodyText] = useState(DAIKO_STANDARD_YAKKAN_DEFAULT_BODY);
+  const [printErr, setPrintErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function print(): Promise<void> {
+    setPrintErr(null);
+    if (!bodyText.trim()) {
+      setPrintErr("約款の本文が空です");
+      return;
+    }
+    const w = window.open("", "_blank");
+    if (!w) {
+      setPrintErr("ポップアップがブロックされました。ブラウザの設定から許可してください。");
+      return;
+    }
+    w.document.open();
+    w.document.write(
+      '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>取得中</title></head><body><p>取得中…</p></body></html>',
+    );
+    w.document.close();
+
+    setBusy(true);
+    const r = await apiFetchText("/documents/daiko-yakkan-print", {
+      method: "POST",
+      json: { bodyText },
+    });
+    setBusy(false);
+    if (!r.ok) {
+      const msg = r.error.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+      w.document.open();
+      w.document.write(
+        `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>エラー</title><style>body{font-family:sans-serif;padding:1rem}</style></head><body><p>${msg}</p><p><button type="button" onclick="window.close()">閉じる</button></p></body></html>`,
+      );
+      w.document.close();
+      setPrintErr(r.error);
+      return;
+    }
+    w.document.open();
+    w.document.write(r.text);
+    w.document.close();
+  }
+
+  return (
+    <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
+      <PanelHint>
+        標準自動車運転代行業約款（告示）の全文を初期表示しています。必要に応じて編集してから印刷してください（印刷画面のみ。マスタには保存されません）。
+      </PanelHint>
+      <div className="settings-form" style={{ marginTop: "0.75rem", maxWidth: "48rem" }}>
+        <label>約款本文</label>
+        <textarea
+          value={bodyText}
+          onChange={(e) => setBodyText(e.target.value)}
+          rows={28}
+          spellCheck={false}
+          style={{ width: "100%", minHeight: "22rem", fontFamily: "inherit", fontSize: "0.9rem", lineHeight: 1.55 }}
+        />
+        <p style={{ marginTop: "0.85rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
+          <button type="button" className="settings-primary" disabled={busy} onClick={() => void print()}>
+            {busy ? "取得中…" : "約款を印刷（A4 縦）"}
+          </button>
+          <Link to="/settings">設定（事業者情報）へ</Link>
+        </p>
+        {printErr ? (
+          <p className="settings-hint" style={{ color: "var(--danger, #b00020)", marginTop: "0.5rem" }}>
+            {printErr}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function DocumentsPage(): JSX.Element {
   const [tab, setTab] = useState("nippo");
 
@@ -863,11 +937,7 @@ export default function DocumentsPage(): JSX.Element {
     {
       id: "yakkan",
       label: "約款",
-      children: (
-        <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
-          <PanelHint>標準自動車運送約款の届出様式イメージなどの出力は、今後このタブから行える予定です。</PanelHint>
-        </div>
-      ),
+      children: <YakkanPrintBlock />,
     },
     {
       id: "shido",
