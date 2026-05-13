@@ -312,7 +312,8 @@ model Vehicle {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  dailyReports DailyReport[]
+  dailyReportsMain   DailyReport[] @relation("DailyReportMainVehicle")
+  dailyReportsEscort DailyReport[] @relation("DailyReportEscortVehicle")
   dispatchReservations DispatchReservation[]
 
   @@index([tenantId, active])
@@ -450,11 +451,17 @@ model DailyReport {
   tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   businessDate      String
   vehicleId         String
-  vehicle           Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  vehicle           Vehicle   @relation("DailyReportMainVehicle", fields: [vehicleId], references: [id], onDelete: Restrict)
   mainEmployeeId    String
   mainEmployee      Employee  @relation("DailyReportMain", fields: [mainEmployeeId], references: [id], onDelete: Restrict)
   partnerEmployeeId String?
   partnerEmployee   Employee? @relation("DailyReportPartner", fields: [partnerEmployeeId], references: [id], onDelete: SetNull)
+  /// 勤務セッション: 随伴車（客車は vehicleId）
+  escortVehicleId      String?
+  escortVehicle        Vehicle? @relation("DailyReportEscortVehicle", fields: [escortVehicleId], references: [id], onDelete: SetNull)
+  /// メーター型のODO（メーカー距離）km 等、運用で整数単位を統一
+  escortOdometerStartM Int?
+  escortOdometerEndM   Int?
   meterStart        Int
   meterEnd          Int
   dutyStartAt       DateTime?

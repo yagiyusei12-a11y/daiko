@@ -25,6 +25,9 @@ export default function DailyReportsMenuPage(): JSX.Element {
   const [businessDate, setBusinessDate] = useState(tokyoTodayYmd);
   const [vehicleId, setVehicleId] = useState("");
   const [employeeId, setEmployeeId] = useState("");
+  const [partnerId, setPartnerId] = useState("");
+  const [escortVehicleId, setEscortVehicleId] = useState("");
+  const [escortOdoStart, setEscortOdoStart] = useState(0);
   const [meterStart, setMeterStart] = useState(0);
   const [meterEnd, setMeterEnd] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -61,7 +64,16 @@ export default function DailyReportsMenuPage(): JSX.Element {
     setErr(null);
     const r = await apiFetch<{ id: string }>("/daily-reports", {
       method: "POST",
-      json: { businessDate, vehicleId, mainEmployeeId: employeeId, meterStart, meterEnd },
+      json: {
+        businessDate,
+        vehicleId,
+        mainEmployeeId: employeeId,
+        meterStart,
+        meterEnd,
+        partnerEmployeeId: partnerId || undefined,
+        escortVehicleId: escortVehicleId || undefined,
+        escortOdometerStartM: escortVehicleId ? escortOdoStart : undefined,
+      },
     });
     setBusy(false);
     if (!r.ok) setErr(r.error);
@@ -134,12 +146,12 @@ export default function DailyReportsMenuPage(): JSX.Element {
             </h2>
             <div className="attend-shift-dialog-scroll">
               <p className="settings-hint">
-                作成後、運行ごとに迎車・左ハンドル等の付帯料金を入力できます（設定の基本額が初期値）。ペア・随伴車・GPS などの詳細ウィザードは順次拡張予定です。
+                作成後に日報詳細で勤務セッション（ペア・随伴車・ODO）と運行ウィザードを入力します。ここで先にペア等を入れても構いません。
               </p>
               <div className="settings-form">
                 <label htmlFor="dr-create-date">事業日</label>
                 <input id="dr-create-date" type="date" value={businessDate} onChange={(e) => setBusinessDate(e.target.value)} />
-                <label htmlFor="dr-create-veh">車両</label>
+                <label htmlFor="dr-create-veh">客車</label>
                 <select id="dr-create-veh" value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
                   <option value="">選択</option>
                   {vehicles.map((v) => (
@@ -157,6 +169,39 @@ export default function DailyReportsMenuPage(): JSX.Element {
                     </option>
                   ))}
                 </select>
+                <label htmlFor="dr-create-partner">ペア（任意）</label>
+                <select
+                  id="dr-create-partner"
+                  value={partnerId}
+                  onChange={(e) => setPartnerId(e.target.value)}
+                >
+                  <option value="">未設定</option>
+                  {employees
+                    .filter((e) => e.id !== employeeId)
+                    .map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.familyName} {e.givenName}
+                      </option>
+                    ))}
+                </select>
+                <label htmlFor="dr-create-escort">随伴車（任意）</label>
+                <select id="dr-create-escort" value={escortVehicleId} onChange={(e) => setEscortVehicleId(e.target.value)}>
+                  <option value="">未設定</option>
+                  {vehicles.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+                <label htmlFor="dr-create-escort-odo">随伴車ODO開始（任意）</label>
+                <input
+                  id="dr-create-escort-odo"
+                  type="number"
+                  min={0}
+                  disabled={!escortVehicleId}
+                  value={escortOdoStart}
+                  onChange={(e) => setEscortOdoStart(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                />
                 <label htmlFor="dr-create-ms">メーター始</label>
                 <input
                   id="dr-create-ms"
