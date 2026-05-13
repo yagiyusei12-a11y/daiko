@@ -727,22 +727,110 @@ td {
 }
 
 .settings-primary {
-  margin-top: 0.85rem;
   align-self: flex-start;
 }
 
-.settings-danger {
-  margin-top: 0.85rem;
+/* type="button" の既定が地色＋細枠のため、主要・副次・危険操作を色分けする */
+button.settings-primary {
+  margin-top: 0.55rem;
+  border-color: transparent;
+  background: linear-gradient(180deg, var(--color-accent) 0%, var(--color-accent-hover) 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-accent) 38%, transparent);
+}
+
+button.settings-primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-accent) 42%, transparent);
+  transform: translateY(-1px);
+}
+
+button.settings-primary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-muted), 0 2px 8px color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+button.settings-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+}
+
+.settings-toolbar button.settings-primary,
+.settings-list-item-split button.settings-primary {
+  margin-top: 0;
+}
+
+button.settings-secondary {
+  margin-top: 0.55rem;
+  border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border-strong));
+  background: color-mix(in srgb, var(--color-surface) 82%, var(--color-accent-muted));
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+button.settings-secondary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent-muted) 50%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-accent) 42%, var(--color-border-strong));
+}
+
+button.settings-secondary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-muted);
+}
+
+button.settings-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.settings-toolbar button.settings-secondary,
+.settings-list-item-split button.settings-secondary {
+  margin-top: 0;
+}
+
+button.settings-danger {
+  margin-top: 0.55rem;
   margin-left: 0.5rem;
+  border: 1px solid #dc2626;
+  background: #fef2f2;
+  color: #991b1b;
+  font-weight: 600;
+}
+
+button.settings-danger:hover:not(:disabled) {
+  background: #fee2e2;
   border-color: #b91c1c;
-  color: #b91c1c;
-  background: transparent;
+  color: #7f1d1d;
+}
+
+button.settings-danger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.25);
+}
+
+button.settings-danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.settings-list-item-split button.settings-danger {
+  margin-top: 0;
+  margin-left: 0;
 }
 
 @media (prefers-color-scheme: dark) {
-  .settings-danger {
-    color: #fca5a5;
+  button.settings-danger {
+    background: rgba(220, 38, 38, 0.22);
+    color: #fecaca;
+    border-color: #f87171;
+  }
+
+  button.settings-danger:hover:not(:disabled) {
+    background: rgba(220, 38, 38, 0.32);
     border-color: #fca5a5;
+    color: #fff;
   }
 }
 

@@ -10,8 +10,6 @@ function tokyoTodayYmd(): string {
 type ReportRow = {
   id: string;
   businessDate: string;
-  meterStart: number;
-  meterEnd: number;
   mainEmployeeName: string;
   escortVehicleLabel: string | null;
 };
@@ -126,13 +124,10 @@ export default function DailyReportsMenuPage(): JSX.Element {
                     {r.mainEmployeeName}
                     {r.escortVehicleLabel ? ` · ${r.escortVehicleLabel}` : " · 随伴未設定"}
                   </span>
-                  <span className="settings-list-meta">
-                    メーター {r.meterStart}→{r.meterEnd}
-                  </span>
                 </Link>
                 <button
                   type="button"
-                  className="settings-secondary settings-list-delete-btn"
+                  className="settings-danger settings-list-delete-btn"
                   disabled={busy}
                   aria-label={`${r.mainEmployeeName}の日報を削除`}
                   onClick={() => void deleteReport(r.id, r.mainEmployeeName, r.escortVehicleLabel)}
