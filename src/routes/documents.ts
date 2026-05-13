@@ -3,7 +3,8 @@ import { authenticate, jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
 import { buildEmployeeRosterPrintHtml } from "../lib/employee-roster-print-html.js";
 import { hasSecondClassDriverLicense } from "../lib/employee-license.js";
-import { buildJommuKirokuboHtmlBundle, type JommuKirokuboModel } from "../lib/jommu-kirokubo-html.js";
+import type { JommuKirokuboModel } from "../lib/jommu-types.js";
+import { isLibreOfficeConfigured, renderJommuKirokuboPdfBundle } from "../lib/jommu-excel-pdf.js";
 import { loadJommuKirokuboModelForDailyReport } from "../lib/jommu-daily-report-model.js";
 import { buildDaikoLaw14SeiyakuPrintHtml } from "../lib/daiko-law14-seiyaku-print-html.js";
 import { buildDaikoNinteiCertificatePrintHtml } from "../lib/daiko-nintei-certificate-print-html.js";
@@ -305,9 +306,30 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
     );
     const ok = models.filter((m): m is JommuKirokuboModel => m != null);
 
-    const title = `乗務記録簿（${from}〜${to}）`;
-    const html = buildJommuKirokuboHtmlBundle(ok, title);
-    return sendHtmlOrPdf(reply, req, b, html, `daily-reports-jommu_${from}_${to}`);
+    if (!wantsPdfOutput(b)) {
+      return reply.code(400).send({
+        error:
+          "乗務記録簿は Excel テンプレートから PDF のみ出力します。リクエスト body の outputFormat に pdf を指定してください。",
+      });
+    }
+    if (!isLibreOfficeConfigured()) {
+      return reply.code(503).send({
+        error:
+          "乗務記録簿の PDF にはサーバーに LibreOffice（soffice）のインストールと、必要に応じた環境変数 LIBREOFFICE_SOFFICE の設定が必要です。管理者に連絡してください。",
+      });
+    }
+    try {
+      const buf = await renderJommuKirokuboPdfBundle(ok);
+      const safe =
+        `daily-reports-jommu_${from}_${to}`.replace(/[^\w.-]+/g, "_").slice(0, 120) || "document";
+      return reply
+        .type("application/pdf")
+        .header("Content-Disposition", `attachment; filename="${safe}.pdf"`)
+        .send(buf);
+    } catch (e) {
+      req.log.error(e);
+      return reply.code(500).send({ error: "乗務記録簿 PDF の生成に失敗しました。時間をおいて再度お試しください。" });
+    }
   });
 
   app.get<{ Querystring: { includeRetired?: string } }>(

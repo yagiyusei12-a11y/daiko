@@ -35,4 +35,4 @@ jobs:
           chmod 600 ~/.ssh/daiko_deploy_ci
           ssh -i ~/.ssh/daiko_deploy_ci -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
             "${u}@${VPS_HOST}" \
-            "set -euo pipefail; export DAIKO_CD=${esc_cd}; cd \"\${DAIKO_CD:-\$HOME/daiko}\"; git pull; if [ -f package-lock.json ]; then npm ci; else npm install; fi; npx prisma migrate deploy; npx prisma generate; npm run db:seed; npm run build; sudo systemctl restart ${esc_svc}; sleep 2; curl -sS http://127.0.0.1:3001/health"
+            "set -euo pipefail; export DAIKO_CD=${esc_cd}; cd \"\${DAIKO_CD:-\$HOME/daiko}\"; git pull; if [ -f package-lock.json ]; then npm ci; else npm install; fi; npx prisma migrate deploy; npx prisma generate; npm run db:seed; npm run build; bash scripts/ensure-chromium-env.sh; bash scripts/ensure-libreoffice-env.sh; sudo systemctl restart ${esc_svc}; sleep 2; curl -sS http://127.0.0.1:3001/health"

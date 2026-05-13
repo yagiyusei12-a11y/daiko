@@ -5,7 +5,7 @@ import { prisma } from "../db.js";
 import { coercePricingPrefs, mergeLegSurchargesJson, tripSurchargeDefaults } from "../lib/pricing-prefs.js";
 import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
 import { hasSecondClassDriverLicense } from "../lib/employee-license.js";
-import { buildJommuKirokuboHtml } from "../lib/jommu-kirokubo-html.js";
+import { isLibreOfficeConfigured, renderJommuKirokuboPdf } from "../lib/jommu-excel-pdf.js";
 import { loadJommuKirokuboModelForDailyReport } from "../lib/jommu-daily-report-model.js";
 
 function asObj(v: unknown): Record<string, unknown> {
@@ -318,8 +318,23 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     const id = String(req.params.id || "");
     const model = await loadJommuKirokuboModelForDailyReport(tenantId, id);
     if (!model) return reply.code(404).send({ error: "not found" });
-    const html = buildJommuKirokuboHtml(model);
-    return reply.type("text/html; charset=utf-8").send(html);
+    if (!isLibreOfficeConfigured()) {
+      return reply.code(503).send({
+        error:
+          "乗務記録簿の PDF にはサーバーに LibreOffice（soffice）が必要です。管理者に LIBREOFFICE_SOFFICE の設定またはインストールを依頼してください。",
+      });
+    }
+    try {
+      const buf = await renderJommuKirokuboPdf(model);
+      const safe = `jommu_${model.businessDateYmd}`.replace(/[^\w.-]+/g, "_").slice(0, 120) || "jommu";
+      return reply
+        .type("application/pdf")
+        .header("Content-Disposition", `attachment; filename="${safe}.pdf"`)
+        .send(buf);
+    } catch (e) {
+      req.log.error(e);
+      return reply.code(500).send({ error: "乗務記録簿 PDF の生成に失敗しました" });
+    }
   });
 
   app.get("/daily-reports/:id", async (req, reply) => {

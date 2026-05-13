@@ -2,11 +2,12 @@
 # -*- coding: utf-8 -*-
 """
 zyoumukiroku.xlsx から列幅・行高・罫線・フォント・背景（テーマ色解決含む）を抽出し、
-日報乗務記録簿 HTML 用の TypeScript 定数ファイルを生成する。
+要約 JSON を生成する（テンプレの検査・差分確認用）。
 
 出力:
   - src/lib/jommu-excel-spec.compact.json … 要約（Git 用・小容量）
-  - src/lib/jommu-excel-layout.generated.ts … jommu-kirokubo-html.ts から import
+
+乗務記録簿の印刷レイアウトは templates/jommu-zyoumukiroku.xlsx と src/lib/jommu-excel-fill.ts を参照。
 
 使い方:
   python scripts/extract_jommu_excel_spec.py [入力.xlsx]
@@ -252,7 +253,6 @@ def main() -> int:
     bg1 = ws["BG1"]
     retention_font = _font(bg1.font)
 
-    sample_border = _border(a6.border)
     compact: dict[str, Any] = {
         "sourceFile": str(in_path.resolve()),
         "sheet": ws.title,
@@ -269,53 +269,12 @@ def main() -> int:
     compact_path = root / "src" / "lib" / "jommu-excel-spec.compact.json"
     compact_path.write_text(json.dumps(compact, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    def esc_ts(s: str) -> str:
-        return json.dumps(s, ensure_ascii=False)
-
-    title_name = title_font.get("name") or "ＭＳ Ｐ明朝"
-    title_sz = float(title_font.get("size") or 20)
-    ret_sz = float(retention_font.get("size") or 10)
-    body_sz = float(cells["A6"]["font"].get("size") or 10) if "A6" in cells else 10.0
-
-    frac_literal = "[" + ", ".join(str(f) for f in col_frac) + "] as const"
-
-    ts_body = f"""/**
- * 自動生成: `python scripts/extract_jommu_excel_spec.py`
- * 元ファイル: {in_path.name}
- * ヘッダー地色・列幅比率・フォントサイズは Excel から解決した値。
- */
-export const JOMMU_EXCEL_SOURCE_FILE = {esc_ts(in_path.name)};
-
-/** 乗務記録ヘッダー帯（A6 塗りつぶしの解決色） */
-export const JOMMU_EXCEL_HEADER_FILL = {esc_ts(header_fill)};
-
-/** タイトル「乗 務 記 録 簿」行のフォント */
-export const JOMMU_EXCEL_TITLE_FONT_FAMILY = {esc_ts(title_name + ", MS PMincho, Noto Serif CJK JP, Yu Mincho, serif")};
-export const JOMMU_EXCEL_TITLE_FONT_PT = {title_sz} as const;
-
-/** 保存期間（右上） */
-export const JOMMU_EXCEL_RETENTION_FONT_PT = {ret_sz} as const;
-
-/** 明細ヘッダー・本文の基準 */
-export const JOMMU_EXCEL_BODY_FONT_PT = {body_sz} as const;
-
-/** メイン表 12 列の幅比率（Excel A,B:J,…,BX:CB の合計 px から算出） */
-export const JOMMU_EXCEL_TABLE_COL_FRAC = {frac_literal};
-
-/** Excel サンプル左罫線スタイル（medium 等） */
-export const JOMMU_EXCEL_HEADER_BORDER_LEFT = {esc_ts(str((sample_border.get("left") or {}).get("style") or "medium"))};
-"""
-
-    out_ts = root / "src" / "lib" / "jommu-excel-layout.generated.ts"
-    out_ts.write_text(ts_body, encoding="utf-8")
-
     # 旧フル JSON は巨大なので削除（存在すれば）
     legacy = root / "src" / "lib" / "jommu-excel-spec.json"
     if legacy.is_file():
         legacy.unlink()
 
     print(f"Wrote {compact_path}")
-    print(f"Wrote {out_ts}")
     return 0
 
 

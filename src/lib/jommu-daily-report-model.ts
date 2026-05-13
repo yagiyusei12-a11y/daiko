@@ -2,7 +2,7 @@
 
 import { TimeCardPunchKind } from "@prisma/client";
 import { prisma } from "../db.js";
-import type { JommuKirokuboModel, JommuTripRow } from "./jommu-kirokubo-html.js";
+import type { JommuKirokuboModel, JommuTripRow } from "./jommu-types.js";
 
 export function hmTokyo(d: Date): string {
   if (Number.isNaN(d.getTime())) return "";
