@@ -9,9 +9,8 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import ExcelJS from "exceljs";
 import { PDFDocument } from "pdf-lib";
-import { fillJommuWorksheet } from "./jommu-excel-fill.js";
+import { buildJommuFilledXlsxBuffer } from "./jommu-populate-fill.js";
 import type { JommuKirokuboModel } from "./jommu-types.js";
 
 const execFileAsync = promisify(execFile);
@@ -58,6 +57,23 @@ function execErrDetails(err: unknown): string {
   return parts.join(" | ");
 }
 
+async function readPdfAfterSoffice(dir: string, base: string, stderr: string): Promise<Buffer> {
+  const expected = path.join(dir, `${base}.pdf`);
+  if (existsSync(expected)) return fs.readFile(expected);
+  const names = await fs.readdir(dir);
+  const pdfs = names.filter((n) => n.toLowerCase().endsWith(".pdf"));
+  if (pdfs.length === 1) return fs.readFile(path.join(dir, pdfs[0]!));
+  const exact = pdfs.find((n) => n === `${base}.pdf`);
+  if (exact) return fs.readFile(path.join(dir, exact));
+  const listing = names.join(", ");
+  const warn = stderr.trim();
+  throw new Error(
+    `LibreOffice が PDF を出力しませんでした（期待: ${expected}）。` +
+      ` 作業ディレクトリ内: [${listing}]` +
+      (warn ? ` soffice stderr: ${warn}` : ""),
+  );
+}
+
 async function xlsxBufferToPdf(xlsxBuffer: Buffer): Promise<Buffer> {
   const soffice = getLibreOfficeExecutable();
   if (!soffice) {
@@ -71,61 +87,62 @@ async function xlsxBufferToPdf(xlsxBuffer: Buffer): Promise<Buffer> {
 
   const base = `jommu-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const xlsxPath = path.join(dir, `${base}.xlsx`);
-  const pdfPath = path.join(dir, `${base}.pdf`);
 
   await fs.writeFile(xlsxPath, xlsxBuffer);
 
-  const childEnv = {
-    ...process.env,
-    /** systemd / Node 子プロセスで LO が書き込み可能な場所に固定（プロファイル・キャッシュ用） */
+  const childEnv: NodeJS.ProcessEnv = { ...process.env };
+  delete childEnv.DISPLAY;
+  Object.assign(childEnv, {
     HOME: dir,
     TMPDIR: dir,
     TMP: dir,
     TEMP: dir,
-    /** 実サーバーではディスプレイ無し。Ubuntu の LibreOffice は gen の方が通りやすいことが多い。 */
     SAL_USE_VCLPLUGIN: process.env.SAL_USE_VCLPLUGIN ?? "gen",
-  };
+  });
+
+  const loPrefix = [
+    `-env:UserInstallation=${userInst}`,
+    "--headless",
+    "--invisible",
+    "--nologo",
+    "--nolockcheck",
+    "--norestore",
+  ];
+
+  const convertFilters = ["pdf:calc_pdf_Export", "pdf"] as const;
 
   try {
-    const { stderr } = await execFileAsync(
-      soffice,
-      [
-        `-env:UserInstallation=${userInst}`,
-        "--headless",
-        "--invisible",
-        "--nologo",
-        "--nolockcheck",
-        "--norestore",
-        "--convert-to",
-        "pdf",
-        "--outdir",
-        dir,
-        xlsxPath,
-      ],
-      {
-        timeout: 120_000,
-        maxBuffer: 20 * 1024 * 1024,
-        env: childEnv,
-      },
-    );
-    try {
-      return await fs.readFile(pdfPath);
-    } catch (readErr) {
-      let listing = "";
-      try {
-        listing = (await fs.readdir(dir)).join(", ");
-      } catch {
-        listing = "(readdir failed)";
+    let lastReadErr: unknown;
+    for (const filter of convertFilters) {
+      for (const n of await fs.readdir(dir).catch(() => [] as string[])) {
+        if (n.toLowerCase().endsWith(".pdf")) {
+          await fs.rm(path.join(dir, n), { force: true }).catch(() => undefined);
+        }
       }
-      const warn = strFromExecOut(stderr).trim();
-      const msg =
-        `LibreOffice が PDF を出力しませんでした（期待: ${pdfPath}）。` +
-        ` 作業ディレクトリ内: [${listing}]` +
-        (warn ? ` soffice stderr: ${warn}` : "");
-      const wrapped = new Error(msg);
-      (wrapped as Error & { cause?: unknown }).cause = readErr;
-      throw wrapped;
+      let stderr = "";
+      try {
+        const r = await execFileAsync(
+          soffice,
+          [...loPrefix, "--convert-to", filter, "--outdir", dir, xlsxPath],
+          {
+            timeout: 120_000,
+            maxBuffer: 20 * 1024 * 1024,
+            env: childEnv,
+          },
+        );
+        stderr = strFromExecOut(r.stderr);
+      } catch (e) {
+        lastReadErr = e;
+        continue;
+      }
+      try {
+        return await readPdfAfterSoffice(dir, base, stderr);
+      } catch (e) {
+        lastReadErr = e;
+      }
     }
+    if (lastReadErr instanceof Error) throw lastReadErr;
+    throw new Error(String(lastReadErr ?? "LibreOffice PDF 変換に失敗しました"));
   } catch (e) {
     if (e instanceof Error && e.message.startsWith("LibreOffice が PDF")) throw e;
     const wrapped = new Error(`soffice の実行に失敗しました: ${execErrDetails(e)}`);
@@ -142,13 +159,7 @@ export async function renderJommuKirokuboPdf(model: JommuKirokuboModel): Promise
     throw new Error(`乗務記録簿テンプレが見つかりません: ${tplPath}（cwd=${process.cwd()}）`);
   }
   const tpl = await fs.readFile(tplPath);
-  const wb = new ExcelJS.Workbook();
-  // @ts-expect-error exceljs の xlsx.load の Buffer 型と Node の Buffer が一致しない（実行時は問題なし）
-  await wb.xlsx.load(tpl);
-  const ws = wb.getWorksheet(1);
-  if (!ws) throw new Error("Jommu template: sheet 1 not found");
-  fillJommuWorksheet(ws, model);
-  const xlsxBuf = Buffer.from(await wb.xlsx.writeBuffer());
+  const xlsxBuf = await buildJommuFilledXlsxBuffer(tpl, model);
   return xlsxBufferToPdf(xlsxBuf);
 }
 
@@ -168,7 +179,7 @@ export async function renderJommuKirokuboPdfBundle(models: JommuKirokuboModel[])
 
   const out = await PDFDocument.create();
   for (const buf of chunks) {
-    const src = await PDFDocument.load(buf);
+    const src = await PDFDocument.load(buf, { ignoreEncryption: true });
     const copied = await out.copyPages(src, src.getPageIndices());
     for (const p of copied) out.addPage(p);
   }
