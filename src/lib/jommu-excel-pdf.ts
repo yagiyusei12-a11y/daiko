@@ -41,6 +41,41 @@ export function isLibreOfficeConfigured(): boolean {
   return getLibreOfficeExecutable() !== null;
 }
 
+/** ヘッドレスサーバー用。Xvfb 経由で仮想 DISPLAY を用意する（Ubuntu: xvfb パッケージ）。 */
+function getXvfbRunExecutable(): string | null {
+  const fromEnv = process.env.XVFB_RUN_EXECUTABLE?.trim();
+  if (fromEnv && existsSync(fromEnv)) return fromEnv;
+  if (existsSync("/usr/bin/xvfb-run")) return "/usr/bin/xvfb-run";
+  return null;
+}
+
+/** Linux では可能なら xvfb-run で包む（LibreOffice の gen VCL が X を要求するため）。 */
+async function runSofficeConvert(
+  soffice: string,
+  sofficeArgv: string[],
+  childEnv: NodeJS.ProcessEnv,
+): Promise<{ stderr: string }> {
+  const xvfb = process.platform !== "win32" ? getXvfbRunExecutable() : null;
+  if (xvfb) {
+    const r = await execFileAsync(
+      xvfb,
+      ["-a", "--server-args=-screen 0 1280x1024x24 -ac", soffice, ...sofficeArgv],
+      {
+        timeout: 120_000,
+        maxBuffer: 20 * 1024 * 1024,
+        env: childEnv,
+      },
+    );
+    return { stderr: strFromExecOut(r.stderr) };
+  }
+  const r = await execFileAsync(soffice, sofficeArgv, {
+    timeout: 120_000,
+    maxBuffer: 20 * 1024 * 1024,
+    env: childEnv,
+  });
+  return { stderr: strFromExecOut(r.stderr) };
+}
+
 function strFromExecOut(x: string | Buffer | undefined): string {
   if (x === undefined) return "";
   return typeof x === "string" ? x : x.toString("utf8");
@@ -91,7 +126,6 @@ async function xlsxBufferToPdf(xlsxBuffer: Buffer): Promise<Buffer> {
   await fs.writeFile(xlsxPath, xlsxBuffer);
 
   const childEnv: NodeJS.ProcessEnv = { ...process.env };
-  delete childEnv.DISPLAY;
   Object.assign(childEnv, {
     HOME: dir,
     TMPDIR: dir,
@@ -122,16 +156,8 @@ async function xlsxBufferToPdf(xlsxBuffer: Buffer): Promise<Buffer> {
       }
       let stderr = "";
       try {
-        const r = await execFileAsync(
-          soffice,
-          [...loPrefix, "--convert-to", filter, "--outdir", dir, xlsxPath],
-          {
-            timeout: 120_000,
-            maxBuffer: 20 * 1024 * 1024,
-            env: childEnv,
-          },
-        );
-        stderr = strFromExecOut(r.stderr);
+        const r = await runSofficeConvert(soffice, [...loPrefix, "--convert-to", filter, "--outdir", dir, xlsxPath], childEnv);
+        stderr = r.stderr;
       } catch (e) {
         lastReadErr = e;
         continue;

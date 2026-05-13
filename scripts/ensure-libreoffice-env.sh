@@ -62,6 +62,20 @@ else
 fi
 set -e
 
+log "xvfb-run（LibreOffice が X11 を要求する環境向け）を確認します…"
+set +e
+if command -v xvfb-run >/dev/null 2>&1; then
+  log "xvfb-run: $(command -v xvfb-run)"
+else
+  sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
+  if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xvfb; then
+    log "xvfb をインストールしました。"
+  else
+    log "WARN: xvfb のインストールに失敗しました。LibreOffice PDF が X11 エラーで失敗する場合があります。"
+  fi
+fi
+set -e
+
 if [[ ! -f "$ENV_FILE" ]]; then
   log "WARN: $ENV_FILE がありません。スキップします。"
   exit 0
