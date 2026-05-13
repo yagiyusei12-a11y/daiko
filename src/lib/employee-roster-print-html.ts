@@ -1,4 +1,4 @@
-/** 従事者名簿（印刷用 HTML）。様式は一般的な従事者名簿のレイアウトに準拠。 */
+/** 従事者名簿（印刷用 HTML）。Excel 様式に準拠したレイアウト。 */
 
 import type { Employee } from "@prisma/client";
 
@@ -8,6 +8,11 @@ function esc(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/** img の src 用（data URL 等。& と " のみエスケープ） */
+function escAttr(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 }
 
 function asExt(j: unknown): Record<string, unknown> {
@@ -27,7 +32,6 @@ function licenseConditionsText(ext: Record<string, unknown>): string {
   return "";
 }
 
-/** Asia/Tokyo の暦日 YYYY-MM-DD */
 function ymdTokyo(d: Date): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Tokyo",
@@ -47,7 +51,6 @@ function ymdFromDbDate(d: Date): string {
   return ymdTokyo(d);
 }
 
-/** 生年月日・採用日から「採用時年齢」（満年齢、採用日時点） */
 function ageAtHireYears(birthYmd: string, hiredYmd: string): string {
   const b = splitYmd(birthYmd);
   const h = splitYmd(hiredYmd);
@@ -91,77 +94,92 @@ const PRINT_CSS = `
   body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
 body {
-  font-family: "MS Mincho","Yu Mincho","Noto Serif JP",serif;
-  font-size: 11px;
+  font-family: "MS P Gothic","MS PGothic","Yu Gothic","Meiryo",sans-serif;
+  font-size: 10.5pt;
   color: #000;
   margin: 0;
-  padding: 10px;
+  padding: 8px 10px;
 }
 .toolbar { margin-bottom: 8px; }
 .toolbar button { padding: 6px 12px; font-size: 12px; cursor: pointer; font-family: inherit; }
 .sheet {
-  max-width: 720px;
+  max-width: 185mm;
   margin: 0 auto 0;
   page-break-after: always;
+  border: 2px solid #000;
+  padding: 8px 10px 10px;
+  box-sizing: border-box;
 }
 .sheet:last-of-type { page-break-after: auto; }
-.head-meta {
-  display: flex;
-  justify-content: flex-end;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 4px;
-  font-size: 10px;
+.rtop { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 4px; }
+.rret { font-size: 9pt; text-align: right; flex: 1; }
+.rdates { border-collapse: collapse; font-size: 9pt; }
+.rdates td, .rdates th { border: 1px solid #000; padding: 2px 6px; vertical-align: middle; }
+.rdates .dl { background: #d7e4f7; font-weight: bold; text-align: center; white-space: nowrap; }
+.rtitle {
+  text-align: center;
+  font-size: 16pt;
+  font-weight: bold;
+  letter-spacing: 0.35em;
+  margin: 6px 0 10px;
+  text-indent: 0.35em;
 }
-.retention { text-align: right; white-space: nowrap; }
-.title-block { text-align: center; margin: 0 0 8px; position: relative; }
-.title-block h1 {
-  font-size: 18px;
-  font-weight: 700;
-  margin: 0;
-  letter-spacing: 0.12em;
+.rf {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  border: 2px solid #000;
 }
-.sub-operator { text-align: center; font-size: 10px; margin: 2px 0 6px; color: #222; }
-table.form { border-collapse: collapse; width: 100%; table-layout: fixed; }
-table.form th, table.form td {
+.rf td, .rf th {
   border: 1px solid #000;
   padding: 4px 5px;
   vertical-align: middle;
-  word-break: break-word;
+  font-size: 10pt;
 }
-table.form th.lbl, td.lbl {
-  background: #d9e8f7;
-  font-weight: 600;
+.rf .L {
+  background: #d7e4f7;
+  font-weight: bold;
   text-align: center;
-  width: 6.5em;
+  width: 5.5em;
 }
-td.lbl-narrow { background: #d9e8f7; font-weight: 600; text-align: center; width: 3em; }
-.t-center { text-align: center; }
-.t-right { text-align: right; }
-.ymd-parts span { display: inline-block; min-width: 2.2em; text-align: center; }
-.gender-mark { letter-spacing: 0.5em; }
-.license-photo-row td { height: 120px; vertical-align: top; padding: 4px; }
-.license-photo-box {
-  border: 1px dashed #666;
-  height: 108px;
+.rf .Lwide { background: #d7e4f7; font-weight: bold; text-align: center; width: 7em; }
+.rf .Lvert {
+  background: #d7e4f7;
+  font-weight: bold;
+  text-align: center;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  width: 1.8em;
+  letter-spacing: 0.15em;
+  padding: 6px 2px;
+}
+.rf .fg { font-size: 9pt; border-bottom: 1px dashed #999; min-height: 1.3em; padding: 2px 4px; }
+.rf .nm { font-size: 11pt; min-height: 1.6em; padding: 4px; }
+.rf .cen { text-align: center; }
+.rf .photo { height: 130px; vertical-align: top; padding: 4px; }
+.rf .photobox {
+  border: 1px dashed #555;
+  height: 118px;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
   background: #fafafa;
+  box-sizing: border-box;
 }
-.license-photo-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.empty-note { color: #555; font-size: 11px; padding: 24px 8px; text-align: center; }
+.rf .photobox img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.rf .phlbl { background: #d7e4f7; font-weight: bold; text-align: center; font-size: 9.5pt; }
+.cen { text-align: center; }
+.empty-note { padding: 16px; text-align: center; color: #444; }
 `;
 
 function ymdCells(ymd: string): string {
   const { y, m, d } = splitYmd(ymd);
-  if (!y) return '<span class="ymd-parts">　　年　　月　　日</span>';
-  return `<span class="ymd-parts"><span>${esc(y)}</span> 年 <span>${esc(m)}</span> 月 <span>${esc(d)}</span> 日</span>`;
+  if (!y) return "＿＿＿＿年　　月　　日";
+  return `${esc(y)}　年　${esc(m)}　月　${esc(d)}　日`;
 }
 
 function ymdCellsBlank(): string {
-  return '<span class="ymd-parts">＿＿＿＿年＿＿月＿＿日</span>';
+  return "＿＿＿＿年　　月　　日";
 }
 
 function buildOneSheet(emp: Employee, ctx: { createdYmd: string; operatorName: string }): string {
@@ -194,91 +212,88 @@ function buildOneSheet(emp: Employee, ctx: { createdYmd: string; operatorName: s
   const front = safeDataUrlImg(extStr(ext, "licensePhotoFrontDataUrl"));
   const back = safeDataUrlImg(extStr(ext, "licensePhotoBackDataUrl"));
 
-  const gMale = gender === "男" ? "✓" : "□";
-  const gFemale = gender === "女" ? "✓" : "□";
+  const mark = (which: "男" | "女") => (gender === which ? "（●）" : "（　）");
 
   return `<section class="sheet">
-<div class="head-meta">
-  <div>
-    <table class="form" style="width:auto;margin-left:auto;border:none;">
-      <tr>
-        <td class="lbl" style="width:4.5em;border:1px solid #000;">作成日</td>
-        <td style="border:1px solid #000;min-width:12em;">${ymdCells(ctx.createdYmd)}</td>
-        <td class="lbl" style="width:4.5em;border:1px solid #000;">修正日</td>
-        <td style="border:1px solid #000;min-width:12em;">${ymdCellsBlank()}</td>
-      </tr>
-    </table>
-  </div>
+<div class="rtop">
+  <div class="rret">〈保存期間：退職日から2年間〉</div>
+  <table class="rdates">
+    <tr>
+      <td class="dl">作成日</td>
+      <td>${ymdCells(ctx.createdYmd)}</td>
+      <td class="dl">修正日</td>
+      <td>${ymdCellsBlank()}</td>
+    </tr>
+  </table>
 </div>
-<div class="title-block">
-  <div class="retention">〈保存期間：退職日から2年間〉</div>
-  <h1>従事者名簿</h1>
-</div>
-${ctx.operatorName ? `<p class="sub-operator">${esc(ctx.operatorName)}</p>` : ""}
+<h1 class="rtitle">従　事　者　名　簿</h1>
+${ctx.operatorName ? `<p class="cen" style="margin:-4px 0 8px;font-size:9.5pt">${esc(ctx.operatorName)}</p>` : ""}
 
-<table class="form">
-  <colgroup><col style="width:14%"/><col style="width:18%"/><col style="width:10%"/><col style="width:12%"/><col style="width:12%"/><col style="width:12%"/><col style="width:22%"/></colgroup>
+<table class="rf">
   <tr>
-    <td class="lbl" colspan="2">ふりがな</td>
-    <td colspan="5">${esc(furigana)}</td>
-  </tr>
-  <tr>
-    <td class="lbl" colspan="2">氏名</td>
-    <td colspan="3">${esc(fullName)}</td>
-    <td class="lbl">性別</td>
-    <td class="t-center gender-mark">${gMale} 男　　${gFemale} 女</td>
-  </tr>
-  <tr>
-    <td class="lbl" colspan="2">生年月日</td>
-    <td colspan="2">${ymdCells(birth)}</td>
-    <td class="lbl" colspan="2">採用時年齢</td>
-    <td class="t-center">${esc(ageHire)}<span style="margin-left:4px;">歳</span></td>
-  </tr>
-  <tr>
-    <td class="lbl" colspan="2">住所</td>
-    <td colspan="5">〒 ${esc(zip)}　${esc(body)}</td>
-  </tr>
-  <tr>
-    <td class="lbl" rowspan="3" colspan="2">連絡先</td>
-    <td class="lbl">自宅</td>
-    <td colspan="4">${esc(phone)}</td>
-  </tr>
-  <tr>
-    <td class="lbl">携帯</td>
-    <td colspan="4">${esc(mobile)}</td>
-  </tr>
-  <tr>
-    <td class="lbl" colspan="5" style="text-align:left;padding-left:6px;"><strong>緊急連絡先</strong>　氏名 ${esc(emName)}　　続柄 ${esc(emRel)}　　電話 ${esc(emTel)}</td>
-  </tr>
-  <tr>
-    <td class="lbl" colspan="2">採用年月日</td>
-    <td colspan="2">${ymdCells(hired)}</td>
-    <td class="lbl" colspan="2">退職年月日</td>
-    <td>${ymdCells(retiredYmd)}</td>
-  </tr>
-  <tr>
-    <td class="lbl" rowspan="2" colspan="2">運転免許</td>
-    <td class="lbl">種類</td>
-    <td colspan="2">${esc(licKind)}</td>
-    <td class="lbl">番号</td>
-    <td>第 ${esc(licNum)} 号</td>
-  </tr>
-  <tr>
-    <td class="lbl">有効期限</td>
-    <td colspan="2">${ymdCells(licExp)}</td>
-    <td class="lbl">免許条件<br/>・限定等</td>
-    <td>${hasCond ? `あり（${esc(licCond)}）` : "なし"}</td>
-  </tr>
-  <tr class="license-photo-row">
-    <td class="lbl" colspan="3">運転免許証（表）</td>
-    <td class="lbl" colspan="4">運転免許証（裏）</td>
-  </tr>
-  <tr class="license-photo-row">
-    <td colspan="3">
-      <div class="license-photo-box">${front ? `<img src="${esc(front)}" alt=""/>` : ""}</div>
+    <td class="L" rowspan="2">氏名</td>
+    <td colspan="3" style="padding:0;vertical-align:top">
+      <div class="fg">${furigana ? esc(furigana) : "（　　　　　　　　　　　　　　　　　　　　　　　　　）"}</div>
+      <div class="nm">${esc(fullName)}</div>
     </td>
-    <td colspan="4">
-      <div class="license-photo-box">${back ? `<img src="${esc(back)}" alt=""/>` : ""}</div>
+    <td class="L">性別</td>
+    <td class="cen">${mark("男")}男　・　${mark("女")}女</td>
+    <td class="L">生年月日</td>
+    <td class="cen">${ymdCells(birth)}</td>
+  </tr>
+  <tr>
+    <td colspan="3"></td>
+    <td class="L" colspan="2">採用時年齢</td>
+    <td colspan="2" class="cen">満　${esc(ageHire || "　　")}　歳</td>
+  </tr>
+  <tr>
+    <td class="L">住所</td>
+    <td colspan="7">〒　${esc(zip)}　${esc(body)}</td>
+  </tr>
+  <tr>
+    <td class="L" rowspan="2">連絡先</td>
+    <td class="Lwide" colspan="1">自宅</td>
+    <td colspan="6">（　${esc(phone)}　）</td>
+  </tr>
+  <tr>
+    <td class="Lwide">携帯</td>
+    <td colspan="6">（　${esc(mobile)}　）</td>
+  </tr>
+  <tr>
+    <td class="L">緊急<br/>連絡先</td>
+    <td colspan="7">氏名　（　${esc(emName)}　）　続柄　（　${esc(emRel)}　）　電話番号　（　${esc(emTel)}　）</td>
+  </tr>
+  <tr>
+    <td class="L">採用<br/>年月日</td>
+    <td colspan="3" class="cen">${ymdCells(hired)}</td>
+    <td class="L">退職<br/>年月日</td>
+    <td colspan="3" class="cen">${ymdCells(retiredYmd)}</td>
+  </tr>
+  <tr>
+    <td class="Lvert" rowspan="3">運転免許</td>
+    <td class="L" colspan="2">種類</td>
+    <td colspan="5">${esc(licKind)}</td>
+  </tr>
+  <tr>
+    <td class="L" colspan="2">番号</td>
+    <td colspan="2">第　${esc(licNum)}　号</td>
+    <td class="L">有効期限</td>
+    <td colspan="2" class="cen">${ymdCells(licExp)}</td>
+  </tr>
+  <tr>
+    <td class="L" colspan="2">免許条件<br/>・限定等</td>
+    <td colspan="5">${hasCond ? `あり（ ${esc(licCond)} ）・なし（　　）` : "あり（　　　　　　　）・なし（　●　）"}</td>
+  </tr>
+  <tr>
+    <td class="phlbl" colspan="4">運転免許証表</td>
+    <td class="phlbl" colspan="4">運転免許証裏</td>
+  </tr>
+  <tr>
+    <td class="photo" colspan="4">
+      <div class="photobox">${front ? `<img src="${escAttr(front)}" alt=""/>` : ""}</div>
+    </td>
+    <td class="photo" colspan="4">
+      <div class="photobox">${back ? `<img src="${escAttr(back)}" alt=""/>` : ""}</div>
     </td>
   </tr>
 </table>
@@ -294,7 +309,7 @@ export function buildEmployeeRosterPrintHtml(args: {
   const op = (args.operatorName ?? "").trim();
   const sheets =
     args.employees.length === 0
-      ? `<section class="sheet"><p class="empty-note">印刷対象の従業員がありません（在籍のみ印刷する場合は、設定で従業員を登録してください）。</p></section>`
+      ? `<section class="sheet"><p class="empty-note">印刷対象の従業員がありません。</p></section>`
       : args.employees.map((e) => buildOneSheet(e, { createdYmd, operatorName: op })).join("\n");
 
   return `<!DOCTYPE html><html lang="ja"><head>
@@ -305,6 +320,6 @@ export function buildEmployeeRosterPrintHtml(args: {
 </head><body>
 <div class="toolbar no-print"><button type="button" onclick="window.print()">印刷</button></div>
 ${sheets}
-<p class="no-print" style="text-align:center;font-size:10px;color:#444;margin-top:8px;">ブラウザの印刷ダイアログから PDF 保存できます。</p>
+<p class="no-print" style="text-align:center;font-size:10px;color:#444;margin-top:8px">ブラウザの印刷ダイアログから PDF 保存できます。</p>
 </body></html>`;
 }

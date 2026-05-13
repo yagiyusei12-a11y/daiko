@@ -4,6 +4,15 @@ import { TimeCardPunchKind } from "@prisma/client";
 import { prisma } from "../db.js";
 import type { JommuKirokuboModel, JommuTripRow } from "./jommu-kirokubo-html.js";
 
+function extStr(registerExtension: unknown, key: string): string {
+  const o =
+    registerExtension !== null && typeof registerExtension === "object" && !Array.isArray(registerExtension)
+      ? (registerExtension as Record<string, unknown>)
+      : {};
+  const v = o[key];
+  return typeof v === "string" ? v.trim() : "";
+}
+
 export function hmTokyo(d: Date): string {
   if (Number.isNaN(d.getTime())) return "";
   return new Intl.DateTimeFormat("ja-JP", {
@@ -43,18 +52,6 @@ export function formatKmFromMeters(m: number): string {
   return s;
 }
 
-export function escortVehicleDrivenLabel(v: { label: string; plate: string | null } | null): string {
-  if (!v) return "—";
-  const p = v.plate?.trim();
-  if (p) return `${p}（${v.label}）`;
-  return v.label.trim() || "—";
-}
-
-export function escortVehicleNoField(v: { label: string; plate: string | null } | null): string {
-  if (!v) return "";
-  return (v.plate?.trim() || v.label || "").trim();
-}
-
 export async function loadJommuKirokuboModelForDailyReport(
   tenantId: string,
   reportId: string,
@@ -63,7 +60,8 @@ export async function loadJommuKirokuboModelForDailyReport(
     where: { id: reportId, tenantId },
     include: {
       trips: { orderBy: { id: "asc" } },
-      mainEmployee: { select: { familyName: true, givenName: true } },
+      mainEmployee: { select: { familyName: true, givenName: true, registerExtension: true } },
+      partnerEmployee: { select: { familyName: true, givenName: true } },
       escortVehicle: { select: { label: true, plate: true } },
       tenant: { select: { name: true } },
     },
@@ -119,8 +117,10 @@ export async function loadJommuKirokuboModelForDailyReport(
     if (Number.isFinite(a) && Number.isFinite(b) && b >= a) totalOdoKm = String(b - a);
   }
 
-  const vehicleDriven = escortVehicleDrivenLabel(report.escortVehicle);
-  const escortNo = escortVehicleNoField(report.escortVehicle);
+  const licenseSerialNo = extStr(report.mainEmployee.registerExtension, "licenseNumber");
+  const partnerCrewName = report.partnerEmployee
+    ? `${report.partnerEmployee.familyName} ${report.partnerEmployee.givenName}`.trim()
+    : "";
 
   let sumDistanceM = 0;
   let sumFare = 0;
@@ -138,7 +138,6 @@ export async function loadJommuKirokuboModelForDailyReport(
       arrivedHm: hmTokyo(t.arrivedAt),
       distanceKm: formatKmFromMeters(t.distanceM),
       fareYen: fare.toLocaleString("ja-JP"),
-      vehicleDriven,
     };
   });
 
@@ -149,9 +148,10 @@ export async function loadJommuKirokuboModelForDailyReport(
     crewName: `${report.mainEmployee.familyName} ${report.mainEmployee.givenName}`.trim(),
     clockInHm: clockInAt ? hmTokyo(clockInAt) : null,
     clockOutHm: clockOutAt ? hmTokyo(clockOutAt) : null,
-    escortVehicleNo: escortNo,
-    operatorName,
+    licenseSerialNo,
+    officeName: operatorName,
     safetyManagerStampName: safetyManagerName,
+    partnerCrewName,
     trips: tripRows,
     odoStartKm,
     odoEndKm,
