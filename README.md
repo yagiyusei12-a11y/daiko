@@ -72,7 +72,7 @@ npm run dev
 
 3. **環境変数 `CHROMIUM_EXECUTABLE`** にその絶対パスを設定する。`daiko-app` の systemd ユニットが `EnvironmentFile=` で読む **VPS 上の `.env`**（または `Environment=CHROMIUM_EXECUTABLE=...`）に 1 行追加し、`sudo systemctl daemon-reload && sudo systemctl restart daiko-app` する。
 
-   **`npm run deploy:vps` のたびに** リポジトリの `scripts/ensure-chromium-env.sh` が自動実行され、Chromium が無ければ apt で入れ、`.env` の `CHROMIUM_EXECUTABLE` を更新します（パスワードなし `sudo` が使えない VPS では手順 1〜3を手動で行ってください）。**初回のみ** Ubuntu の `chromium` / `chromium-browser` が Snap を引く場合があり、そのときはデプロイが数分長引くことがあります（2 回目以降は既に入っているため短いです）。
+   **`npm run deploy:vps` のたびに** リポジトリの `scripts/ensure-chromium-env.sh` が自動実行されます。**amd64** では **Google Chrome stable** を優先して導入し（Snap 版 Chromium は systemd 配下で PDF 化が失敗しやすいため）、`.env` の `CHROMIUM_EXECUTABLE` をそのパスに更新します。Chrome が入らない環境では従来どおり Chromium を apt で入れます。**初回のみ** ブラウザのダウンロードでデプロイが数分長引くことがあります（2 回目以降は短いです）。パスワードなし `sudo` が使えない VPS では手順 1〜3を手動で行ってください。
 
 4. （任意）生成がタイムアウトする場合は **`DAIKO_PDF_TIMEOUT_MS`**（ミリ秒、既定 120000）を `.env` に追加する。
 

@@ -1,7 +1,15 @@
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import puppeteer from "puppeteer-core";
 import type { Browser } from "puppeteer-core";
 
-const executablePath = process.env.CHROMIUM_EXECUTABLE?.trim();
+function getChromiumExecutable(): string | undefined {
+  const raw = process.env.CHROMIUM_EXECUTABLE?.trim();
+  if (!raw) return undefined;
+  const stripped = raw.replace(/^\uFEFF/, "").replace(/^["']|["']$/g, "");
+  return stripped || undefined;
+}
+
 const timeoutMs = Math.min(
   Math.max(Number(process.env.DAIKO_PDF_TIMEOUT_MS ?? 120_000), 10_000),
   600_000,
@@ -12,21 +20,37 @@ let browser: Browser | null = null;
 let serialChain: Promise<unknown> = Promise.resolve();
 
 export function isChromiumConfiguredForPdf(): boolean {
-  return Boolean(executablePath);
+  return Boolean(getChromiumExecutable());
 }
 
 async function getBrowser(): Promise<Browser> {
+  const executablePath = getChromiumExecutable();
   if (!executablePath) {
     const e = new Error("CHROMIUM_EXECUTABLE が未設定です。");
     (e as NodeJS.ErrnoException).code = "PDF_CHROMIUM_MISSING";
     throw e;
   }
   if (browser?.connected) return browser;
-  browser = await puppeteer.launch({
-    executablePath,
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
-  });
+  const userDataDir = join(process.cwd(), ".cache", "puppeteer-user-data");
+  await mkdir(userDataDir, { recursive: true });
+  try {
+    browser = await puppeteer.launch({
+      executablePath,
+      headless: true,
+      userDataDir,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+        "--disable-extensions",
+      ],
+    });
+  } catch (err) {
+    browser = null;
+    throw err;
+  }
   return browser;
 }
 
@@ -44,7 +68,7 @@ function runSerialized<T>(fn: () => Promise<T>): Promise<T> {
  * 帳票 HTML 内の @page / @media print を preferCSSPageSize で尊重する。
  */
 export async function renderHtmlToPdf(fullHtml: string): Promise<Buffer> {
-  if (!executablePath) {
+  if (!getChromiumExecutable()) {
     const e = new Error("CHROMIUM_EXECUTABLE が未設定です。");
     (e as NodeJS.ErrnoException).code = "PDF_CHROMIUM_MISSING";
     throw e;

@@ -6,4 +6,5 @@ public/app/
 prisma/dev.db
 prisma/dev.db-journal
 uploads/
+.cache/
 .cursor/debug-*.log
