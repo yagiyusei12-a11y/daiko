@@ -46,6 +46,7 @@ export async function loadJommuKirokuboModelForDailyReport(
     include: {
       trips: { orderBy: { id: "asc" } },
       mainEmployee: { select: { familyName: true, givenName: true } },
+      partnerEmployee: { select: { familyName: true, givenName: true } },
       escortVehicle: { select: { label: true, plate: true } },
       tenant: { select: { name: true } },
     },
@@ -95,6 +96,10 @@ export async function loadJommuKirokuboModelForDailyReport(
     report.escortVehicle?.label?.trim() ||
     "";
 
+  const accompanyingCrewName = report.partnerEmployee
+    ? `${report.partnerEmployee.familyName} ${report.partnerEmployee.givenName}`.trim()
+    : "";
+
   let sumDistanceM = 0;
   let sumFare = 0;
   const tripRows: JommuTripRow[] = report.trips.map((t) => {
@@ -111,7 +116,6 @@ export async function loadJommuKirokuboModelForDailyReport(
       arrivedHm: hmTokyo(t.arrivedAt),
       distanceKm: formatKmFromMeters(t.distanceM),
       fareYen: fare.toLocaleString("ja-JP"),
-      remarks: "",
     };
   });
 
@@ -125,6 +129,7 @@ export async function loadJommuKirokuboModelForDailyReport(
     officeName,
     companyCarRegNo,
     safetyManagerName,
+    accompanyingCrewName,
     trips: tripRows,
     odoStartKm,
     odoEndKm,

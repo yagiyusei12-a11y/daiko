@@ -1,6 +1,9 @@
-/** 乗務記録簿（印刷用 HTML）。A4 横向き・様式 PDF（zyoumukiroku.pdf）に合わせた文言・単位（㎞）・字間。 */
+/** 乗務記録簿（印刷用 HTML）。A4 横向き・公的様式に近いレイアウト（薄いピーチの見出し帯・2 列ヘッダー）。 */
 
 import { PRINT_BUSINESS_BASE_CSS } from "./print-business-theme.js";
+
+/** 見出し帯・表ヘッダー地色（様式の淡いピーチ系） */
+const JOMMU_HEADER_FILL = "#fde4d6";
 
 function esc(s: string): string {
   return s
@@ -20,8 +23,6 @@ export type JommuTripRow = {
   arrivedHm: string;
   distanceKm: string;
   fareYen: string;
-  /** 苦情・意見等備考（任意） */
-  remarks: string;
 };
 
 export type JommuKirokuboModel = {
@@ -37,6 +38,8 @@ export type JommuKirokuboModel = {
   companyCarRegNo: string;
   /** 安全運転管理者（設定の法定情報） */
   safetyManagerName: string;
+  /** 日報の同伴乗務員（客車担当以外のペア） */
+  accompanyingCrewName: string;
   trips: JommuTripRow[];
   odoStartKm: string | null;
   odoEndKm: string | null;
@@ -64,14 +67,14 @@ function timeCellsInline(hm: string): string {
   return timeCells(hm.trim() ? hm : null);
 }
 
-/** Excel 帳票風：黒枠・ラベル薄青 (#d9e1f2)・乗務記録帯は同色（参照 PDF に合わせる） */
+/** 黒枠・見出し帯は淡いピーチ（公的様式のイメージに合わせる） */
 const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
-@page { size: A4 landscape; margin: 7mm 9mm; }
+@page { size: A4 landscape; margin: 6mm 8mm; }
 .jm-doc {
   width: 277mm;
   max-width: 100%;
   margin: 0 auto;
-  padding: 1.5mm 0 0;
+  padding: 0;
   color: #000000;
   font-size: 9pt;
   font-family: "Noto Sans CJK JP", "Yu Gothic UI", "Yu Gothic", "Meiryo", "MS PGothic", sans-serif;
@@ -81,7 +84,7 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
 .jm-doc .jm-topline {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 0.5mm;
+  margin-bottom: 0.4mm;
 }
 .jm-doc .jm-retention {
   margin: 0;
@@ -90,11 +93,11 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   letter-spacing: 0;
 }
 .jm-doc .jm-title {
-  margin: 0 0 2.5mm;
+  margin: 0 0 2mm;
   text-align: center;
-  font-size: 17pt;
+  font-size: 18pt;
   font-weight: 700;
-  letter-spacing: 0;
+  letter-spacing: 0.08em;
   text-indent: 0;
   color: #000000;
   font-family: "Noto Serif CJK JP", "Yu Mincho", "YuMincho", "MS Mincho", serif;
@@ -104,7 +107,7 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   border-collapse: collapse;
   table-layout: fixed;
   border: 1.5pt solid #000000;
-  margin: 0 0 1.5mm;
+  margin: 0 0 1.2mm;
   background: #ffffff;
 }
 .jm-doc .jm-tbl th,
@@ -117,25 +120,26 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   color: #000000;
 }
 .jm-doc .jm-lbl {
-  background: #d9e1f2;
+  background: ${JOMMU_HEADER_FILL};
   font-weight: 600;
   text-align: center;
   color: #000000;
   font-size: 8.5pt;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 .jm-doc .jm-val {
   background: #ffffff;
-  min-height: 1.4em;
+  min-height: 1.35em;
   color: #000000;
 }
-.jm-doc .jm-meta-outer { margin-bottom: 1.5mm; }
+.jm-doc .jm-meta-outer { margin-bottom: 1.2mm; }
 .jm-doc .jm-meta-outer > tbody > tr > td {
-  border: 1pt solid #000000;
+  border: 1.5pt solid #000000;
   padding: 0;
   vertical-align: top;
-  width: 33.33%;
 }
+.jm-doc .jm-meta-left { width: 58%; }
+.jm-doc .jm-meta-right { width: 42%; }
 .jm-doc .jm-box-inner {
   width: 100%;
   border-collapse: collapse;
@@ -147,7 +151,7 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
 .jm-doc .jm-crew-line {
   font-size: 11pt;
   font-weight: 700;
-  padding: 5px 6px !important;
+  padding: 4px 6px !important;
 }
 .jm-doc .jm-sub2 {
   display: table;
@@ -157,7 +161,7 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
 .jm-doc .jm-sub2 > div {
   display: table-cell;
   width: 50%;
-  padding: 4px 5px;
+  padding: 3px 5px;
   vertical-align: middle;
   font-size: 8.5pt;
 }
@@ -167,75 +171,47 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
 .jm-doc .jm-ymd {
   text-align: center;
   font-variant-numeric: tabular-nums;
-  padding: 5px !important;
+  padding: 4px !important;
   font-size: 10pt;
 }
 .jm-doc .jm-plate {
-  padding: 5px 6px !important;
+  padding: 4px 6px !important;
   font-size: 10pt;
 }
 .jm-doc .jm-office-block {
-  padding: 5px 6px !important;
-  min-height: 2.8em;
+  padding: 4px 6px !important;
+  min-height: 2.6em;
   font-size: 10pt;
 }
-.jm-doc .jm-mgr-inner {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-.jm-doc .jm-mgr-inner td {
-  border: 0.5pt solid #000000;
-}
-.jm-doc .jm-mgr-inner .jm-mgr-lbl {
-  width: 38%;
-}
-.jm-doc .jm-mgr-inner .jm-mgr-val {
-  padding: 4px 5px !important;
-  font-size: 9.5pt;
-}
-.jm-doc .jm-in {
-  width: 2.2rem;
-  text-align: center;
-  font-size: 8pt;
-  font-weight: 700;
-  background: #d9e1f2;
-  vertical-align: middle !important;
-}
-.jm-doc .jm-section-h {
-  background: #d9e1f2;
-  color: #000000;
-  font-weight: 700;
-  text-align: center;
+.jm-doc .jm-mgr-val {
+  padding: 4px 6px !important;
   font-size: 10pt;
-  padding: 4px !important;
-  letter-spacing: 0.25em;
-  border-color: #000000;
+  min-height: 2.2em;
 }
 .jm-doc .jm-work thead th {
-  background: #d9e1f2;
+  background: ${JOMMU_HEADER_FILL};
   font-weight: 600;
   text-align: center;
-  font-size: 8pt;
+  font-size: 7.5pt;
   line-height: 1.2;
-  padding: 4px 2px !important;
+  padding: 3px 2px !important;
   color: #000000;
   border-color: #000000;
 }
 .jm-doc .jm-work tbody td {
-  font-size: 8pt;
-  padding: 3px 3px !important;
-  height: 5.2mm;
+  font-size: 7.5pt;
+  padding: 2px 3px !important;
+  height: 5mm;
   vertical-align: middle;
   border-color: #000000;
 }
 .jm-doc .jm-no {
-  width: 1.6em;
+  width: 1.5em;
   text-align: center;
   font-weight: 600;
   color: #000000;
   font-variant-numeric: tabular-nums;
-  background: #f2f2f2;
+  background: #faf6f3;
 }
 .jm-doc .jm-c {
   text-align: center;
@@ -252,34 +228,34 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   display: inline;
   font-size: 7pt;
   font-weight: 600;
-  color: #333333;
+  color: #222222;
   margin-left: 2px;
 }
 .jm-doc .jm-daiko {
   text-align: center;
   font-weight: 600;
-  font-size: 8pt;
+  font-size: 7.5pt;
 }
 .jm-doc .jm-foot-v {
   writing-mode: vertical-rl;
   text-orientation: upright;
-  width: 2.8rem;
-  min-width: 2.6rem;
-  max-width: 3rem;
-  letter-spacing: 0.12em;
-  padding: 6px 4px !important;
-  font-size: 8pt;
+  width: 2.6rem;
+  min-width: 2.4rem;
+  max-width: 2.8rem;
+  letter-spacing: 0.1em;
+  padding: 5px 3px !important;
+  font-size: 7.5pt;
   line-height: 1.35;
-  background: #d9e1f2;
+  background: ${JOMMU_HEADER_FILL};
   color: #000000;
   font-weight: 700;
 }
 .jm-doc .jm-foot thead th {
-  background: #d9e1f2;
+  background: ${JOMMU_HEADER_FILL};
   font-weight: 600;
   text-align: center;
-  font-size: 8pt;
-  padding: 5px 3px !important;
+  font-size: 7.5pt;
+  padding: 4px 2px !important;
   line-height: 1.2;
   color: #000000;
 }
@@ -287,9 +263,9 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   font-size: 10pt;
   font-weight: 600;
   text-align: right;
-  padding: 6px 8px !important;
+  padding: 5px 7px !important;
   font-variant-numeric: tabular-nums;
-  min-width: 3.2rem;
+  min-width: 3rem;
   vertical-align: middle;
   overflow-wrap: normal;
   word-break: normal;
@@ -298,18 +274,10 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
 .jm-doc .jm-footnote {
   display: flex;
   justify-content: flex-end;
-  align-items: center;
-  gap: 8px;
-  margin-top: 1mm;
+  margin-top: 0.8mm;
   font-size: 8pt;
   color: #000000;
-}
-.jm-doc .jm-fn-box {
-  border: 0.5pt solid #000000;
-  padding: 1px 10px;
-  min-width: 2.2em;
-  text-align: center;
-  font-size: 8.5pt;
+  font-variant-numeric: tabular-nums;
 }
 .jm-foot-sub { font-size: 7pt; font-weight: 500; }
 .jm-blank { letter-spacing: 0.06em; }
@@ -318,6 +286,7 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
 `;
 
 function renderJommuTripRows(model: JommuKirokuboModel): string {
+  const partner = esc(model.accompanyingCrewName);
   const rowCount = Math.max(10, model.trips.length);
   const rows: string[] = [];
   for (let i = 0; i < rowCount; i++) {
@@ -331,10 +300,10 @@ function renderJommuTripRows(model: JommuKirokuboModel): string {
   <td class="jm-val">${t ? esc(t.viaText) : ""}</td>
   <td class="jm-val">${t ? esc(t.destination) : ""}</td>
   <td class="jm-val jm-c">${t ? timeCellsInline(t.arrivedHm) : ""}</td>
-  <td class="jm-val jm-r">${t && String(t.distanceKm).trim() ? `${esc(t.distanceKm)}<span class="jm-unit">㎞</span>` : `<span class="jm-unit">㎞</span>`}</td>
+  <td class="jm-val jm-r">${t && String(t.distanceKm).trim() ? `${esc(t.distanceKm)}<span class="jm-unit">km</span>` : `<span class="jm-unit">km</span>`}</td>
   <td class="jm-val jm-r">${t && String(t.fareYen).trim() ? `${esc(t.fareYen)}<span class="jm-unit">円</span>` : `<span class="jm-unit">円</span>`}</td>
   <td class="jm-val jm-daiko">代行</td>
-  <td class="jm-val">${t ? esc(t.remarks) : ""}</td>
+  <td class="jm-val">${partner}</td>
 </tr>`);
   }
   return rows.join("\n");
@@ -349,32 +318,23 @@ function renderHeaderMeta(model: JommuKirokuboModel): string {
 
   return `<table class="jm-tbl jm-meta-outer" role="presentation">
 <tbody><tr>
-  <td>
+  <td class="jm-meta-left">
     <table class="jm-box-inner">
       <tr><td class="jm-lbl">乗務員氏名</td></tr>
       <tr><td class="jm-val jm-crew-line">${crew}</td></tr>
-      <tr><td class="jm-sub2"><div>始業時刻　${timeCells(model.clockInHm)}</div><div>終業時刻　${timeCells(model.clockOutHm)}</div></td></tr>
-    </table>
-  </td>
-  <td>
-    <table class="jm-box-inner">
       <tr><td class="jm-lbl">業務年月日</td></tr>
       <tr><td class="jm-val jm-ymd">${esc(yParts.y)}　年　${esc(yParts.m)}　月　${esc(yParts.d)}　日</td></tr>
-      <tr><td class="jm-lbl">随伴車<br/>登録番号</td></tr>
+      <tr><td class="jm-sub2"><div>始業時刻　${timeCells(model.clockInHm)}</div><div>終業時刻　${timeCells(model.clockOutHm)}</div></td></tr>
+      <tr><td class="jm-lbl">随伴車登録番号</td></tr>
       <tr><td class="jm-val jm-plate">${plate}</td></tr>
     </table>
   </td>
-  <td>
+  <td class="jm-meta-right">
     <table class="jm-box-inner">
       <tr><td class="jm-lbl">事業者名</td></tr>
       <tr><td class="jm-val jm-office-block">${office}</td></tr>
-      <tr><td style="padding:0;border:none">
-        <table class="jm-mgr-inner" role="presentation"><tr>
-        <td class="jm-lbl jm-mgr-lbl">安全運転<br/>管理者名</td>
-        <td class="jm-val jm-mgr-val">${mgr}</td>
-        <td class="jm-in">印</td>
-        </tr></table>
-      </td></tr>
+      <tr><td class="jm-lbl">安全運転管理者名</td></tr>
+      <tr><td class="jm-val jm-mgr-val">${mgr}</td></tr>
     </table>
   </td>
 </tr></tbody>
@@ -385,28 +345,27 @@ function renderJommuSheet(model: JommuKirokuboModel): string {
   const tripBody = renderJommuTripRows(model);
 
   return `<article class="pd-doc jm-doc">
-<div class="jm-topline"><p class="jm-retention">＜保存期間：最後に記載した日から２年間＞</p></div>
-<h1 class="jm-title">乗　務　記　録　簿</h1>
+<div class="jm-topline"><p class="jm-retention">&lt;保存期間：最後に記載した日から2年間&gt;</p></div>
+<h1 class="jm-title">乗務記録簿</h1>
 ${renderHeaderMeta(model)}
 <table class="jm-tbl jm-work">
   <colgroup>
-    <col style="width:3%" />
-    <col style="width:8.5%" />
-    <col style="width:7.5%" />
-    <col style="width:8.5%" />
-    <col style="width:7%" />
-    <col style="width:7.5%" />
-    <col style="width:8.5%" />
-    <col style="width:7%" />
+    <col style="width:2.8%" />
     <col style="width:9%" />
+    <col style="width:8%" />
     <col style="width:9%" />
+    <col style="width:7%" />
+    <col style="width:8%" />
+    <col style="width:9%" />
+    <col style="width:7%" />
+    <col style="width:8.5%" />
+    <col style="width:8.5%" />
     <col style="width:5.5%" />
-    <col style="width:19%" />
+    <col style="width:17.2%" />
   </colgroup>
   <thead>
-    <tr><th class="jm-section-h" colspan="12">乗務記録</th></tr>
     <tr>
-      <th>　</th>
+      <th></th>
       <th>依頼者</th>
       <th>客車の<br/>車両番号</th>
       <th>依頼場所</th>
@@ -417,7 +376,7 @@ ${renderHeaderMeta(model)}
       <th>走行距離</th>
       <th>料金</th>
       <th>運転した<br/>車両</th>
-      <th>苦情　意見等備考</th>
+      <th>同伴乗務員名</th>
     </tr>
   </thead>
   <tbody>
@@ -426,21 +385,21 @@ ${tripBody}
 </table>
 <table class="jm-tbl jm-foot">
   <colgroup>
-    <col style="width:11%" />
-    <col style="width:17.8%" />
-    <col style="width:17.8%" />
-    <col style="width:17.8%" />
-    <col style="width:17.8%" />
-    <col style="width:17.8%" />
+    <col style="width:10%" />
+    <col style="width:18%" />
+    <col style="width:18%" />
+    <col style="width:18%" />
+    <col style="width:18%" />
+    <col style="width:18%" />
   </colgroup>
   <thead>
     <tr>
       <th class="jm-lbl jm-foot-v" rowspan="2">メーター距離等</th>
-      <th>始業時<br/><span class="jm-foot-sub">（㎞）</span></th>
-      <th>終業時<br/><span class="jm-foot-sub">（㎞）</span></th>
-      <th>走行距離合計<br/><span class="jm-foot-sub">（㎞）</span></th>
-      <th>実車走行距離<br/><span class="jm-foot-sub">（㎞）</span></th>
-      <th>売上合計<br/><span class="jm-foot-sub">（円）</span></th>
+      <th>始業時<br/><span class="jm-foot-sub">km</span></th>
+      <th>終業時<br/><span class="jm-foot-sub">km</span></th>
+      <th>走行距離合計<br/><span class="jm-foot-sub">km</span></th>
+      <th>実車走行距離<br/><span class="jm-foot-sub">km</span></th>
+      <th>売上合計<br/><span class="jm-foot-sub">円</span></th>
     </tr>
   </thead>
   <tbody>
@@ -453,10 +412,7 @@ ${tripBody}
   </tr>
   </tbody>
 </table>
-<div class="jm-footnote">
-  <span>様式番号　0000-0000</span>
-  <span class="jm-fn-box">日</span>
-</div>
+<div class="jm-footnote">0000-0000</div>
 </article>`;
 }
 

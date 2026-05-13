@@ -98,7 +98,7 @@ function DailyReportJommuPrintBlock(): JSX.Element {
   return (
     <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
       <PanelHint>
-        指定期間・対象従業員（客車担当の日報）に基づき、乗務記録簿形式の PDF を生成します。出勤・退勤打刻と随伴車の ODO ログが揃っていると、各日報のフッター距離が埋まりやすくなります。
+        指定期間・対象従業員（客車担当の日報）に基づき、公的様式に近い乗務記録簿レイアウトの PDF を生成します。同伴乗務員は日報のペア設定、メーター欄は出勤・退勤打刻と随伴車の ODO ログが揃っていると埋まりやすくなります。
       </PanelHint>
       <div className="settings-form" style={{ marginTop: "0.75rem", maxWidth: "36rem" }}>
         <label>期間（開始）</label>
