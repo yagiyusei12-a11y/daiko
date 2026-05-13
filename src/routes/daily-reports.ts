@@ -37,7 +37,6 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         businessDate: true,
         meterStart: true,
         meterEnd: true,
-        vehicle: { select: { label: true } },
         mainEmployee: { select: { familyName: true, givenName: true } },
       },
     });
@@ -47,7 +46,6 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         businessDate: r.businessDate,
         meterStart: r.meterStart,
         meterEnd: r.meterEnd,
-        vehicleLabel: r.vehicle?.label ?? "—",
         mainEmployeeName: `${r.mainEmployee.familyName} ${r.mainEmployee.givenName}`,
       })),
     };

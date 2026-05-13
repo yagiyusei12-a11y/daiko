@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiFetch } from "../api";
 import { Card, Err } from "../ui";
@@ -71,6 +71,31 @@ function viaStopsFromTrip(trip: TripLegFull): string[] {
 function toDatetimeLocalValue(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/** DB の tripMeter*M / distanceM はメートル整数。UI は km。 */
+function tripMeterKmFromM(m: number | null | undefined): number {
+  if (m == null) return 0;
+  return m / 1000;
+}
+
+function kmToTripMeters(km: number): number {
+  return Math.max(0, Math.round(km * 1000));
+}
+
+function formatKm(k: number): string {
+  if (!Number.isFinite(k)) return "—";
+  const s = k.toFixed(2).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+  return s;
+}
+
+function travelMinutesBetween(depLocal: string, arrLocal: string): number | null {
+  const a = new Date(depLocal);
+  const b = new Date(arrLocal);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
+  const diffMin = (b.getTime() - a.getTime()) / 60_000;
+  if (!Number.isFinite(diffMin)) return null;
+  return Math.max(0, Math.round(diffMin));
 }
 
 function readSlot(j: unknown, key: string): { apply: boolean; yen: number } {
@@ -163,9 +188,8 @@ function TripWizard({
   const [destination, setDestination] = useState(trip.destination);
   const [fareYen, setFareYen] = useState(trip.fareYen);
   const [parkingAdvanceYen, setParkingAdvanceYen] = useState(trip.parkingAdvanceYen ?? 0);
-  const [tripMeterStartM, setTripMeterStartM] = useState(trip.tripMeterStartM ?? 0);
-  const [tripMeterEndM, setTripMeterEndM] = useState(trip.tripMeterEndM ?? 0);
-  const [distanceM, setDistanceM] = useState(trip.distanceM ?? 0);
+  const [tripStartKm, setTripStartKm] = useState(() => tripMeterKmFromM(trip.tripMeterStartM));
+  const [tripEndKm, setTripEndKm] = useState(() => tripMeterKmFromM(trip.tripMeterEndM));
   const [departedLocal, setDepartedLocal] = useState(() => toDatetimeLocalValue(new Date(trip.departedAt)));
   const [arrivedLocal, setArrivedLocal] = useState(() => toDatetimeLocalValue(new Date(trip.arrivedAt)));
   const [tariffVersionId, setTariffVersionId] = useState(trip.tariffVersionId ?? "");
@@ -190,9 +214,8 @@ function TripWizard({
     setDestination(trip.destination);
     setFareYen(trip.fareYen);
     setParkingAdvanceYen(trip.parkingAdvanceYen ?? 0);
-    setTripMeterStartM(trip.tripMeterStartM ?? 0);
-    setTripMeterEndM(trip.tripMeterEndM ?? 0);
-    setDistanceM(trip.distanceM ?? 0);
+    setTripStartKm(tripMeterKmFromM(trip.tripMeterStartM));
+    setTripEndKm(tripMeterKmFromM(trip.tripMeterEndM));
     setDepartedLocal(toDatetimeLocalValue(new Date(trip.departedAt)));
     setArrivedLocal(toDatetimeLocalValue(new Date(trip.arrivedAt)));
     setTariffVersionId(trip.tariffVersionId ?? "");
@@ -207,6 +230,9 @@ function TripWizard({
     setApplyLateNightFlatYen(trip.applyLateNightFlatYen);
     setApplyEarlyRushFlatYen(trip.applyEarlyRushFlatYen);
   }, [trip]);
+
+  const distanceKmAuto = useMemo(() => Math.max(0, tripEndKm - tripStartKm), [tripEndKm, tripStartKm]);
+  const travelMinutesAuto = useMemo(() => travelMinutesBetween(departedLocal, arrivedLocal), [departedLocal, arrivedLocal]);
 
   function toggle(
     cur: { apply: boolean; yen: number },
@@ -235,6 +261,9 @@ function TripWizard({
       cancel: { apply: cancel.apply, yen: cancel.yen },
     };
     const viaFiltered = viaStops.map((s) => s.trim()).filter(Boolean);
+    const startM = kmToTripMeters(tripStartKm);
+    const endM = kmToTripMeters(tripEndKm);
+    const distM = Math.max(0, endM - startM);
     const r = await apiFetch(`/daily-reports/${reportId}/trips/${trip.id}`, {
       method: "PATCH",
       json: {
@@ -245,9 +274,9 @@ function TripWizard({
         viaStopsJson: viaFiltered,
         fareYen,
         parkingAdvanceYen,
-        tripMeterStartM: tripMeterStartM || null,
-        tripMeterEndM: tripMeterEndM || null,
-        distanceM,
+        tripMeterStartM: startM > 0 ? startM : null,
+        tripMeterEndM: endM > 0 ? endM : null,
+        distanceM: distM,
         departedAt: departedAt.toISOString(),
         arrivedAt: arrivedAt.toISOString(),
         tariffVersionId: tariffVersionId.trim() || null,
@@ -278,9 +307,18 @@ function TripWizard({
         <label>依頼者名</label>
         <input value={clientName} onChange={(e) => setClientName(e.target.value)} />
         <label>客車の車両番号</label>
-        <input value={charterVehicleNo} onChange={(e) => setCharterVehicleNo(e.target.value)} placeholder="例: 滋賀300あ1234" />
-        <label>開始メーター距離（m など運用で統一）</label>
-        <input type="number" min={0} value={tripMeterStartM} onChange={(e) => setTripMeterStartM(Math.max(0, Math.floor(Number(e.target.value) || 0)))} />
+        <input value={charterVehicleNo} onChange={(e) => setCharterVehicleNo(e.target.value)} placeholder="例: 1234" />
+        <label>開始メーター距離（km）</label>
+        <input
+          type="number"
+          min={0}
+          step="any"
+          value={tripStartKm}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            setTripStartKm(Number.isFinite(v) ? Math.max(0, v) : 0);
+          }}
+        />
         <label>開始時刻</label>
         <input type="datetime-local" value={departedLocal} onChange={(e) => setDepartedLocal(e.target.value)} />
         <button type="button" className="settings-secondary" onClick={() => setDepartedLocal(toDatetimeLocalValue(new Date()))}>
@@ -321,15 +359,35 @@ function TripWizard({
         <button type="button" className="settings-secondary" onClick={() => setViaStops((rows) => [...rows, ""])}>
           経由地を追加
         </button>
-        <label>到着メーター距離</label>
-        <input type="number" min={0} value={tripMeterEndM} onChange={(e) => setTripMeterEndM(Math.max(0, Math.floor(Number(e.target.value) || 0)))} />
+        <label>到着メーター距離（km）</label>
+        <input
+          type="number"
+          min={0}
+          step="any"
+          value={tripEndKm}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            setTripEndKm(Number.isFinite(v) ? Math.max(0, v) : 0);
+          }}
+        />
         <label>到着地</label>
         <input value={destination} onChange={(e) => setDestination(e.target.value)} />
         <GpsTownButton label="GPSで町名を到着に入力" onTown={(t) => setDestination((d) => (d ? `${d} ${t}`.trim() : t))} disabled={busy} />
         <label>到着時刻</label>
         <input type="datetime-local" value={arrivedLocal} onChange={(e) => setArrivedLocal(e.target.value)} />
-        <label>走行距離（m）</label>
-        <input type="number" min={0} value={distanceM} onChange={(e) => setDistanceM(Math.max(0, Math.floor(Number(e.target.value) || 0)))} />
+        <button type="button" className="settings-secondary" onClick={() => setArrivedLocal(toDatetimeLocalValue(new Date()))}>
+          現在時刻を到着にセット
+        </button>
+        <label>走行距離（km）</label>
+        <input type="text" readOnly value={formatKm(distanceKmAuto)} title="到着メーター − 開始メーター" />
+        <p className="settings-hint" style={{ marginTop: 0 }}>
+          到着メーター − 開始メーターから自動計算（保存時に記録されます）。
+        </p>
+        <label>走行時間（分）</label>
+        <input type="text" readOnly value={travelMinutesAuto != null ? String(travelMinutesAuto) : "—"} title="到着時刻 − 開始時刻" />
+        <p className="settings-hint" style={{ marginTop: 0 }}>
+          到着時刻 − 開始時刻から自動表示（参考値・DBには保存しません）。
+        </p>
         <label>料金プラン（版）</label>
         <select value={tariffVersionId} onChange={(e) => setTariffVersionId(e.target.value)}>
           <option value="">未選択</option>
@@ -419,7 +477,6 @@ export default function DailyReportDetailPage(): JSX.Element {
   const [vehicles, setVehicles] = useState<VehMini[]>([]);
 
   const [partnerId, setPartnerId] = useState<string>("");
-  const [mainVehicleId, setMainVehicleId] = useState<string>("");
   const [escortVehicleId, setEscortVehicleId] = useState<string>("");
   const [escortOdoStart, setEscortOdoStart] = useState<number>(0);
   const [sessionBusy, setSessionBusy] = useState(false);
@@ -452,7 +509,6 @@ export default function DailyReportDetailPage(): JSX.Element {
     setVehicles(r.data.vehicles ?? []);
     const rep = r.data.report;
     setPartnerId(rep.partnerEmployeeId ?? "");
-    setMainVehicleId(rep.vehicleId ?? "");
     setEscortVehicleId(rep.escortVehicleId ?? "");
     setEscortOdoStart(rep.escortOdometerStartM ?? 0);
     setErr(null);
@@ -483,10 +539,6 @@ export default function DailyReportDetailPage(): JSX.Element {
     const r = await apiFetch<{ id: string }>(`/daily-reports/${reportId}/trips`, { method: "POST", json: {} });
     if (!r.ok) setErr(r.error);
     else await load();
-  }
-
-  async function saveMainVehicle(): Promise<void> {
-    await patchSession({ vehicleId: mainVehicleId || null });
   }
 
   async function savePartner(): Promise<void> {
@@ -532,32 +584,17 @@ export default function DailyReportDetailPage(): JSX.Element {
       <p className="settings-hint" style={{ marginTop: 0 }}>
         <Link to="/daily-reports">一覧へ</Link>
         {" · "}
-        客車: {report.vehicle ? `${report.vehicle.label}${report.vehicle.plate ? `（${report.vehicle.plate}）` : ""}` : "未設定"} / 乗務:{" "}
-        {report.mainEmployee.familyName} {report.mainEmployee.givenName} / メーター {report.meterStart}→{report.meterEnd}
+        乗務: {report.mainEmployee.familyName} {report.mainEmployee.givenName} / メーター {report.meterStart}→{report.meterEnd}
       </p>
 
       <div className="settings-section-panel" style={{ marginBottom: "1rem" }}>
         <h3 className="settings-subtitle" style={{ marginTop: 0 }}>
           勤務セッション（この日報で固定）
         </h3>
-        <p className="settings-hint">ペア・客車・随伴車は途中で変えたいときだけ保存してください。次の運行入力ではそのまま引き継がれます。</p>
+        <p className="settings-hint">ペア・随伴車は途中で変えたいときだけ保存してください。次の運行入力ではそのまま引き継がれます。</p>
         <Err msg={sessionErr} />
         <div className="settings-form">
-          <label>客車</label>
-          <select value={mainVehicleId} onChange={(e) => setMainVehicleId(e.target.value)}>
-            <option value="">未設定</option>
-            {vehicles.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.label}
-                {v.plate ? `（${v.plate}）` : ""}
-              </option>
-            ))}
-          </select>
-          <button type="button" className="settings-secondary" disabled={sessionBusy} onClick={() => void saveMainVehicle()}>
-            客車を保存
-          </button>
-
-          <label style={{ marginTop: "0.75rem" }}>ペア（乗務員）</label>
+          <label>ペア（乗務員）</label>
           <select value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
             <option value="">未設定</option>
             {employees

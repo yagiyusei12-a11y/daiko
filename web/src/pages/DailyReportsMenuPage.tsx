@@ -12,7 +12,6 @@ type ReportRow = {
   businessDate: string;
   meterStart: number;
   meterEnd: number;
-  vehicleLabel: string;
   mainEmployeeName: string;
 };
 
@@ -27,8 +26,6 @@ export default function DailyReportsMenuPage(): JSX.Element {
   const [partnerId, setPartnerId] = useState("");
   const [escortVehicleId, setEscortVehicleId] = useState("");
   const [escortOdoStart, setEscortOdoStart] = useState(0);
-  const [meterStart, setMeterStart] = useState(0);
-  const [meterEnd, setMeterEnd] = useState(0);
   const [busy, setBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -63,8 +60,6 @@ export default function DailyReportsMenuPage(): JSX.Element {
       json: {
         businessDate,
         mainEmployeeId: employeeId,
-        meterStart,
-        meterEnd,
         partnerEmployeeId: partnerId || undefined,
         escortVehicleId: escortVehicleId || undefined,
         escortOdometerStartM: escortVehicleId ? escortOdoStart : undefined,
@@ -108,9 +103,7 @@ export default function DailyReportsMenuPage(): JSX.Element {
             {reports.map((r) => (
               <li key={r.id}>
                 <Link className="settings-list-btn" to={`/daily-reports/${r.id}`} style={{ textDecoration: "none", color: "inherit" }}>
-                  <span>
-                    {r.vehicleLabel} / {r.mainEmployeeName}
-                  </span>
+                  <span>{r.mainEmployeeName}</span>
                   <span className="settings-list-meta">
                     メーター {r.meterStart}→{r.meterEnd}
                   </span>
@@ -141,7 +134,7 @@ export default function DailyReportsMenuPage(): JSX.Element {
             </h2>
             <div className="attend-shift-dialog-scroll">
               <p className="settings-hint">
-                作成後に日報詳細で勤務セッション（ペア・随伴車・ODO）と運行ウィザードを入力します。ここで先にペア等を入れても構いません。
+                作成後に日報詳細で勤務セッション（ペア・随伴車・ODO）と運行を入力します。ここで先にペア等を入れても構いません。
               </p>
               <div className="settings-form">
                 <label htmlFor="dr-create-date">事業日</label>
@@ -187,22 +180,6 @@ export default function DailyReportsMenuPage(): JSX.Element {
                   disabled={!escortVehicleId}
                   value={escortOdoStart}
                   onChange={(e) => setEscortOdoStart(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
-                />
-                <label htmlFor="dr-create-ms">メーター始</label>
-                <input
-                  id="dr-create-ms"
-                  type="number"
-                  min={0}
-                  value={meterStart}
-                  onChange={(e) => setMeterStart(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
-                />
-                <label htmlFor="dr-create-me">メーター終</label>
-                <input
-                  id="dr-create-me"
-                  type="number"
-                  min={0}
-                  value={meterEnd}
-                  onChange={(e) => setMeterEnd(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
                 />
               </div>
             </div>
