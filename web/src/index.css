@@ -1035,6 +1035,12 @@ td {
   max-width: 36rem;
 }
 
+/* 日報: 運行追加（フォームが長いため広め・高め） */
+.trip-add-dialog.pricing-modal {
+  max-width: min(42rem, 96vw);
+  max-height: min(92vh, 52rem);
+}
+
 /* シフト申請: カレンダー〜時刻入力を1つのスクロール領域に。親の .pricing-modal > .settings-form { flex:1 } が直子に二重で当たり高さ0になるのを避ける */
 .attend-shift-dialog-scroll {
   flex: 1;

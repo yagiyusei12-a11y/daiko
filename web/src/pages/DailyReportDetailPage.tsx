@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiFetch } from "../api";
 import { Card, Err } from "../ui";
@@ -52,8 +52,60 @@ type ReportDetail = {
   partnerEmployee: EmpMini | null;
 };
 
-type TariffOpt = { id: string; label: string; planId: string; version: number };
+type TariffOpt = {
+  id: string;
+  label: string;
+  planId: string;
+  version: number;
+  nightSurchargeBps: number;
+  nightSurchargeFlatYen: number;
+  leftHandSurchargeBps: number;
+  earlyMorningFlatYen: number;
+  lateNightFlatYen: number;
+  earlyRushFlatYen: number;
+};
 type Defaults = { pickupYen: number; leftHandYen: number; foreignCarYen: number; cancelYen: number };
+
+/** 配車スケジュールから運行フォームへ渡すプリフィル（token で再適用を区別） */
+type SchedulePrefillPayload = {
+  token: number;
+  customerName: string;
+  pickup: string;
+  dropoff: string;
+  viaStops: string[];
+  vehicleNumber: string;
+  departedIso: string;
+  arrivedIso: string;
+};
+
+type ScheduleReservationRow = {
+  id: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  driverEmployeeId: string | null;
+  vehicleId: string | null;
+  detail: {
+    customerName: string;
+    phone: string;
+    pickup: string;
+    viaStops: string[];
+    dropoff: string;
+    vehicleNumber: string;
+    parking: string;
+  };
+};
+
+type SchedulePayloadMini = { date: string; reservations: ScheduleReservationRow[] };
+
+function formatScheduleRowLabel(row: ScheduleReservationRow): string {
+  const t0 = new Date(row.startsAt);
+  const t1 = new Date(row.endsAt);
+  const hm = (d: Date) =>
+    Number.isNaN(d.getTime()) ? "—" : d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+  const route = [row.detail.pickup, row.detail.dropoff].filter(Boolean).join("→");
+  return `${hm(t0)}–${hm(t1)} ${row.title}${route ? `（${route}）` : ""}`;
+}
 
 function viaStopsFromTrip(trip: TripLegFull): string[] {
   const raw = trip.viaStopsJson;
@@ -171,6 +223,8 @@ function TripWizard({
   defaults,
   features,
   onSubmitted,
+  sectionTitle = "運行",
+  schedulePrefill,
 }: {
   reportId: string;
   trip: TripLegFull;
@@ -178,6 +232,8 @@ function TripWizard({
   defaults: Defaults;
   features: string[];
   onSubmitted: () => void | Promise<void>;
+  sectionTitle?: string;
+  schedulePrefill?: SchedulePrefillPayload | null;
 }): JSX.Element {
   const { flashSaved } = useSavedToast();
   const j0 = trip.legSurchargesJson;
@@ -231,8 +287,37 @@ function TripWizard({
     setApplyEarlyRushFlatYen(trip.applyEarlyRushFlatYen);
   }, [trip]);
 
+  useEffect(() => {
+    if (!schedulePrefill) return;
+    setClientName(schedulePrefill.customerName);
+    setOrigin(schedulePrefill.pickup);
+    setDestination(schedulePrefill.dropoff);
+    const vs = schedulePrefill.viaStops.map((s) => s.trim()).filter(Boolean);
+    setViaStops(vs.length > 0 ? vs : [""]);
+    setCharterVehicleNo(schedulePrefill.vehicleNumber);
+    setDepartedLocal(toDatetimeLocalValue(new Date(schedulePrefill.departedIso)));
+    setArrivedLocal(toDatetimeLocalValue(new Date(schedulePrefill.arrivedIso)));
+  }, [schedulePrefill]);
+
   const distanceKmAuto = useMemo(() => Math.max(0, tripEndKm - tripStartKm), [tripEndKm, tripStartKm]);
   const travelMinutesAuto = useMemo(() => travelMinutesBetween(departedLocal, arrivedLocal), [departedLocal, arrivedLocal]);
+
+  const tariffCap = useMemo(() => tariffVersions.find((t) => t.id === tariffVersionId), [tariffVersions, tariffVersionId]);
+  const showNightPct = (tariffCap?.nightSurchargeBps ?? 0) > 0;
+  const showNightFlat = (tariffCap?.nightSurchargeFlatYen ?? 0) > 0;
+  const showLeftHandPct = (tariffCap?.leftHandSurchargeBps ?? 0) > 0;
+  const showEarlyMorningFlat = (tariffCap?.earlyMorningFlatYen ?? 0) > 0;
+  const showLateNightFlat = (tariffCap?.lateNightFlatYen ?? 0) > 0;
+  const showEarlyRushFlat = (tariffCap?.earlyRushFlatYen ?? 0) > 0;
+
+  const hasPrefsLegRows =
+    features.includes("pickup") ||
+    features.includes("leftHand") ||
+    features.includes("foreignCar") ||
+    features.includes("cancel");
+  const hasTariffFlagRows =
+    showNightPct || showNightFlat || showLeftHandPct || showEarlyMorningFlat || showLateNightFlat || showEarlyRushFlat;
+  const showSurchargeDetails = hasPrefsLegRows || hasTariffFlagRows;
 
   function toggle(
     cur: { apply: boolean; yen: number },
@@ -255,10 +340,10 @@ function TripWizard({
       return;
     }
     const legSurchargesJson = {
-      pickup: { apply: pickup.apply, yen: pickup.yen },
-      leftHand: { apply: leftHand.apply, yen: leftHand.yen },
-      foreignCar: { apply: foreignCar.apply, yen: foreignCar.yen },
-      cancel: { apply: cancel.apply, yen: cancel.yen },
+      pickup: { apply: features.includes("pickup") ? pickup.apply : false, yen: features.includes("pickup") ? pickup.yen : 0 },
+      leftHand: { apply: features.includes("leftHand") ? leftHand.apply : false, yen: features.includes("leftHand") ? leftHand.yen : 0 },
+      foreignCar: { apply: features.includes("foreignCar") ? foreignCar.apply : false, yen: features.includes("foreignCar") ? foreignCar.yen : 0 },
+      cancel: { apply: features.includes("cancel") ? cancel.apply : false, yen: features.includes("cancel") ? cancel.yen : 0 },
     };
     const viaFiltered = viaStops.map((s) => s.trim()).filter(Boolean);
     const startM = kmToTripMeters(tripStartKm);
@@ -280,12 +365,12 @@ function TripWizard({
         departedAt: departedAt.toISOString(),
         arrivedAt: arrivedAt.toISOString(),
         tariffVersionId: tariffVersionId.trim() || null,
-        applyNightSurcharge,
-        applyNightSurchargeFlat,
-        applyLeftHandSurcharge,
-        applyEarlyMorningFlatYen,
-        applyLateNightFlatYen,
-        applyEarlyRushFlatYen,
+        applyNightSurcharge: showNightPct ? applyNightSurcharge : false,
+        applyNightSurchargeFlat: showNightFlat ? applyNightSurchargeFlat : false,
+        applyLeftHandSurcharge: showLeftHandPct ? applyLeftHandSurcharge : false,
+        applyEarlyMorningFlatYen: showEarlyMorningFlat ? applyEarlyMorningFlatYen : false,
+        applyLateNightFlatYen: showLateNightFlat ? applyLateNightFlatYen : false,
+        applyEarlyRushFlatYen: showEarlyRushFlat ? applyEarlyRushFlatYen : false,
         legSurchargesJson,
       },
     });
@@ -300,7 +385,7 @@ function TripWizard({
   return (
     <section className="settings-section-panel trip-editor" style={{ marginBottom: "1rem" }}>
       <h3 className="settings-subtitle" style={{ marginTop: 0 }}>
-        運行（1件）
+        {sectionTitle}
       </h3>
       <Err msg={err} />
       <div className="settings-form">
@@ -400,63 +485,77 @@ function TripWizard({
         <label>運賃（円）</label>
         <input type="number" min={0} value={fareYen} onChange={(e) => setFareYen(Math.max(0, Math.floor(Number(e.target.value) || 0)))} />
 
-        <details className="settings-fieldset" style={{ marginTop: "0.5rem" }}>
-          <summary style={{ cursor: "pointer", fontWeight: 600 }}>付帯料金・加算フラグ</summary>
-          <div className="settings-form" style={{ marginTop: "0.5rem" }}>
-            {features.includes("pickup") ? (
-              <>
+        {showSurchargeDetails ? (
+          <details className="settings-fieldset" style={{ marginTop: "0.5rem" }}>
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>付帯料金・加算フラグ</summary>
+            <div className="settings-form" style={{ marginTop: "0.5rem" }}>
+              {features.includes("pickup") ? (
+                <>
+                  <label className="settings-check">
+                    <input type="checkbox" checked={pickup.apply} onChange={(e) => toggle(pickup, setPickup, defaults.pickupYen, e.target.checked)} /> 迎車料金
+                  </label>
+                  <NumRow label="迎車（円）" value={pickup.yen} onChange={(yen) => setPickup({ ...pickup, yen })} disabled={!pickup.apply} />
+                </>
+              ) : null}
+              {features.includes("leftHand") ? (
+                <>
+                  <label className="settings-check">
+                    <input type="checkbox" checked={leftHand.apply} onChange={(e) => toggle(leftHand, setLeftHand, defaults.leftHandYen, e.target.checked)} />{" "}
+                    左ハンドル（定額枠）
+                  </label>
+                  <NumRow label="左ハンドル（円）" value={leftHand.yen} onChange={(yen) => setLeftHand({ ...leftHand, yen })} disabled={!leftHand.apply} />
+                </>
+              ) : null}
+              {features.includes("foreignCar") ? (
+                <>
+                  <label className="settings-check">
+                    <input type="checkbox" checked={foreignCar.apply} onChange={(e) => toggle(foreignCar, setForeignCar, defaults.foreignCarYen, e.target.checked)} />{" "}
+                    外車
+                  </label>
+                  <NumRow label="外車（円）" value={foreignCar.yen} onChange={(yen) => setForeignCar({ ...foreignCar, yen })} disabled={!foreignCar.apply} />
+                </>
+              ) : null}
+              {features.includes("cancel") ? (
+                <>
+                  <label className="settings-check">
+                    <input type="checkbox" checked={cancel.apply} onChange={(e) => toggle(cancel, setCancel, defaults.cancelYen, e.target.checked)} /> キャンセル
+                  </label>
+                  <NumRow label="キャンセル（円）" value={cancel.yen} onChange={(yen) => setCancel({ ...cancel, yen })} disabled={!cancel.apply} />
+                </>
+              ) : null}
+              {showNightPct ? (
                 <label className="settings-check">
-                  <input type="checkbox" checked={pickup.apply} onChange={(e) => toggle(pickup, setPickup, defaults.pickupYen, e.target.checked)} /> 迎車料金
+                  <input type="checkbox" checked={applyNightSurcharge} onChange={(e) => setApplyNightSurcharge(e.target.checked)} /> 深夜割増（率）
                 </label>
-                <NumRow label="迎車（円）" value={pickup.yen} onChange={(yen) => setPickup({ ...pickup, yen })} disabled={!pickup.apply} />
-              </>
-            ) : null}
-            {features.includes("leftHand") ? (
-              <>
+              ) : null}
+              {showNightFlat ? (
                 <label className="settings-check">
-                  <input type="checkbox" checked={leftHand.apply} onChange={(e) => toggle(leftHand, setLeftHand, defaults.leftHandYen, e.target.checked)} />{" "}
-                  左ハンドル（定額枠）
+                  <input type="checkbox" checked={applyNightSurchargeFlat} onChange={(e) => setApplyNightSurchargeFlat(e.target.checked)} /> 深夜帯定額
                 </label>
-                <NumRow label="左ハンドル（円）" value={leftHand.yen} onChange={(yen) => setLeftHand({ ...leftHand, yen })} disabled={!leftHand.apply} />
-              </>
-            ) : null}
-            {features.includes("foreignCar") ? (
-              <>
+              ) : null}
+              {showLeftHandPct ? (
                 <label className="settings-check">
-                  <input type="checkbox" checked={foreignCar.apply} onChange={(e) => toggle(foreignCar, setForeignCar, defaults.foreignCarYen, e.target.checked)} />{" "}
-                  外車
+                  <input type="checkbox" checked={applyLeftHandSurcharge} onChange={(e) => setApplyLeftHandSurcharge(e.target.checked)} /> 左ハンドル（率）
                 </label>
-                <NumRow label="外車（円）" value={foreignCar.yen} onChange={(yen) => setForeignCar({ ...foreignCar, yen })} disabled={!foreignCar.apply} />
-              </>
-            ) : null}
-            {features.includes("cancel") ? (
-              <>
+              ) : null}
+              {showEarlyMorningFlat ? (
                 <label className="settings-check">
-                  <input type="checkbox" checked={cancel.apply} onChange={(e) => toggle(cancel, setCancel, defaults.cancelYen, e.target.checked)} /> キャンセル
+                  <input type="checkbox" checked={applyEarlyMorningFlatYen} onChange={(e) => setApplyEarlyMorningFlatYen(e.target.checked)} /> 早朝定額1
                 </label>
-                <NumRow label="キャンセル（円）" value={cancel.yen} onChange={(yen) => setCancel({ ...cancel, yen })} disabled={!cancel.apply} />
-              </>
-            ) : null}
-            <label className="settings-check">
-              <input type="checkbox" checked={applyNightSurcharge} onChange={(e) => setApplyNightSurcharge(e.target.checked)} /> 深夜割増（率）
-            </label>
-            <label className="settings-check">
-              <input type="checkbox" checked={applyNightSurchargeFlat} onChange={(e) => setApplyNightSurchargeFlat(e.target.checked)} /> 深夜帯定額
-            </label>
-            <label className="settings-check">
-              <input type="checkbox" checked={applyLeftHandSurcharge} onChange={(e) => setApplyLeftHandSurcharge(e.target.checked)} /> 左ハンドル（率）
-            </label>
-            <label className="settings-check">
-              <input type="checkbox" checked={applyEarlyMorningFlatYen} onChange={(e) => setApplyEarlyMorningFlatYen(e.target.checked)} /> 早朝定額1
-            </label>
-            <label className="settings-check">
-              <input type="checkbox" checked={applyLateNightFlatYen} onChange={(e) => setApplyLateNightFlatYen(e.target.checked)} /> 深夜定額2
-            </label>
-            <label className="settings-check">
-              <input type="checkbox" checked={applyEarlyRushFlatYen} onChange={(e) => setApplyEarlyRushFlatYen(e.target.checked)} /> 早朝定額2
-            </label>
-          </div>
-        </details>
+              ) : null}
+              {showLateNightFlat ? (
+                <label className="settings-check">
+                  <input type="checkbox" checked={applyLateNightFlatYen} onChange={(e) => setApplyLateNightFlatYen(e.target.checked)} /> 深夜定額2
+                </label>
+              ) : null}
+              {showEarlyRushFlat ? (
+                <label className="settings-check">
+                  <input type="checkbox" checked={applyEarlyRushFlatYen} onChange={(e) => setApplyEarlyRushFlatYen(e.target.checked)} /> 早朝定額2
+                </label>
+              ) : null}
+            </div>
+          </details>
+        ) : null}
 
         <button type="button" className="settings-primary" style={{ marginTop: "0.75rem" }} disabled={busy} onClick={() => void submit()}>
           送信（この運行を保存）
@@ -487,6 +586,16 @@ export default function DailyReportDetailPage(): JSX.Element {
   const [odoEndInput, setOdoEndInput] = useState(0);
   const [continueBusy, setContinueBusy] = useState(false);
 
+  const [addTripOpen, setAddTripOpen] = useState(false);
+  const [dialogTripId, setDialogTripId] = useState<string | null>(null);
+  const [addTripBusy, setAddTripBusy] = useState(false);
+  const [schedulePrefill, setSchedulePrefill] = useState<SchedulePrefillPayload | null>(null);
+  const schedulePrefillSeq = useRef(0);
+  const [schedulePickOpen, setSchedulePickOpen] = useState(false);
+  const [schedulePickErr, setSchedulePickErr] = useState<string | null>(null);
+  const [schedulePickLoading, setSchedulePickLoading] = useState(false);
+  const [schedulePayload, setSchedulePayload] = useState<SchedulePayloadMini | null>(null);
+
   const load = useCallback(async () => {
     if (!reportId) return;
     const r = await apiFetch<{
@@ -504,7 +613,21 @@ export default function DailyReportDetailPage(): JSX.Element {
     setReport(r.data.report);
     setDefaults(r.data.pricingDefaults);
     setFeatures(r.data.pricingFeatures ?? []);
-    setTariffVersions(r.data.tariffVersions ?? []);
+    const tvs = r.data.tariffVersions ?? [];
+    setTariffVersions(
+      tvs.map((tv) => ({
+        id: tv.id,
+        label: tv.label,
+        planId: tv.planId,
+        version: tv.version,
+        nightSurchargeBps: Number(tv.nightSurchargeBps) || 0,
+        nightSurchargeFlatYen: Number(tv.nightSurchargeFlatYen) || 0,
+        leftHandSurchargeBps: Number(tv.leftHandSurchargeBps) || 0,
+        earlyMorningFlatYen: Number(tv.earlyMorningFlatYen) || 0,
+        lateNightFlatYen: Number(tv.lateNightFlatYen) || 0,
+        earlyRushFlatYen: Number(tv.earlyRushFlatYen) || 0,
+      })),
+    );
     setEmployees(r.data.employees ?? []);
     setVehicles(r.data.vehicles ?? []);
     const rep = r.data.report;
@@ -534,11 +657,60 @@ export default function DailyReportDetailPage(): JSX.Element {
     else void load();
   }
 
-  async function addTrip(): Promise<void> {
+  async function openNewTripDialog(): Promise<void> {
     if (!reportId) return;
+    setAddTripBusy(true);
+    setErr(null);
     const r = await apiFetch<{ id: string }>(`/daily-reports/${reportId}/trips`, { method: "POST", json: {} });
-    if (!r.ok) setErr(r.error);
-    else await load();
+    if (!r.ok) {
+      setErr(r.error);
+      setAddTripBusy(false);
+      return;
+    }
+    setDialogTripId(r.data.id);
+    setSchedulePrefill(null);
+    schedulePrefillSeq.current = 0;
+    await load();
+    setAddTripOpen(true);
+    setAddTripBusy(false);
+  }
+
+  function closeAddTripDialog(): void {
+    setAddTripOpen(false);
+    setDialogTripId(null);
+    setSchedulePrefill(null);
+    setSchedulePickOpen(false);
+  }
+
+  async function openSchedulePicker(): Promise<void> {
+    if (!report) return;
+    setSchedulePickOpen(true);
+    setSchedulePickErr(null);
+    setSchedulePickLoading(true);
+    const r = await apiFetch<SchedulePayloadMini>(`/dispatch/schedule?date=${encodeURIComponent(report.businessDate)}`);
+    setSchedulePickLoading(false);
+    if (!r.ok) {
+      setSchedulePickErr(r.error);
+      setSchedulePayload(null);
+      return;
+    }
+    setSchedulePayload(r.data);
+  }
+
+  function applyReservationToPrefill(row: ScheduleReservationRow): void {
+    schedulePrefillSeq.current += 1;
+    const d = row.detail;
+    setSchedulePrefill({
+      token: schedulePrefillSeq.current,
+      customerName: d.customerName,
+      pickup: d.pickup,
+      dropoff: d.dropoff,
+      viaStops: Array.isArray(d.viaStops) ? d.viaStops.filter((s): s is string => typeof s === "string") : [],
+      vehicleNumber: d.vehicleNumber,
+      departedIso: row.startsAt,
+      arrivedIso: row.endsAt,
+    });
+    setSchedulePickOpen(false);
   }
 
   async function savePartner(): Promise<void> {
@@ -568,7 +740,21 @@ export default function DailyReportDetailPage(): JSX.Element {
     }
   }
 
-  if (!reportId) return <p className="settings-hint">日報が見つかりません。</p>;
+  const dialogTrip = useMemo(() => {
+    if (!report || !addTripOpen || !dialogTripId) return null;
+    return report.trips.find((t) => t.id === dialogTripId) ?? null;
+  }, [report, addTripOpen, dialogTripId]);
+
+  const mainDriverReservations = useMemo(() => {
+    if (!schedulePayload || !report) return [];
+    return schedulePayload.reservations.filter((x) => x.driverEmployeeId === report.mainEmployeeId);
+  }, [schedulePayload, report]);
+
+  const inlineTrips = useMemo(() => {
+    if (!report) return [];
+    if (addTripOpen && dialogTripId) return report.trips.filter((t) => t.id !== dialogTripId);
+    return report.trips;
+  }, [report, addTripOpen, dialogTripId]);
   if (!report || !defaults) {
     return (
       <Card title="日報">
@@ -640,14 +826,14 @@ export default function DailyReportDetailPage(): JSX.Element {
       </div>
 
       <div style={{ marginBottom: "0.75rem" }}>
-        <button type="button" className="settings-primary" onClick={() => void addTrip()}>
-          運行を追加
+        <button type="button" className="settings-primary" disabled={addTripBusy} onClick={() => void openNewTripDialog()}>
+          {addTripBusy ? "準備中…" : "運行を追加"}
         </button>
       </div>
 
       {report.trips.length === 0 ? <p className="settings-hint">運行がまだありません。「運行を追加」から入力してください。</p> : null}
 
-      {report.trips.map((t) => (
+      {inlineTrips.map((t) => (
         <TripWizard
           key={t.id}
           reportId={reportId!}
@@ -655,6 +841,7 @@ export default function DailyReportDetailPage(): JSX.Element {
           tariffVersions={tariffVersions}
           defaults={defaults}
           features={features}
+          sectionTitle="運行"
           onSubmitted={async () => {
             await load();
             setContinueOpen(true);
@@ -663,6 +850,105 @@ export default function DailyReportDetailPage(): JSX.Element {
         />
       ))}
 
+      {addTripOpen && dialogTripId && defaults && dialogTrip ? (
+        <div
+          className="pricing-modal-backdrop"
+          style={{ zIndex: 105 }}
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closeAddTripDialog();
+          }}
+        >
+          <div
+            className="pricing-modal attend-shift-dialog trip-add-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dr-add-trip-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h2 id="dr-add-trip-title" className="pricing-modal-title">
+              運行を追加
+            </h2>
+            <p className="settings-hint">入力後「送信」で保存します。閉じた場合も空の運行は一覧に残ります。</p>
+            <div className="attend-shift-dialog-scroll" style={{ display: "flex", flexDirection: "column", gap: "0.5rem", paddingTop: "0.35rem" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                <button type="button" className="settings-secondary" disabled={schedulePickLoading} onClick={() => void openSchedulePicker()}>
+                  スケジュールから入力
+                </button>
+              </div>
+              <TripWizard
+                reportId={reportId!}
+                trip={dialogTrip}
+                tariffVersions={tariffVersions}
+                defaults={defaults}
+                features={features}
+                sectionTitle="運行入力"
+                schedulePrefill={schedulePrefill}
+                onSubmitted={async () => {
+                  closeAddTripDialog();
+                  await load();
+                  setContinueOpen(true);
+                  setContinueStep("choose");
+                }}
+              />
+            </div>
+            <div className="pricing-modal-actions">
+              <button type="button" className="settings-secondary" onClick={() => closeAddTripDialog()}>
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {schedulePickOpen ? (
+        <div
+          className="pricing-modal-backdrop"
+          style={{ zIndex: 110 }}
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setSchedulePickOpen(false);
+          }}
+        >
+          <div
+            className="pricing-modal attend-shift-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dr-sched-pick-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h2 id="dr-sched-pick-title" className="pricing-modal-title">
+              スケジュールから入力
+            </h2>
+            <p className="settings-hint">乗務（客車担当）の予定から1件選ぶと、依頼者名・経路・車番・開始・終了時刻などが入力されます。</p>
+            <Err msg={schedulePickErr} />
+            <div className="attend-shift-dialog-scroll">
+              {schedulePickLoading ? <p className="settings-hint">読み込み中…</p> : null}
+              {!schedulePickLoading && mainDriverReservations.length === 0 ? (
+                <p className="settings-hint">この日付で乗務スタッフに紐づく配車予定がありません（スケジュールで予定を登録してください）。</p>
+              ) : null}
+              {!schedulePickLoading
+                ? mainDriverReservations.map((row) => (
+                    <button
+                      key={row.id}
+                      type="button"
+                      className="settings-list-btn"
+                      style={{ textAlign: "left", width: "100%", marginBottom: "0.35rem" }}
+                      onClick={() => applyReservationToPrefill(row)}
+                    >
+                      {formatScheduleRowLabel(row)}
+                    </button>
+                  ))
+                : null}
+            </div>
+            <div className="pricing-modal-actions">
+              <button type="button" onClick={() => setSchedulePickOpen(false)}>
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {continueOpen ? (
         <div
           className="pricing-modal-backdrop"
@@ -675,7 +961,7 @@ export default function DailyReportDetailPage(): JSX.Element {
             {continueStep === "choose" ? (
               <>
                 <h2 className="pricing-modal-title">本日の業務は続きますか？</h2>
-                <p className="settings-hint">「はい」で空の運行を追加し、続けて入力できます。「いいえ」で随伴車の終了ODOを記録して締めます。</p>
+                <p className="settings-hint">「はい」でダイアログから次の運行を入力できます。「いいえ」で随伴車の終了ODOを記録して締めます。</p>
                 <div className="pricing-modal-actions">
                   <button
                     type="button"
@@ -684,7 +970,7 @@ export default function DailyReportDetailPage(): JSX.Element {
                     onClick={() => {
                       void (async () => {
                         setContinueBusy(true);
-                        await addTrip();
+                        await openNewTripDialog();
                         setContinueBusy(false);
                         setContinueOpen(false);
                         setContinueStep("choose");
