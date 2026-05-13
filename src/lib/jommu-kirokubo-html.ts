@@ -60,7 +60,8 @@ function timeCells(hm: string | null): string {
   const { h, m } = splitHm(hm);
   const hb = h ? esc(h) : '<span class="jm-blank">　　</span>';
   const mb = m ? esc(m) : '<span class="jm-blank">　　</span>';
-  return `<span class="jm-time-pair">${hb}<span class="jm-colon">：</span>${mb}</span>`;
+  /* 様式に合わせ半角コロン＋前後スペース */
+  return `<span class="jm-time-pair">${hb}<span class="jm-colon"> : </span>${mb}</span>`;
 }
 
 function timeCellsInline(hm: string): string {
@@ -81,24 +82,31 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
-.jm-doc .jm-topline {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 0.4mm;
+.jm-doc .jm-title-band {
+  position: relative;
+  margin: 0 0 2.2mm;
+  min-height: 1.35em;
 }
 .jm-doc .jm-retention {
+  position: absolute;
+  top: 0;
+  right: 0;
   margin: 0;
   font-size: 8pt;
   color: #000000;
   letter-spacing: 0;
+  line-height: 1.35;
+  max-width: 52%;
+  text-align: right;
 }
 .jm-doc .jm-title {
-  margin: 0 0 2mm;
+  margin: 0;
+  padding: 0 18% 0 18%;
   text-align: center;
-  font-size: 18pt;
+  font-size: 19pt;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-indent: 0;
+  letter-spacing: 0.35em;
+  text-indent: 0.35em;
   color: #000000;
   font-family: "Noto Serif CJK JP", "Yu Mincho", "YuMincho", "MS Mincho", serif;
 }
@@ -106,7 +114,7 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  border: 1.5pt solid #000000;
+  border: 2pt solid #000000;
   margin: 0 0 1.2mm;
   background: #ffffff;
 }
@@ -134,12 +142,16 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
 }
 .jm-doc .jm-meta-outer { margin-bottom: 1.2mm; }
 .jm-doc .jm-meta-outer > tbody > tr > td {
-  border: 1.5pt solid #000000;
+  border: 2pt solid #000000;
   padding: 0;
   vertical-align: top;
 }
 .jm-doc .jm-meta-left { width: 58%; }
 .jm-doc .jm-meta-right { width: 42%; }
+.jm-doc .jm-meta-right .jm-mgr-val {
+  min-height: 12em;
+  vertical-align: top;
+}
 .jm-doc .jm-box-inner {
   width: 100%;
   border-collapse: collapse;
@@ -188,6 +200,17 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   font-size: 10pt;
   min-height: 2.2em;
 }
+.jm-doc .jm-section-h {
+  background: ${JOMMU_HEADER_FILL};
+  color: #000000;
+  font-weight: 700;
+  text-align: center;
+  font-size: 10pt;
+  padding: 4px !important;
+  letter-spacing: 0.35em;
+  text-indent: 0.35em;
+  border-color: #000000;
+}
 .jm-doc .jm-work thead th {
   background: ${JOMMU_HEADER_FILL};
   font-weight: 600;
@@ -224,12 +247,51 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   overflow-wrap: normal;
   word-break: normal;
 }
+.jm-doc .jm-metric-cell {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 1.2em;
+}
+.jm-doc .jm-metric-num {
+  flex: 1 1 auto;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 .jm-doc .jm-unit {
-  display: inline;
+  flex: 0 0 auto;
   font-size: 7pt;
   font-weight: 600;
   color: #222222;
-  margin-left: 2px;
+}
+.jm-doc .jm-foot-hd {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4px;
+  font-weight: 600;
+  text-align: left;
+  line-height: 1.15;
+}
+.jm-doc .jm-foot-hd .jm-foot-lbl {
+  flex: 1 1 auto;
+  text-align: center;
+}
+.jm-doc .jm-foot-hd .jm-foot-unit {
+  flex: 0 0 auto;
+  font-size: 7pt;
+  font-weight: 600;
+  color: #222222;
+  padding-bottom: 0.5px;
+}
+.jm-doc .jm-metric-td {
+  padding: 2px 4px !important;
+  vertical-align: middle;
 }
 .jm-doc .jm-daiko {
   text-align: center;
@@ -250,14 +312,19 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   color: #000000;
   font-weight: 700;
 }
+.jm-doc .jm-foot thead th.jm-foot-hd {
+  text-align: left;
+  font-weight: 600;
+}
 .jm-doc .jm-foot thead th {
   background: ${JOMMU_HEADER_FILL};
   font-weight: 600;
   text-align: center;
   font-size: 7.5pt;
-  padding: 4px 2px !important;
+  padding: 4px 5px !important;
   line-height: 1.2;
   color: #000000;
+  vertical-align: bottom;
 }
 .jm-doc .jm-foot tbody td {
   font-size: 10pt;
@@ -279,7 +346,6 @@ const JOMMU_CSS = `${PRINT_BUSINESS_BASE_CSS}
   color: #000000;
   font-variant-numeric: tabular-nums;
 }
-.jm-foot-sub { font-size: 7pt; font-weight: 500; }
 .jm-blank { letter-spacing: 0.06em; }
 .jm-colon { padding: 0 1px; }
 .jm-time-pair { white-space: nowrap; }
@@ -291,6 +357,10 @@ function renderJommuTripRows(model: JommuKirokuboModel): string {
   const rows: string[] = [];
   for (let i = 0; i < rowCount; i++) {
     const t = model.trips[i];
+    const distNum =
+      t && String(t.distanceKm).trim() ? `<span class="jm-metric-num">${esc(t.distanceKm)}</span>` : `<span class="jm-metric-num"></span>`;
+    const fareNum =
+      t && String(t.fareYen).trim() ? `<span class="jm-metric-num">${esc(t.fareYen)}</span>` : `<span class="jm-metric-num"></span>`;
     rows.push(`<tr>
   <td class="jm-no">${i + 1}</td>
   <td class="jm-val">${t ? esc(t.clientName) : ""}</td>
@@ -300,8 +370,8 @@ function renderJommuTripRows(model: JommuKirokuboModel): string {
   <td class="jm-val">${t ? esc(t.viaText) : ""}</td>
   <td class="jm-val">${t ? esc(t.destination) : ""}</td>
   <td class="jm-val jm-c">${t ? timeCellsInline(t.arrivedHm) : ""}</td>
-  <td class="jm-val jm-r">${t && String(t.distanceKm).trim() ? `${esc(t.distanceKm)}<span class="jm-unit">km</span>` : `<span class="jm-unit">km</span>`}</td>
-  <td class="jm-val jm-r">${t && String(t.fareYen).trim() ? `${esc(t.fareYen)}<span class="jm-unit">円</span>` : `<span class="jm-unit">円</span>`}</td>
+  <td class="jm-val jm-metric-td"><div class="jm-metric-cell">${distNum}<span class="jm-unit">km</span></div></td>
+  <td class="jm-val jm-metric-td"><div class="jm-metric-cell">${fareNum}<span class="jm-unit">円</span></div></td>
   <td class="jm-val jm-daiko">代行</td>
   <td class="jm-val">${partner}</td>
 </tr>`);
@@ -325,7 +395,7 @@ function renderHeaderMeta(model: JommuKirokuboModel): string {
       <tr><td class="jm-lbl">業務年月日</td></tr>
       <tr><td class="jm-val jm-ymd">${esc(yParts.y)}　年　${esc(yParts.m)}　月　${esc(yParts.d)}　日</td></tr>
       <tr><td class="jm-sub2"><div>始業時刻　${timeCells(model.clockInHm)}</div><div>終業時刻　${timeCells(model.clockOutHm)}</div></td></tr>
-      <tr><td class="jm-lbl">随伴車登録番号</td></tr>
+      <tr><td class="jm-lbl">随伴車<br/>登録番号</td></tr>
       <tr><td class="jm-val jm-plate">${plate}</td></tr>
     </table>
   </td>
@@ -345,8 +415,10 @@ function renderJommuSheet(model: JommuKirokuboModel): string {
   const tripBody = renderJommuTripRows(model);
 
   return `<article class="pd-doc jm-doc">
-<div class="jm-topline"><p class="jm-retention">&lt;保存期間：最後に記載した日から2年間&gt;</p></div>
-<h1 class="jm-title">乗務記録簿</h1>
+<div class="jm-title-band">
+  <p class="jm-retention">＜保存期間：最後に記載した日から２年間＞</p>
+  <h1 class="jm-title">乗　務　記　録　簿</h1>
+</div>
 ${renderHeaderMeta(model)}
 <table class="jm-tbl jm-work">
   <colgroup>
@@ -364,6 +436,7 @@ ${renderHeaderMeta(model)}
     <col style="width:17.2%" />
   </colgroup>
   <thead>
+    <tr><th class="jm-section-h" colspan="12">乗務記録</th></tr>
     <tr>
       <th></th>
       <th>依頼者</th>
@@ -395,11 +468,11 @@ ${tripBody}
   <thead>
     <tr>
       <th class="jm-lbl jm-foot-v" rowspan="2">メーター距離等</th>
-      <th>始業時<br/><span class="jm-foot-sub">km</span></th>
-      <th>終業時<br/><span class="jm-foot-sub">km</span></th>
-      <th>走行距離合計<br/><span class="jm-foot-sub">km</span></th>
-      <th>実車走行距離<br/><span class="jm-foot-sub">km</span></th>
-      <th>売上合計<br/><span class="jm-foot-sub">円</span></th>
+      <th class="jm-foot-hd"><span class="jm-foot-lbl">始業時</span><span class="jm-foot-unit">km</span></th>
+      <th class="jm-foot-hd"><span class="jm-foot-lbl">終業時</span><span class="jm-foot-unit">km</span></th>
+      <th class="jm-foot-hd"><span class="jm-foot-lbl">走行距離合計</span><span class="jm-foot-unit">km</span></th>
+      <th class="jm-foot-hd"><span class="jm-foot-lbl">実車走行距離</span><span class="jm-foot-unit">km</span></th>
+      <th class="jm-foot-hd"><span class="jm-foot-lbl">売上合計</span><span class="jm-foot-unit">円</span></th>
     </tr>
   </thead>
   <tbody>
