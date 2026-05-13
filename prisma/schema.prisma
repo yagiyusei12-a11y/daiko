@@ -86,6 +86,7 @@ model Tenant {
   confirmedShiftDays  ConfirmedShiftDay[]
   timeCardPunches     TimeCardPunch[]
   vehicleOdometerLogs VehicleOdometerLog[]
+  lineChannels        TenantLineChannel[]
 }
 
 /// デモ用サンプル投入のバッチ（payload に作成した主キー一覧を保持し、削除時に利用）
@@ -269,6 +270,22 @@ model ConfirmedShiftDay {
 
   @@unique([tenantId, employeeId, businessDate])
   @@index([tenantId, businessDate])
+}
+
+/// テナントと公式 LINE（LIFF / Webhook 用）。lineChannelId は id_token の aud と突合せる。
+model TenantLineChannel {
+  id                String   @id @default(cuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// LINE Login チャネル ID（LIFF の id_token の aud）
+  lineChannelId     String
+  /// Messaging API チャネルシークレット等（Webhook 検証・将来拡張用）
+  lineChannelSecret String   @default("")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([tenantId, lineChannelId])
+  @@index([lineChannelId])
 }
 
 /// タイムカード打刻（出勤・退勤・休憩はイベントとして複数行で保持）

@@ -15,11 +15,13 @@ import { registerAttendanceRoutes } from "./routes/attendance.js";
 import { registerDashboardRoutes } from "./routes/dashboard.js";
 import { registerDispatchRoutes } from "./routes/dispatch.js";
 import { registerDocumentsRoutes } from "./routes/documents.js";
+import { registerLiffBookingRoutes } from "./routes/liff-booking.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const app = Fastify({ logger: true });
 
+/** CORS: LIFF から API を呼ぶ場合は CORS_ALLOWED_ORIGINS に LINE のオリジン（例: https://liff.line.me,https://miniapp.line.me）を追加。未設定かつ本番以外は origin: true。 */
 const origins = process.env.CORS_ALLOWED_ORIGINS?.split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -85,6 +87,7 @@ await app.register(registerAttendanceRoutes, { prefix: `${v1}/attendance` });
 await app.register(registerDailyReportRoutes, { prefix: v1 });
 await app.register(registerDashboardRoutes, { prefix: `${v1}/dashboard` });
 await app.register(registerDispatchRoutes, { prefix: `${v1}/dispatch` });
+await app.register(registerLiffBookingRoutes, { prefix: `${v1}/liff` });
 await app.register(registerDocumentsRoutes, { prefix: v1 });
 
 app.get("/api/v1/openapi.json", async () => app.swagger());

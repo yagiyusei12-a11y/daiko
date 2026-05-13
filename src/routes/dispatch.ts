@@ -5,61 +5,16 @@ import {
   coerceBusinessBasicsFromCustomJson,
   resolveBusinessHoursForYmd,
 } from "../lib/business-basics.js";
+import {
+  coerceDetail,
+  createDispatchReservationExplicit,
+  DispatchReservationOverlapError,
+  parseDutiesJson,
+  YMD_RE,
+} from "../lib/dispatch-reservation.js";
 import { loadUserAccess, type UserAccessContext } from "../lib/permissions.js";
 import { parseTokyoLocalDateTimeToUtc, tokyoDayRangeUtc } from "../lib/tokyo-datetime.js";
 import { prisma } from "../db.js";
-
-const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
-const DUTY_WHITELIST = new Set(["客車", "随伴車", "電話", "スケジュール"]);
-
-function parseDutiesJson(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  const out: string[] = [];
-  for (const x of raw) {
-    if (typeof x === "string" && DUTY_WHITELIST.has(x)) out.push(x);
-  }
-  return [...new Set(out)];
-}
-
-type DispatchDetail = {
-  customerName: string;
-  phone: string;
-  pickup: string;
-  viaStops: string[];
-  dropoff: string;
-  vehicleNumber: string;
-  parking: string;
-};
-
-function coerceDetail(raw: unknown): DispatchDetail {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return {
-      customerName: "",
-      phone: "",
-      pickup: "",
-      viaStops: [],
-      dropoff: "",
-      vehicleNumber: "",
-      parking: "",
-    };
-  }
-  const o = raw as Record<string, unknown>;
-  const via: string[] = [];
-  if (Array.isArray(o.viaStops)) {
-    for (const x of o.viaStops) {
-      if (typeof x === "string" && x.trim()) via.push(x.trim());
-    }
-  }
-  return {
-    customerName: typeof o.customerName === "string" ? o.customerName.trim() : "",
-    phone: typeof o.phone === "string" ? o.phone.trim() : "",
-    pickup: typeof o.pickup === "string" ? o.pickup.trim() : "",
-    viaStops: via,
-    dropoff: typeof o.dropoff === "string" ? o.dropoff.trim() : "",
-    vehicleNumber: typeof o.vehicleNumber === "string" ? o.vehicleNumber.trim() : "",
-    parking: typeof o.parking === "string" ? o.parking.trim() : "",
-  };
-}
 
 async function loadDriverRows(
   tenantId: string,
@@ -209,21 +164,21 @@ export async function registerDispatchRoutes(app: FastifyInstance): Promise<void
       if (!v) return reply.code(404).send({ error: "車両が見つかりません" });
     }
 
-    const title = `${detail.customerName}（${detail.pickup}→${detail.dropoff}）`.slice(0, 240);
-
-    const row = await prisma.dispatchReservation.create({
-      data: {
+    try {
+      const row = await createDispatchReservationExplicit({
         tenantId,
-        vehicleId,
         driverEmployeeId,
-        title,
-        detailJson: detail as unknown as Prisma.InputJsonValue,
+        vehicleId,
         startsAt,
         endsAt,
-      },
-      select: { id: true },
-    });
-
-    return { id: row.id };
+        detail,
+      });
+      return { id: row.id };
+    } catch (e) {
+      if (e instanceof DispatchReservationOverlapError) {
+        return reply.code(400).send({ error: e.message });
+      }
+      throw e;
+    }
   });
 }
