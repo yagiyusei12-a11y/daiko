@@ -13,6 +13,7 @@ import {
 import { coerceTillFromCustomJson, mergeTillIntoCustomJson, parseTillPut } from "../lib/till-settings.js";
 import { coercePricingPrefs, mergePricingPrefsUpdate } from "../lib/pricing-prefs.js";
 import { prisma } from "../db.js";
+import { reverseGeocodeTownJaCached } from "../lib/reverse-geocode-cache.js";
 
 type JsonObj = Record<string, unknown>;
 
@@ -131,6 +132,24 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
       prefecture: r.address1 ?? "",
       addressStart,
     };
+  });
+
+  /** ブラウザから Nominatim を直接叩かず、サーバー経由＋キャッシュで逆ジオコーディング */
+  app.get<{ Querystring: { lat?: string; lon?: string } }>("/reverse-geocode", async (req, reply) => {
+    const lat = Number(req.query?.lat);
+    const lon = Number(req.query?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      return reply.code(400).send({ error: "lat と lon を数値で指定してください" });
+    }
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      return reply.code(400).send({ error: "緯度経度の範囲が不正です" });
+    }
+    try {
+      const town = await reverseGeocodeTownJaCached(lat, lon);
+      return { town };
+    } catch {
+      return reply.code(502).send({ error: "逆ジオコーディングに失敗しました" });
+    }
   });
 
   app.get("/company", async (req) => {

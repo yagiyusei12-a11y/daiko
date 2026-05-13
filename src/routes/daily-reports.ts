@@ -8,6 +8,18 @@ function asObj(v: unknown): Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
 
+/** 経由地 JSON（string[]）を検証し、空要素は除く */
+function parseViaStopsJsonBody(v: unknown): { ok: true; stops: string[] } | { ok: false; error: string } {
+  if (!Array.isArray(v)) return { ok: false, error: "viaStopsJson は文字列の配列である必要があります" };
+  const stops: string[] = [];
+  for (const x of v) {
+    if (typeof x !== "string") return { ok: false, error: "viaStopsJson は文字列の配列である必要があります" };
+    const t = x.trim();
+    if (t) stops.push(t);
+  }
+  return { ok: true, stops };
+}
+
 export async function registerDailyReportRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
 
@@ -241,7 +253,20 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       if (typeof b.charterVehicleNo === "string") data.charterVehicleNo = b.charterVehicleNo.trim() || null;
       if (typeof b.origin === "string") data.origin = b.origin;
       if (typeof b.destination === "string") data.destination = b.destination;
-      if (typeof b.viaNote === "string") data.viaNote = b.viaNote.trim() || null;
+
+      if (b.viaStopsJson !== undefined) {
+        const parsed = parseViaStopsJsonBody(b.viaStopsJson);
+        if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
+        data.viaStopsJson = parsed.stops as Prisma.InputJsonValue;
+        data.viaNote = parsed.stops.length ? parsed.stops.join("\n") : null;
+        data.viaStopCount = parsed.stops.length;
+      } else if (typeof b.viaNote === "string") {
+        const trimmed = b.viaNote.trim() || null;
+        data.viaNote = trimmed;
+        const lines = b.viaNote.split(/\r?\n/).map((s: string) => s.trim()).filter(Boolean);
+        data.viaStopsJson = lines;
+        data.viaStopCount = lines.length;
+      }
       if (b.fareYen !== undefined) data.fareYen = Math.max(0, Math.floor(Number(b.fareYen) || 0));
       if (b.parkingAdvanceYen !== undefined) data.parkingAdvanceYen = Math.max(0, Math.floor(Number(b.parkingAdvanceYen) || 0));
       if (b.tripMeterStartM !== undefined) {

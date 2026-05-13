@@ -15,6 +15,7 @@ type TripLegFull = {
   origin: string;
   destination: string;
   viaNote: string | null;
+  viaStopsJson: unknown;
   departedAt: string;
   arrivedAt: string;
   distanceM: number;
@@ -53,6 +54,19 @@ type ReportDetail = {
 
 type TariffOpt = { id: string; label: string; planId: string; version: number };
 type Defaults = { pickupYen: number; leftHandYen: number; foreignCarYen: number; cancelYen: number };
+
+function viaStopsFromTrip(trip: TripLegFull): string[] {
+  const raw = trip.viaStopsJson;
+  if (Array.isArray(raw)) {
+    const xs = raw.filter((x): x is string => typeof x === "string").map((s) => s.trim());
+    const filtered = xs.filter(Boolean);
+    if (filtered.length > 0) return filtered;
+  }
+  if (trip.viaNote) {
+    return trip.viaNote.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  }
+  return [""];
+}
 
 function toDatetimeLocalValue(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
@@ -145,7 +159,7 @@ function TripWizard({
   const [clientName, setClientName] = useState(trip.clientName);
   const [charterVehicleNo, setCharterVehicleNo] = useState(trip.charterVehicleNo ?? "");
   const [origin, setOrigin] = useState(trip.origin);
-  const [viaNote, setViaNote] = useState(trip.viaNote ?? "");
+  const [viaStops, setViaStops] = useState(() => viaStopsFromTrip(trip));
   const [destination, setDestination] = useState(trip.destination);
   const [fareYen, setFareYen] = useState(trip.fareYen);
   const [parkingAdvanceYen, setParkingAdvanceYen] = useState(trip.parkingAdvanceYen ?? 0);
@@ -172,7 +186,7 @@ function TripWizard({
     setClientName(trip.clientName);
     setCharterVehicleNo(trip.charterVehicleNo ?? "");
     setOrigin(trip.origin);
-    setViaNote(trip.viaNote ?? "");
+    setViaStops(viaStopsFromTrip(trip));
     setDestination(trip.destination);
     setFareYen(trip.fareYen);
     setParkingAdvanceYen(trip.parkingAdvanceYen ?? 0);
@@ -220,6 +234,7 @@ function TripWizard({
       foreignCar: { apply: foreignCar.apply, yen: foreignCar.yen },
       cancel: { apply: cancel.apply, yen: cancel.yen },
     };
+    const viaFiltered = viaStops.map((s) => s.trim()).filter(Boolean);
     const r = await apiFetch(`/daily-reports/${reportId}/trips/${trip.id}`, {
       method: "PATCH",
       json: {
@@ -227,7 +242,7 @@ function TripWizard({
         charterVehicleNo: charterVehicleNo.trim() || null,
         origin,
         destination,
-        viaNote: viaNote.trim() || null,
+        viaStopsJson: viaFiltered,
         fareYen,
         parkingAdvanceYen,
         tripMeterStartM: tripMeterStartM || null,
@@ -278,8 +293,34 @@ function TripWizard({
         <input value={origin} onChange={(e) => setOrigin(e.target.value)} />
         <GpsTownButton label="GPSで町名を入力" onTown={(t) => setOrigin((o) => (o ? `${o} ${t}`.trim() : t))} disabled={busy} />
         <label>経由地</label>
-        <textarea value={viaNote} onChange={(e) => setViaNote(e.target.value)} rows={2} placeholder="複数行可" />
-        <GpsTownButton label="GPSで町名を経由に追記" onTown={(t) => setViaNote((v) => (v ? `${v}\n${t}`.trim() : t))} disabled={busy} />
+        {viaStops.map((v, idx) => (
+          <div key={idx} style={{ display: "flex", flexDirection: "column", gap: "0.25rem", marginBottom: "0.5rem" }}>
+            <div style={{ display: "flex", gap: "0.35rem", alignItems: "flex-start", flexWrap: "wrap" }}>
+              <input
+                style={{ flex: "1 1 12rem", minWidth: 0 }}
+                value={v}
+                onChange={(e) => setViaStops((rows) => rows.map((x, i) => (i === idx ? e.target.value : x)))}
+                placeholder={`経由 ${idx + 1}`}
+              />
+              <button
+                type="button"
+                className="settings-secondary"
+                disabled={viaStops.length <= 1}
+                onClick={() => setViaStops((rows) => rows.filter((_, i) => i !== idx))}
+              >
+                削除
+              </button>
+            </div>
+            <GpsTownButton
+              label="GPSでこの行に追記"
+              onTown={(t) => setViaStops((rows) => rows.map((x, i) => (i === idx ? (x ? `${x} ${t}`.trim() : t) : x)))}
+              disabled={busy}
+            />
+          </div>
+        ))}
+        <button type="button" className="settings-secondary" onClick={() => setViaStops((rows) => [...rows, ""])}>
+          経由地を追加
+        </button>
         <label>到着メーター距離</label>
         <input type="number" min={0} value={tripMeterEndM} onChange={(e) => setTripMeterEndM(Math.max(0, Math.floor(Number(e.target.value) || 0)))} />
         <label>到着地</label>
@@ -556,11 +597,11 @@ export default function DailyReportDetailPage(): JSX.Element {
           tariffVersions={tariffVersions}
           defaults={defaults}
           features={features}
-        onSubmitted={async () => {
-          await load();
-          setContinueOpen(true);
-          setContinueStep("choose");
-        }}
+          onSubmitted={async () => {
+            await load();
+            setContinueOpen(true);
+            setContinueStep("choose");
+          }}
         />
       ))}
 
