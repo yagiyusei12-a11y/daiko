@@ -87,6 +87,10 @@ export async function registerDispatchRoutes(app: FastifyInstance): Promise<void
     if (!range) return reply.code(400).send({ error: "日付が不正です" });
 
     const settings = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+    const rollHour = settings?.businessDayRollHour ?? 4;
+    // 事業日のロールオーバー分だけ終端を延長（例: rollHour=4 → 翌 4:00 まで）
+    const extendedEnd = new Date(range.end.getTime() + rollHour * 60 * 60 * 1000);
+
     const basics = coerceBusinessBasicsFromCustomJson(settings?.customJson);
     const businessHours = resolveBusinessHoursForYmd(date, basics);
     const timing = coerceReservationTimingFromCustomJson(settings?.customJson);
@@ -112,7 +116,7 @@ export async function registerDispatchRoutes(app: FastifyInstance): Promise<void
 
     const resWhere: Prisma.DispatchReservationWhereInput = {
       tenantId,
-      startsAt: { lt: range.end },
+      startsAt: { lt: extendedEnd },
       endsAt: { gt: range.start },
     };
     if (access.isStaffShiftOnly && access.employeeId) {
@@ -209,7 +213,17 @@ export async function registerDispatchRoutes(app: FastifyInstance): Promise<void
     }
     const endsAt = new Date(startsAt.getTime() + resolved.blockedMinutes * 60 * 1000);
 
-    const businessDate = startLocal.slice(0, 10);
+    // 事業日計算: rollHour 未満（翌暦日0:00〜rollHour:00）は前事業日
+    const calDateOfStart = startLocal.slice(0, 10);
+    const startHour = Number(startLocal.slice(11, 13));
+    let businessDate = calDateOfStart;
+    const tsRollHour = settingsRow?.businessDayRollHour ?? 4;
+    if (!Number.isNaN(startHour) && tsRollHour > 0 && startHour < tsRollHour) {
+      // 前日の事業日にする
+      const [sy, sm, sd] = calDateOfStart.split("-").map(Number);
+      const prev = new Date(Date.UTC(sy, sm - 1, sd - 1, 12, 0, 0));
+      businessDate = `${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, "0")}-${String(prev.getUTCDate()).padStart(2, "0")}`;
+    }
     if (!YMD_RE.test(businessDate)) {
       return reply.code(400).send({ error: "日時に日付が含まれていません" });
     }

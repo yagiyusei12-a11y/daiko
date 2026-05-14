@@ -253,6 +253,7 @@ export default function TodaySchedulePage(): JSX.Element {
   }, [scheduleDurationOptions]);
 
   const scheduleAxis = useMemo(() => {
+    const rollHour = (me?.dayChangeHour ?? 28) - 24;
     let mn = Number.POSITIVE_INFINITY;
     let mx = Number.NEGATIVE_INFINITY;
     const slots = data?.businessHours ?? [];
@@ -266,10 +267,21 @@ export default function TodaySchedulePage(): JSX.Element {
       mn = 7 * 60;
       mx = 22 * 60;
     }
+    // 既存の予定の時刻も軸に含める
+    for (const rv of data?.reservations ?? []) {
+      const a = minutesSinceTokyoDay(viewDate, rv.startsAt);
+      const b = minutesSinceTokyoDay(viewDate, rv.endsAt);
+      if (Number.isFinite(a) && a > 0) mx = Math.max(mx, a + 30);
+      if (Number.isFinite(b) && b > 0) mx = Math.max(mx, b);
+    }
+    // rollHour がある場合は日付変更時刻まで軸を延長
+    if (rollHour > 0) {
+      mx = Math.max(mx, (24 + rollHour) * 60);
+    }
     const step = 15;
     const slotCount = Math.max(1, Math.ceil((mx - mn) / step));
     return { mn, mx, slotCount, step };
-  }, [data?.businessHours]);
+  }, [data?.businessHours, data?.reservations, viewDate, me?.dayChangeHour]);
 
   const scheduleTranspose = deviceKind === "phone";
   const scheduleSlotPx = 11;
@@ -773,13 +785,7 @@ export default function TodaySchedulePage(): JSX.Element {
                               left: `${bar.startPct}%`,
                               width: `${bar.sizePct}%`,
                               border: "none",
-                              padding: "0 2px",
                               cursor: "grab",
-                              overflow: "hidden",
-                              fontSize: "0.58rem",
-                              color: "#fff",
-                              whiteSpace: "nowrap",
-                              textOverflow: "ellipsis",
                               opacity: isCrossRowDragging ? 0.35 : 1,
                             }}
                             title={`${rv.detail.customerName} ${rv.detail.pickup}→${rv.detail.dropoff}`}

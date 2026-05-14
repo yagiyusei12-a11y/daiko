@@ -1830,7 +1830,7 @@ button.settings-danger:disabled {
   display: grid;
   grid-template-columns: 7rem 1fr;
   border-bottom: 1px solid var(--color-border);
-  min-height: 2.25rem;
+  min-height: 3.5rem;
 }
 
 .attend-schedule-row:last-child {
@@ -1846,7 +1846,7 @@ button.settings-danger:disabled {
 
 .attend-schedule-track {
   position: relative;
-  min-height: 2.25rem;
+  min-height: 3.5rem;
   background: var(--color-surface);
 }
 
@@ -1854,10 +1854,14 @@ button.settings-danger:disabled {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  height: 0.65rem;
+  height: 1.8rem;
   border-radius: 4px;
   background: color-mix(in srgb, var(--color-accent) 75%, #1e3a5f);
   min-width: 3px;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  box-sizing: border-box;
 }
 
 .attend-schedule-wrap--transpose {
@@ -1900,6 +1904,11 @@ button.settings-danger:disabled {
   z-index: 2;
   opacity: 0.95;
   background: color-mix(in srgb, var(--color-accent) 75%, #1e3a5f) !important;
+  font-size: 0.72rem;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .attend-schedule-row--drag-target .attend-schedule-track {
   background: color-mix(in srgb, var(--color-accent) 12%, transparent);
