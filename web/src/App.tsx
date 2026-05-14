@@ -7,11 +7,28 @@ import DailyReportDetailPage from "./pages/DailyReportDetailPage";
 import DailyReportsMenuPage from "./pages/DailyReportsMenuPage";
 import AttendanceMenuPage from "./pages/AttendanceMenuPage";
 import ComplaintsPage from "./pages/ComplaintsPage";
+import DocumentsPage from "./pages/DocumentsPage";
 import InstructionRecordsPage from "./pages/InstructionRecordsPage";
 import DashboardPage from "./pages/DashboardPage";
 import SettingsMenuPage from "./pages/SettingsMenuPage";
 
 export default function App(): JSX.Element {
+  // #region agent log
+  fetch("http://127.0.0.1:7838/ingest/f37b4987-1b77-43d9-b411-9367fa4c8525", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "57fb34" },
+    body: JSON.stringify({
+      sessionId: "57fb34",
+      hypothesisId: "H1",
+      location: "App.tsx:entry",
+      message: "App function entered",
+      data: {},
+      timestamp: Date.now(),
+      runId: "post-fix-verify",
+    }),
+  }).catch(() => {});
+  // #endregion
+
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
