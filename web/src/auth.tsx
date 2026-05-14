@@ -26,7 +26,34 @@ export type MeUser = {
   roles: string[];
   permissions: string[];
   staffMenuVisibility?: StaffMenuVisibilityClient;
+  /** 日付変更時間（28時間表記）。rollHour = dayChangeHour - 24 */
+  dayChangeHour: number;
 };
+
+/**
+ * dayChangeHour（28時間表記）を考慮した現在の事業日（Tokyo, yyyy-MM-dd）を返す。
+ * dayChangeHour=28 → 04:00 未満は前日の事業日。
+ */
+export function currentBusinessYmd(dayChangeHour: number): string {
+  const rollHour = dayChangeHour - 24;
+  const tokyoParts = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(new Date());
+  const get = (t: string) => tokyoParts.find((p) => p.type === t)?.value ?? "00";
+  const ymd = `${get("year")}-${get("month")}-${get("day")}`;
+  const hour = Number(get("hour"));
+  if (rollHour > 0 && hour < rollHour) {
+    const prev = new Date(`${ymd}T12:00:00+09:00`);
+    prev.setDate(prev.getDate() - 1);
+    return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-${String(prev.getDate()).padStart(2, "0")}`;
+  }
+  return ymd;
+}
 
 type AuthCtx = {
   me: MeUser | null;

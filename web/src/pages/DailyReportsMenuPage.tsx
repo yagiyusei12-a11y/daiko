@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiFetch } from "../api";
+import { useAuth, currentBusinessYmd } from "../auth";
 import { Card, Err } from "../ui";
 import { useSavedToast } from "../saved-toast";
-
-function tokyoTodayYmd(): string {
-  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date()).slice(0, 10);
-}
 
 type ReportRow = {
   id: string;
@@ -18,18 +15,24 @@ type ReportRow = {
 export default function DailyReportsMenuPage(): JSX.Element {
   const nav = useNavigate();
   const { flashSaved } = useSavedToast();
+  const { me } = useAuth();
   const [err, setErr] = useState<string | null>(null);
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [vehicles, setVehicles] = useState<{ id: string; label: string }[]>([]);
   const [employees, setEmployees] = useState<{ id: string; familyName: string; givenName: string }[]>([]);
   const [passengerDrivers, setPassengerDrivers] = useState<{ id: string; familyName: string; givenName: string }[]>([]);
-  const [businessDate, setBusinessDate] = useState(tokyoTodayYmd);
+  const [businessDate, setBusinessDate] = useState(() => currentBusinessYmd(me?.dayChangeHour ?? 28));
   const [employeeId, setEmployeeId] = useState("");
   const [partnerId, setPartnerId] = useState("");
   const [escortVehicleId, setEscortVehicleId] = useState("");
   const [escortOdoStart, setEscortOdoStart] = useState(0);
   const [busy, setBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+
+  // me がロードされたら dayChangeHour 考慮の事業日で初期値を上書き
+  useEffect(() => {
+    if (me) setBusinessDate((prev) => prev === currentBusinessYmd(28) ? currentBusinessYmd(me.dayChangeHour) : prev);
+  }, [me]);
 
   const load = useCallback(async () => {
     const [r1, r2, r3, r4] = await Promise.all([

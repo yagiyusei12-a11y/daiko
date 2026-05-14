@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../api";
+import { useAuth, currentBusinessYmd } from "../auth";
 import {
   SCHEDULE_UNASSIGNED_DRIVER_ID,
   scheduleDbUnassignedToDriverColumnKey,
@@ -34,9 +35,6 @@ function scheduleBarPercentages(
   return { startPct, sizePct: Math.min(sizePct, 100 - startPct) };
 }
 
-function tokyoTodayYmd(): string {
-  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date()).slice(0, 10);
-}
 
 function tokyoMidnightUtcMs(ymd: string): number {
   const [y, mo, d] = ymd.split("-").map(Number);
@@ -167,8 +165,9 @@ function isUnassignedDriverId(id: string): boolean {
 
 export default function TodaySchedulePage(): JSX.Element {
   const { flashSaved } = useSavedToast();
+  const { me } = useAuth();
   const deviceKind = useDeviceKind();
-  const [viewDate, setViewDate] = useState(tokyoTodayYmd);
+  const [viewDate, setViewDate] = useState(() => currentBusinessYmd(me?.dayChangeHour ?? 28));
   const [data, setData] = useState<SchedulePayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);

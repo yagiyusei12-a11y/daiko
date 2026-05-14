@@ -143,7 +143,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
             id: true,
             name: true,
             slug: true,
-            settings: { select: { legalTradeName: true, customJson: true } },
+            settings: { select: { legalTradeName: true, customJson: true, businessDayRollHour: true } },
           },
         },
         roles: { include: { role: true } },
@@ -157,6 +157,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       ? `${user.employee.familyName} ${user.employee.givenName}`.trim()
       : (user.displayName?.trim() || user.email);
     const sm = coerceStaffMenuVisibilityFromCustomJson(user.tenant.settings?.customJson);
+    const rollHour = user.tenant.settings?.businessDayRollHour ?? 4;
     return {
       user: {
         id: user.id,
@@ -172,6 +173,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           allowedHeaderNavIds: sm.allowedHeaderNavIds,
           allowedSubTabIdsByNav: sm.allowedSubTabIdsByNav,
         },
+        dayChangeHour: rollHour + 24,
       },
     };
   });
