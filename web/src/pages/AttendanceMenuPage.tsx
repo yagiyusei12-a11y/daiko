@@ -1070,7 +1070,7 @@ export default function AttendanceMenuPage(): JSX.Element {
     setTcLoading(true);
     setErr(null);
     const body: Record<string, unknown> = { employeeId: tcEmployeeId, businessDate: tcDate, kind };
-    if (kind === "CLOCK_IN" && alcoholCheck) body.alcoholCheck = alcoholCheck;
+    if ((kind === "CLOCK_IN" || kind === "CLOCK_OUT") && alcoholCheck) body.alcoholCheck = alcoholCheck;
     const r = await apiFetch("/attendance/timecard/punch", {
       method: "POST",
       json: body,
