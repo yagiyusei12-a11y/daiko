@@ -91,10 +91,9 @@ export async function loadJommuKirokuboModelForDailyReport(
     if (Number.isFinite(a) && Number.isFinite(b) && b >= a) totalOdoKm = String(b - a);
   }
 
-  const companyCarRegNo =
-    report.escortVehicle?.plate?.trim() ||
-    report.escortVehicle?.label?.trim() ||
-    "";
+  const escortVehicleLabel = report.escortVehicle?.label?.trim() ?? "";
+  const escortVehiclePlate = report.escortVehicle?.plate?.trim() ?? "";
+  const companyCarRegNo = escortVehiclePlate || escortVehicleLabel;
 
   const accompanyingCrewName = report.partnerEmployee
     ? `${report.partnerEmployee.familyName} ${report.partnerEmployee.givenName}`.trim()
@@ -127,6 +126,9 @@ export async function loadJommuKirokuboModelForDailyReport(
     clockInHm: clockInAt ? hmTokyo(clockInAt) : null,
     clockOutHm: clockOutAt ? hmTokyo(clockOutAt) : null,
     officeName,
+    operatorName: tradeName,
+    escortVehicleLabel,
+    escortVehiclePlate,
     companyCarRegNo,
     safetyManagerName,
     accompanyingCrewName,
