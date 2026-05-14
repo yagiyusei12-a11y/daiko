@@ -12,6 +12,7 @@ import { isChromiumConfiguredForPdf, renderHtmlToPdf } from "../lib/html-to-pdf.
 import { renderJommuKirokuboPdfBundle } from "../lib/jommu-excel-pdf.js";
 import { userFacingJommuPdfError } from "../lib/jommu-pdf-user-error.js";
 import { loadJommuKirokuboModelForDailyReport } from "../lib/jommu-daily-report-model.js";
+import { buildDaikoHenkoKisaiPrintHtml, type HenkoKisaiInput, type HenkoKisaiKind } from "../lib/daiko-henko-kisai-print-html.js";
 import { buildDaikoLaw14SeiyakuPrintHtml } from "../lib/daiko-law14-seiyaku-print-html.js";
 import { buildDaikoNinteiCertificatePrintHtml } from "../lib/daiko-nintei-certificate-print-html.js";
 import { buildDaikoYakkanPrintHtml } from "../lib/daiko-yakkan-print-html.js";
@@ -278,6 +279,86 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
       sheets: parsed.map((p) => ({ signerName: p.signerName, signerAddress: p.signerAddress })),
     });
     return sendHtmlOrPdf(reply, req, b, html, "daiko-law14-seiyaku");
+  });
+
+  app.post("/documents/henko-kisai-print", async (req, reply) => {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+
+    const kindRaw = String(b.kind ?? "").trim();
+    const allowedKinds: HenkoKisaiKind[] = [
+      "mutual_aid_renewal",
+      "escort_swap",
+      "escort_add",
+      "trade_name_change",
+    ];
+    if (!allowedKinds.includes(kindRaw as HenkoKisaiKind)) {
+      return reply.code(400).send({ error: "kind は mutual_aid_renewal / escort_swap / escort_add / trade_name_change のいずれかを指定してください" });
+    }
+    const kind = kindRaw as HenkoKisaiKind;
+
+    function strField(key: string, max = 800): string {
+      const v = b[key];
+      const s = typeof v === "string" ? v.trim() : "";
+      return s.length > max ? s.slice(0, max) : s;
+    }
+
+    function ymdField(key: string): string {
+      const v = String(b[key] ?? "").trim();
+      if (!v) return "";
+      if (!ISO_DATE.test(v)) {
+        throw Object.assign(new Error(`${key} は YYYY-MM-DD で指定してください`), { _httpStatus: 400 });
+      }
+      return v;
+    }
+
+    function plateList(key: string): string[] {
+      const v = b[key];
+      if (!Array.isArray(v)) return [];
+      return v
+        .map((x) => (typeof x === "string" ? x.trim() : ""))
+        .filter(Boolean)
+        .slice(0, 50);
+    }
+
+    try {
+      const input: HenkoKisaiInput = {
+        kind,
+        submittedOn: ymdField("submittedOn"),
+        addresseeCommission: strField("addresseeCommission", 300),
+        applicantName: strField("applicantName", 300),
+        applicantAddress: strField("applicantAddress", 600),
+        mainOfficeName: strField("mainOfficeName", 300),
+        mainOfficeAddress: strField("mainOfficeAddress", 600),
+        certifiedCommission: strField("certifiedCommission", 300),
+        certificationNumber: strField("certificationNumber", 120),
+        changedOn: ymdField("changedOn"),
+        changeReason: strField("changeReason", 2000),
+        newCoverageFrom: ymdField("newCoverageFrom"),
+        newCoverageTo: ymdField("newCoverageTo"),
+        oldCoverageFrom: ymdField("oldCoverageFrom"),
+        oldCoverageTo: ymdField("oldCoverageTo"),
+        newEscortPlates: plateList("newEscortPlates"),
+        oldEscortPlates: plateList("oldEscortPlates"),
+        newTradeName: strField("newTradeName", 300),
+        oldTradeName: strField("oldTradeName", 300),
+      };
+
+      if (!input.submittedOn) {
+        return reply.code(400).send({ error: "提出年月日を入力してください" });
+      }
+      if (!input.changedOn) {
+        return reply.code(400).send({ error: "変更年月日を入力してください" });
+      }
+
+      const html = buildDaikoHenkoKisaiPrintHtml(input);
+      return sendHtmlOrPdf(reply, req, b, html, "daiko-henko-kisai");
+    } catch (e) {
+      if (e && typeof e === "object" && "_httpStatus" in e) {
+        const msg = e instanceof Error ? e.message : String((e as { message?: unknown }).message ?? "入力が不正です");
+        return reply.code(400).send({ error: msg });
+      }
+      throw e;
+    }
   });
 
   app.post("/documents/daiko-nintei-certificate-print", async (req, reply) => {

@@ -173,6 +173,10 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
       legalCertificationNumber: s?.legalCertificationNumber ?? null,
       legalCertificationDate: s?.legalCertificationDate ? ymd(s.legalCertificationDate) : null,
       legalPublicSafetyCommission: s?.legalPublicSafetyCommission ?? null,
+      legalMainOfficeName: s?.legalMainOfficeName ?? null,
+      legalMainOfficeAddress: s?.legalMainOfficeAddress ?? null,
+      legalMutualAidContractFrom: s?.legalMutualAidContractFrom ? ymd(s.legalMutualAidContractFrom) : null,
+      legalMutualAidContractTo: s?.legalMutualAidContractTo ? ymd(s.legalMutualAidContractTo) : null,
     };
   });
 

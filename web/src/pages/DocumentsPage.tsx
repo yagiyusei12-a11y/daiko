@@ -815,6 +815,362 @@ function YakkanPrintBlock(): JSX.Element {
   );
 }
 
+type HenkoKind = "mutual_aid_renewal" | "escort_swap" | "escort_add" | "trade_name_change";
+
+type HenkoCompanyRow = {
+  tenantName: string;
+  legalTradeName: string | null;
+  legalRepresentativeName: string | null;
+  legalPostalCode: string | null;
+  legalPrefecture: string | null;
+  legalStreetAddress: string | null;
+  legalCertificationNumber: string | null;
+  legalPublicSafetyCommission: string | null;
+  legalMainOfficeName: string | null;
+  legalMainOfficeAddress: string | null;
+  legalMutualAidContractFrom: string | null;
+  legalMutualAidContractTo: string | null;
+};
+
+type HenkoVehicleRow = { id: string; label: string; plate: string | null; active: boolean };
+
+function todayYmd(): string {
+  return tokyoYmd(new Date());
+}
+
+function buildApplicantAddress(c: HenkoCompanyRow): string {
+  const zip = (c.legalPostalCode ?? "").replace(/\D/g, "");
+  const head = zip.length === 7 ? `〒${zip.slice(0, 3)}-${zip.slice(3)}　` : "";
+  const body = [c.legalPrefecture?.trim(), c.legalStreetAddress?.trim()].filter(Boolean).join("");
+  return `${head}${body}`.trim();
+}
+
+function buildApplicantName(c: HenkoCompanyRow): string {
+  const t = c.legalTradeName?.trim() ?? "";
+  const r = c.legalRepresentativeName?.trim() ?? "";
+  if (t && r) return `${t}　${r}`;
+  return t || r || c.tenantName;
+}
+
+function buildCommissionAddressee(c: HenkoCompanyRow): string {
+  const p = c.legalPublicSafetyCommission?.trim();
+  if (p) return /公安委員会/u.test(p) ? p : `${p}公安委員会`;
+  const pref = c.legalPrefecture?.trim();
+  return pref ? `${pref}公安委員会` : "";
+}
+
+function buildPlateText(v: HenkoVehicleRow): string {
+  const p = (v.plate ?? "").trim();
+  return p || v.label;
+}
+
+function HenkoKisaiPrintBlock(): JSX.Element {
+  const [kind, setKind] = useState<HenkoKind>("mutual_aid_renewal");
+  const [company, setCompany] = useState<HenkoCompanyRow | null>(null);
+  const [vehicles, setVehicles] = useState<HenkoVehicleRow[]>([]);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [printErr, setPrintErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const [submittedOn, setSubmittedOn] = useState<string>(todayYmd);
+  const [addresseeCommission, setAddresseeCommission] = useState("");
+  const [applicantName, setApplicantName] = useState("");
+  const [applicantAddress, setApplicantAddress] = useState("");
+  const [mainOfficeName, setMainOfficeName] = useState("");
+  const [mainOfficeAddress, setMainOfficeAddress] = useState("");
+  const [certifiedCommission, setCertifiedCommission] = useState("");
+  const [certificationNumber, setCertificationNumber] = useState("");
+  const [changedOn, setChangedOn] = useState<string>(todayYmd);
+  const [changeReason, setChangeReason] = useState("");
+
+  const [newCoverageFrom, setNewCoverageFrom] = useState("");
+  const [newCoverageTo, setNewCoverageTo] = useState("");
+  const [oldCoverageFrom, setOldCoverageFrom] = useState("");
+  const [oldCoverageTo, setOldCoverageTo] = useState("");
+
+  const [newPlateText, setNewPlateText] = useState("");
+  const [oldPlateText, setOldPlateText] = useState("");
+  const [swapNewVid, setSwapNewVid] = useState<string>("");
+  const [swapOldVid, setSwapOldVid] = useState<string>("");
+
+  const [newTradeName, setNewTradeName] = useState("");
+  const [oldTradeName, setOldTradeName] = useState("");
+
+  const appliedDefaultsRef = useRef(false);
+
+  const reload = useCallback(async () => {
+    setLoadErr(null);
+    const [c, v] = await Promise.all([
+      apiFetch<HenkoCompanyRow>("/settings/company"),
+      apiFetch<{ vehicles: HenkoVehicleRow[] }>("/settings/vehicles"),
+    ]);
+    if (!c.ok) {
+      setLoadErr(c.error);
+      return;
+    }
+    setCompany(c.data);
+    if (v.ok) setVehicles(v.data.vehicles ?? []);
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  // 会社情報がロードできたら共通欄を一度だけ自動投入
+  useEffect(() => {
+    if (!company || appliedDefaultsRef.current) return;
+    appliedDefaultsRef.current = true;
+    setAddresseeCommission(buildCommissionAddressee(company));
+    setApplicantName(buildApplicantName(company));
+    setApplicantAddress(buildApplicantAddress(company));
+    setMainOfficeName((company.legalMainOfficeName?.trim() || company.legalTradeName?.trim() || "").trim());
+    setMainOfficeAddress((company.legalMainOfficeAddress?.trim() || buildApplicantAddress(company)).trim());
+    setCertifiedCommission(buildCommissionAddressee(company));
+    setCertificationNumber((company.legalCertificationNumber ?? "").trim());
+  }, [company]);
+
+  // kind 切り替え時の自動入力
+  useEffect(() => {
+    if (!company) return;
+    if (kind === "mutual_aid_renewal") {
+      setOldCoverageFrom(company.legalMutualAidContractFrom ?? "");
+      setOldCoverageTo(company.legalMutualAidContractTo ?? "");
+      setChangeReason("受託自動車共済契約の更新のため");
+    } else if (kind === "escort_swap") {
+      setChangeReason("随伴用自動車１台の入替のため");
+    } else if (kind === "escort_add") {
+      setChangeReason("随伴用自動車１台増車のため");
+      const allPlates = vehicles.filter((v) => v.active).map(buildPlateText).filter(Boolean).join("\n");
+      setOldPlateText(allPlates);
+    } else if (kind === "trade_name_change") {
+      setOldTradeName(company.legalTradeName ?? "");
+      setChangeReason("主たる営業所の名称を変更したため");
+    }
+  }, [kind, company, vehicles]);
+
+  // 入替: 旧・新車両を選んだら自動でテキスト入力欄に反映
+  useEffect(() => {
+    if (kind !== "escort_swap") return;
+    if (swapNewVid) {
+      const v = vehicles.find((x) => x.id === swapNewVid);
+      if (v) setNewPlateText(buildPlateText(v));
+    }
+  }, [swapNewVid, vehicles, kind]);
+  useEffect(() => {
+    if (kind !== "escort_swap") return;
+    if (swapOldVid) {
+      const v = vehicles.find((x) => x.id === swapOldVid);
+      if (v) setOldPlateText(buildPlateText(v));
+    }
+  }, [swapOldVid, vehicles, kind]);
+
+  async function savePdf(): Promise<void> {
+    setPrintErr(null);
+    if (!submittedOn || !changedOn) {
+      setPrintErr("提出年月日・変更年月日を入力してください");
+      return;
+    }
+    const body: Record<string, unknown> = {
+      kind,
+      submittedOn,
+      addresseeCommission,
+      applicantName,
+      applicantAddress,
+      mainOfficeName,
+      mainOfficeAddress,
+      certifiedCommission,
+      certificationNumber,
+      changedOn,
+      changeReason,
+      outputFormat: "pdf",
+    };
+    if (kind === "mutual_aid_renewal") {
+      body.newCoverageFrom = newCoverageFrom;
+      body.newCoverageTo = newCoverageTo;
+      body.oldCoverageFrom = oldCoverageFrom;
+      body.oldCoverageTo = oldCoverageTo;
+    } else if (kind === "escort_swap" || kind === "escort_add") {
+      body.newEscortPlates = newPlateText.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+      body.oldEscortPlates = oldPlateText.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    } else if (kind === "trade_name_change") {
+      body.newTradeName = newTradeName;
+      body.oldTradeName = oldTradeName;
+    }
+
+    setBusy(true);
+    const r = await apiFetchBlob("/documents/henko-kisai-print", { method: "POST", json: body });
+    setBusy(false);
+    if (!r.ok) {
+      setPrintErr(r.error);
+      return;
+    }
+    downloadBrowserBlob(r.blob, r.filename ?? "daiko-henko-kisai.pdf");
+  }
+
+  const showCoverage = kind === "mutual_aid_renewal";
+  const showPlates = kind === "escort_swap" || kind === "escort_add";
+  const showTrade = kind === "trade_name_change";
+
+  return (
+    <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
+      <PanelHint>
+        変更事項を選ぶと必要な入力欄が表示されます。会社情報・随伴車一覧から自動入力した内容を必要に応じて編集し、「PDFで保存」してください。
+      </PanelHint>
+      {loadErr ? (
+        <p className="settings-hint" style={{ color: "var(--danger, #b00020)" }}>
+          {loadErr}
+        </p>
+      ) : null}
+      <div className="settings-form" style={{ marginTop: "0.75rem", maxWidth: "48rem" }}>
+        <fieldset style={{ border: "none", padding: 0 }}>
+          <legend className="settings-hint" style={{ marginBottom: "0.35rem" }}>
+            変更事項
+          </legend>
+          {(
+            [
+              ["mutual_aid_renewal", "受託自動車共済契約の更新"],
+              ["escort_swap", "随伴車の入替"],
+              ["escort_add", "随伴車の増車"],
+              ["trade_name_change", "屋号の変更"],
+            ] as Array<[HenkoKind, string]>
+          ).map(([k, label]) => (
+            <label
+              key={k}
+              style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.2rem", cursor: "pointer" }}
+            >
+              <input type="radio" name="henkoKind" checked={kind === k} onChange={() => setKind(k)} disabled={busy} />
+              {label}
+            </label>
+          ))}
+        </fieldset>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem 1rem", marginTop: "0.75rem" }}>
+          <label>提出年月日
+            <input type="date" value={submittedOn} onChange={(e) => setSubmittedOn(e.target.value)} disabled={busy} />
+          </label>
+          <label>変更年月日
+            <input type="date" value={changedOn} onChange={(e) => setChangedOn(e.target.value)} disabled={busy} />
+          </label>
+        </div>
+
+        <label>宛先（〇〇県公安委員会）
+          <input value={addresseeCommission} onChange={(e) => setAddresseeCommission(e.target.value)} disabled={busy} />
+        </label>
+        <label>申請者の氏名又は名称
+          <input value={applicantName} onChange={(e) => setApplicantName(e.target.value)} disabled={busy} />
+        </label>
+        <label>申請者の住所
+          <input value={applicantAddress} onChange={(e) => setApplicantAddress(e.target.value)} disabled={busy} />
+        </label>
+        <label>主たる営業所　名称
+          <input value={mainOfficeName} onChange={(e) => setMainOfficeName(e.target.value)} disabled={busy} />
+        </label>
+        <label>主たる営業所　所在地
+          <input value={mainOfficeAddress} onChange={(e) => setMainOfficeAddress(e.target.value)} disabled={busy} />
+        </label>
+        <label>認定をした公安委員会の名称
+          <input value={certifiedCommission} onChange={(e) => setCertifiedCommission(e.target.value)} disabled={busy} />
+        </label>
+        <label>認定番号
+          <input value={certificationNumber} onChange={(e) => setCertificationNumber(e.target.value)} disabled={busy} />
+        </label>
+
+        {showCoverage ? (
+          <>
+            <div style={{ marginTop: "0.5rem", fontWeight: 600 }}>変更事項：受託自動車共済契約期間</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem 1rem" }}>
+              <label>新（開始）
+                <input type="date" value={newCoverageFrom} onChange={(e) => setNewCoverageFrom(e.target.value)} disabled={busy} />
+              </label>
+              <label>新（終了）
+                <input type="date" value={newCoverageTo} onChange={(e) => setNewCoverageTo(e.target.value)} disabled={busy} />
+              </label>
+              <label>旧（開始）
+                <input type="date" value={oldCoverageFrom} onChange={(e) => setOldCoverageFrom(e.target.value)} disabled={busy} />
+              </label>
+              <label>旧（終了）
+                <input type="date" value={oldCoverageTo} onChange={(e) => setOldCoverageTo(e.target.value)} disabled={busy} />
+              </label>
+            </div>
+          </>
+        ) : null}
+
+        {showPlates ? (
+          <>
+            <div style={{ marginTop: "0.5rem", fontWeight: 600 }}>
+              変更事項：{kind === "escort_swap" ? "随伴用自動車（入替）" : "随伴用自動車（増車）"}
+            </div>
+            {kind === "escort_swap" ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem 1rem" }}>
+                <label>新（入替後の車両）
+                  <select value={swapNewVid} onChange={(e) => setSwapNewVid(e.target.value)} disabled={busy}>
+                    <option value="">（車両を選択）</option>
+                    {vehicles.map((v) => (
+                      <option key={v.id} value={v.id}>{`${v.label}${v.plate ? `（${v.plate}）` : ""}`}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>旧（入替前の車両）
+                  <select value={swapOldVid} onChange={(e) => setSwapOldVid(e.target.value)} disabled={busy}>
+                    <option value="">（車両を選択）</option>
+                    {vehicles.map((v) => (
+                      <option key={v.id} value={v.id}>{`${v.label}${v.plate ? `（${v.plate}）` : ""}`}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : null}
+            <label>新（PDF に印字する車両ナンバー・1行1台）
+              <textarea
+                rows={kind === "escort_add" ? 5 : 2}
+                value={newPlateText}
+                onChange={(e) => setNewPlateText(e.target.value)}
+                disabled={busy}
+              />
+            </label>
+            <label>旧（PDF に印字する車両ナンバー・1行1台）
+              <textarea
+                rows={kind === "escort_add" ? 5 : 2}
+                value={oldPlateText}
+                onChange={(e) => setOldPlateText(e.target.value)}
+                disabled={busy}
+              />
+            </label>
+          </>
+        ) : null}
+
+        {showTrade ? (
+          <>
+            <div style={{ marginTop: "0.5rem", fontWeight: 600 }}>変更事項：主たる営業所の名称（屋号）</div>
+            <label>新（変更後の屋号）
+              <input value={newTradeName} onChange={(e) => setNewTradeName(e.target.value)} disabled={busy} />
+            </label>
+            <label>旧（変更前の屋号）
+              <input value={oldTradeName} onChange={(e) => setOldTradeName(e.target.value)} disabled={busy} />
+            </label>
+          </>
+        ) : null}
+
+        <label>変更理由
+          <textarea rows={3} value={changeReason} onChange={(e) => setChangeReason(e.target.value)} disabled={busy} />
+        </label>
+
+        <p style={{ marginTop: "0.85rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
+          <button type="button" className="settings-primary" disabled={busy} onClick={() => void savePdf()}>
+            {busy ? "生成中…" : "PDFで保存"}
+          </button>
+          <Link to="/settings">設定（事業者情報・随伴車）へ</Link>
+        </p>
+        {printErr ? (
+          <p className="settings-hint" style={{ color: "var(--danger, #b00020)", marginTop: "0.5rem" }}>
+            {printErr}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function DocumentsPage(): JSX.Element {
   const [tab, setTab] = useState("nippo");
 
@@ -865,11 +1221,7 @@ export default function DocumentsPage(): JSX.Element {
     {
       id: "henko",
       label: "変更届出書",
-      children: (
-        <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
-          <PanelHint>変更届の記載例イメージの出力は、今後このタブから行える予定です。</PanelHint>
-        </div>
-      ),
+      children: <HenkoKisaiPrintBlock />,
     },
   ];
 
