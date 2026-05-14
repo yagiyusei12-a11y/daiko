@@ -1269,7 +1269,9 @@ function AlcoholCheckPrintBlock(): JSX.Element {
                 <tr><td colSpan={8} style={{ padding: "1rem", textAlign: "center", color: "var(--color-muted)" }}>記録なし</td></tr>
               ) : rows.map((row) => (
                 <tr key={row.id} style={{ borderBottom: "1px solid var(--color-border)" }}>
-                  <td style={{ padding: "0.35rem 0.6rem", whiteSpace: "nowrap" }}>{row.businessDate}</td>
+                  <td style={{ padding: "0.35rem 0.6rem", whiteSpace: "nowrap" }}>
+                    {new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(row.punchedAt))}
+                  </td>
                   <td style={{ padding: "0.35rem 0.6rem", whiteSpace: "nowrap" }}>{row.familyName} {row.givenName}</td>
                   <td style={{ padding: "0.35rem 0.6rem", whiteSpace: "nowrap" }}>{row.phase}</td>
                   <td style={{ padding: "0.35rem 0.6rem" }}>{row.breathalyzerName ?? "—"}</td>

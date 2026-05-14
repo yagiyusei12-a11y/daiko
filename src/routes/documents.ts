@@ -567,8 +567,18 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
 
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
 
+    const fmtTokyo = (d: Date) =>
+      new Intl.DateTimeFormat("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(d);
+
     type AlcoholRow = {
-      businessDate: string;
+      punchedAtLabel: string;
       phase: string;
       name: string;
       breathalyzerName: string;
@@ -583,7 +593,7 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
       .map((p) => {
         const ac = (p.alcoholCheckJson ?? {}) as Record<string, unknown>;
         return {
-          businessDate: p.businessDate,
+          punchedAtLabel: fmtTokyo(p.punchedAt),
           phase: p.kind === "CLOCK_IN" ? "出勤" : "退勤",
           name: `${p.employee.familyName} ${p.employee.givenName}`,
           breathalyzerName: typeof ac.breathalyzerName === "string" ? ac.breathalyzerName : "—",
@@ -597,7 +607,7 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
     const tableRows = rows
       .map(
         (r) => `<tr>
-      <td>${r.businessDate}</td>
+      <td>${r.punchedAtLabel}</td>
       <td>${r.name}</td>
       <td>${r.phase}</td>
       <td>${r.breathalyzerName}</td>
