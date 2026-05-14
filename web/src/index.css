@@ -1421,6 +1421,110 @@ button.settings-danger:disabled {
   margin-top: 0.75rem;
 }
 
+.attend-tc-page.attend-shift-root {
+  max-width: none;
+}
+
+.attend-tc-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(10rem, 14rem);
+  gap: 1rem;
+  align-items: start;
+  margin-top: 0.25rem;
+}
+
+@media (max-width: 1100px) {
+  .attend-tc-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.attend-tc-col--form > label:first-of-type {
+  margin-top: 0;
+}
+
+.attend-tc-name-readout {
+  margin: 0.25rem 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.attend-tc-list-month {
+  margin-bottom: 0.5rem;
+}
+
+.attend-tc-summary-table-wrap {
+  overflow-x: auto;
+  margin: 0.35rem 0 0;
+}
+
+.attend-tc-summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.attend-tc-summary-table th,
+.attend-tc-summary-table td {
+  border: 1px solid var(--color-border);
+  padding: 0.35rem 0.4rem;
+  vertical-align: middle;
+}
+
+.attend-tc-summary-table th {
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-border));
+  text-align: left;
+  white-space: nowrap;
+}
+
+.attend-tc-summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.attend-tc-wage-list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.attend-tc-wage-row {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.5rem;
+  background: color-mix(in srgb, var(--color-surface) 96%, var(--color-border));
+}
+
+.attend-tc-wage-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.6rem;
+  font-size: 0.82rem;
+  margin-bottom: 0.2rem;
+}
+
+.attend-tc-wage-date {
+  font-weight: 600;
+}
+
+.attend-tc-wage-name {
+  color: var(--color-muted);
+}
+
+.attend-tc-wage-amount {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.attend-tc-wage-rate {
+  margin: 0.15rem 0 0;
+  font-size: 0.72rem;
+}
+
 .attend-schedule-wrap {
   margin-top: 1rem;
   border: 1px solid var(--color-border);

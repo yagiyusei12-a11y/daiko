@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
-import { useAuth, isStaffShiftOnlyMe } from "../auth";
+import { useAuth, isFullNavMe, isStaffShiftOnlyMe } from "../auth";
 import { useSavedToast } from "../saved-toast";
 import { Card, Err, Tabs, type TabDef } from "../ui";
 import { filterSubTabsForMe } from "../lib/staff-menu-client";
@@ -24,6 +24,29 @@ type BreathalyzerEntry = {
 type ShiftDaySlot = { start: string; end: string };
 
 type ConfirmedDayInfo = { startTime: string; endTime: string; duties: string[] };
+
+type TcMonthSummarySlot = { id: string; punchedAt: string; hm: string };
+type TcMonthSummaryRow = {
+  employeeId: string;
+  familyName: string;
+  givenName: string;
+  businessDate: string;
+  clockIn: TcMonthSummarySlot | null;
+  breakStart: TcMonthSummarySlot | null;
+  breakEnd: TcMonthSummarySlot | null;
+  clockOut: TcMonthSummarySlot | null;
+  baseHourlyYen: number;
+  wageYen: number | null;
+};
+
+type TcEditField = { punchId: string; label: string; local: string; originalIso: string };
+
+function toDatetimeLocalValue(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 function formatAlcoholBrief(ac: unknown): string | null {
   if (!ac || typeof ac !== "object") return null;
@@ -578,6 +601,7 @@ export default function AttendanceMenuPage(): JSX.Element {
   const { me } = useAuth();
   const { flashSaved } = useSavedToast();
   const staffOnly = me ? isStaffShiftOnlyMe(me.permissions) : false;
+  const canPickEmployee = me ? isFullNavMe(me.permissions) : false;
 
   const [tab, setTab] = useState("shift");
   const [err, setErr] = useState<string | null>(null);
@@ -626,6 +650,16 @@ export default function AttendanceMenuPage(): JSX.Element {
   const [alcMethod, setAlcMethod] = useState("");
   const [alcDetected, setAlcDetected] = useState(false);
   const [alcNote, setAlcNote] = useState("");
+  const [tcListYm, setTcListYm] = useState(currentYearMonth);
+  const [tcListRows, setTcListRows] = useState<TcMonthSummaryRow[]>([]);
+  const [tcListLoading, setTcListLoading] = useState(false);
+  const [tcEdit, setTcEdit] = useState<{
+    employeeId: string;
+    businessDate: string;
+    displayName: string;
+    fields: TcEditField[];
+  } | null>(null);
+  const [tcEditBusy, setTcEditBusy] = useState(false);
 
   const roster = useMemo(
     () => employees.filter((e) => e.status === "ACTIVE" && !e.retiredAt),
@@ -648,10 +682,33 @@ export default function AttendanceMenuPage(): JSX.Element {
   }, [loadEmployees]);
 
   useEffect(() => {
-    if (staffOnly && me?.employeeId) {
+    if (!me?.employeeId) return;
+    if (!canPickEmployee) {
       setSelectedEmployeeId(me.employeeId);
+      setTcEmployeeId(me.employeeId);
+    } else {
+      setSelectedEmployeeId((v) => v || me.employeeId);
+      setTcEmployeeId((v) => v || me.employeeId);
     }
-  }, [staffOnly, me?.employeeId]);
+  }, [me?.employeeId, canPickEmployee]);
+
+  const loadTcList = useCallback(async () => {
+    setTcListLoading(true);
+    const r = await apiFetch<{ rows: TcMonthSummaryRow[] }>(
+      `/attendance/timecard/month-summary?yearMonth=${encodeURIComponent(tcListYm)}`,
+    );
+    setTcListLoading(false);
+    if (!r.ok) {
+      setErr(r.error);
+      setTcListRows([]);
+      return;
+    }
+    setTcListRows(r.data.rows ?? []);
+  }, [tcListYm]);
+
+  useEffect(() => {
+    if (tab === "timecard") void loadTcList();
+  }, [tab, tcListYm, loadTcList]);
 
   const loadMonthApp = useCallback(
     async (ym: string) => {
@@ -919,10 +976,6 @@ export default function AttendanceMenuPage(): JSX.Element {
   }, [tab, tcEmployeeId, tcDate, loadTcPunches]);
 
   useEffect(() => {
-    if (staffOnly && me?.employeeId) setTcEmployeeId(me.employeeId);
-  }, [staffOnly, me?.employeeId]);
-
-  useEffect(() => {
     const d = tcBreathList.find((x) => x.id === alcBreathId);
     if (d?.verificationMethods?.length) {
       setAlcMethod((m) => (d.verificationMethods.includes(m) ? m : d.verificationMethods[0]));
@@ -946,6 +999,7 @@ export default function AttendanceMenuPage(): JSX.Element {
     }
     flashSaved();
     void loadTcPunches();
+    void loadTcList();
     return true;
   }
 
@@ -1009,7 +1063,85 @@ export default function AttendanceMenuPage(): JSX.Element {
     else {
       flashSaved();
       void loadTcPunches();
+      void loadTcList();
     }
+  }
+
+  function openTcEditRow(row: TcMonthSummaryRow): void {
+    const fields: TcEditField[] = [];
+    const add = (label: string, slot: TcMonthSummarySlot | null) => {
+      if (!slot) return;
+      fields.push({
+        punchId: slot.id,
+        label,
+        local: toDatetimeLocalValue(slot.punchedAt),
+        originalIso: slot.punchedAt,
+      });
+    };
+    add("出勤", row.clockIn);
+    add("休憩入", row.breakStart);
+    add("休憩終", row.breakEnd);
+    add("退勤", row.clockOut);
+    if (fields.length === 0) return;
+    setTcEdit({
+      employeeId: row.employeeId,
+      businessDate: row.businessDate,
+      displayName: `${row.familyName} ${row.givenName}`.trim(),
+      fields,
+    });
+  }
+
+  async function saveTcEditForm(): Promise<void> {
+    if (!tcEdit) return;
+    setTcEditBusy(true);
+    setErr(null);
+    try {
+      for (const f of tcEdit.fields) {
+        const newMs = new Date(f.local).getTime();
+        if (Number.isNaN(newMs)) {
+          setErr("日時の形式が不正です");
+          return;
+        }
+        const origMs = new Date(f.originalIso).getTime();
+        if (newMs === origMs) continue;
+        const r = await apiFetch(`/attendance/timecard/punches/${encodeURIComponent(f.punchId)}`, {
+          method: "PATCH",
+          json: { punchedAt: new Date(f.local).toISOString() },
+        });
+        if (!r.ok) {
+          setErr(r.error);
+          return;
+        }
+      }
+      flashSaved();
+      setTcEdit(null);
+      void loadTcList();
+      void loadTcPunches();
+    } finally {
+      setTcEditBusy(false);
+    }
+  }
+
+  async function deleteTcSummaryDay(row: TcMonthSummaryRow): Promise<void> {
+    const ids = [row.clockIn?.id, row.breakStart?.id, row.breakEnd?.id, row.clockOut?.id].filter((x): x is string =>
+      Boolean(x),
+    );
+    if (ids.length === 0) return;
+    if (!window.confirm(`${row.businessDate}（${row.familyName} ${row.givenName}）の打刻をすべて削除しますか？`)) return;
+    setTcLoading(true);
+    setErr(null);
+    for (const id of ids) {
+      const r = await apiFetch(`/attendance/timecard/punches/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!r.ok) {
+        setErr(r.error);
+        setTcLoading(false);
+        return;
+      }
+    }
+    setTcLoading(false);
+    flashSaved();
+    void loadTcList();
+    void loadTcPunches();
   }
 
   const shiftPanel = (
@@ -1019,19 +1151,23 @@ export default function AttendanceMenuPage(): JSX.Element {
       ) : (
         <>
           <label>氏名（名簿）</label>
-          <select
-            value={selectedEmployeeId}
-            disabled={staffOnly}
-            onChange={(e) => setSelectedEmployeeId(e.target.value)}
-          >
-            <option value="">選択してください</option>
-            {roster.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.familyName} {e.givenName}
-              </option>
-            ))}
-          </select>
-          {staffOnly ? <p className="settings-hint">スタッフ権限のため、ご自身のみ選択できます。</p> : null}
+          {canPickEmployee ? (
+            <select value={selectedEmployeeId} onChange={(e) => setSelectedEmployeeId(e.target.value)}>
+              <option value="">選択してください</option>
+              {roster.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.familyName} {e.givenName}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <>
+              <p className="settings-readout attend-tc-name-readout">{me?.employeeDisplayName ?? "—"}</p>
+              {me?.employeeId ? (
+                <p className="settings-hint">ログイン中のユーザーに紐づく従業員です。他の従業員を選ぶには管理者権限が必要です。</p>
+              ) : null}
+            </>
+          )}
 
           <div className="settings-toolbar" style={{ marginTop: "0.75rem" }}>
             <button type="button" className="settings-primary" disabled={!selectedEmployeeId} onClick={() => setDialogOpen(true)}>
@@ -1201,113 +1337,209 @@ export default function AttendanceMenuPage(): JSX.Element {
   );
 
   const timeCardPanel = (
-    <div className="settings-form attend-shift-root">
+    <div className="settings-form attend-shift-root attend-tc-page">
       {staffOnly && !me?.employeeId ? (
         <p className="settings-hint">このアカウントは従業員に紐づいていないため、タイムカードを利用できません。</p>
       ) : (
-        <>
-          <label>氏名（名簿）</label>
-          <select
-            value={tcEmployeeId}
-            disabled={staffOnly}
-            onChange={(e) => setTcEmployeeId(e.target.value)}
-          >
-            <option value="">選択してください</option>
-            {roster.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.familyName} {e.givenName}
-              </option>
-            ))}
-          </select>
-          {staffOnly ? <p className="settings-hint">スタッフ権限のため、ご自身のみ選択できます。</p> : null}
+        <div className="attend-tc-layout">
+          <div className="attend-tc-col attend-tc-col--form">
+            <label>氏名（名簿）</label>
+            {canPickEmployee ? (
+              <select value={tcEmployeeId} onChange={(e) => setTcEmployeeId(e.target.value)}>
+                <option value="">選択してください</option>
+                {roster.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.familyName} {e.givenName}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <>
+                <p className="settings-readout attend-tc-name-readout">{me?.employeeDisplayName ?? "—"}</p>
+                {me?.employeeId ? (
+                  <p className="settings-hint">ログイン中のユーザーに紐づく従業員です。他の従業員を選ぶには管理者権限が必要です。</p>
+                ) : null}
+              </>
+            )}
 
-          <label htmlFor="tc-date">日付（事業日）</label>
-          <input
-            id="tc-date"
-            type="date"
-            value={tcDate}
-            onChange={(e) => setTcDate(e.target.value)}
-          />
+            <label htmlFor="tc-date">日付（事業日）</label>
+            <input id="tc-date" type="date" value={tcDate} onChange={(e) => setTcDate(e.target.value)} />
 
-          <div className="settings-toolbar attend-tc-buttons">
-            <button
-              type="button"
-              className="settings-primary"
-              disabled={!tcEmployeeId || tcLoading}
-              onClick={() => void beginClockIn()}
-            >
-              出勤
-            </button>
-            <button
-              type="button"
-              className="settings-primary"
-              disabled={!tcEmployeeId || tcLoading}
-              onClick={() => void postTimecardPunch("CLOCK_OUT")}
-            >
-              退勤
-            </button>
-            <button
-              type="button"
-              className="settings-secondary"
-              disabled={!tcEmployeeId || tcLoading}
-              onClick={() => void postTimecardPunch("BREAK_START")}
-            >
-              休憩入
-            </button>
-            <button
-              type="button"
-              className="settings-secondary"
-              disabled={!tcEmployeeId || tcLoading}
-              onClick={() => void postTimecardPunch("BREAK_END")}
-            >
-              休憩終
-            </button>
+            <div className="settings-toolbar attend-tc-buttons">
+              <button
+                type="button"
+                className="settings-primary"
+                disabled={!tcEmployeeId || tcLoading}
+                onClick={() => void beginClockIn()}
+              >
+                出勤
+              </button>
+              <button
+                type="button"
+                className="settings-primary"
+                disabled={!tcEmployeeId || tcLoading}
+                onClick={() => void postTimecardPunch("CLOCK_OUT")}
+              >
+                退勤
+              </button>
+              <button
+                type="button"
+                className="settings-secondary"
+                disabled={!tcEmployeeId || tcLoading}
+                onClick={() => void postTimecardPunch("BREAK_START")}
+              >
+                休憩入
+              </button>
+              <button
+                type="button"
+                className="settings-secondary"
+                disabled={!tcEmployeeId || tcLoading}
+                onClick={() => void postTimecardPunch("BREAK_END")}
+              >
+                休憩終
+              </button>
+            </div>
+
+            <h3 className="attend-shift-section-title">打刻一覧（当日）</h3>
+            {!tcEmployeeId ? (
+              <p className="settings-hint">従業員を選ぶと打刻一覧が表示されます。</p>
+            ) : tcLoading ? (
+              <p className="settings-hint">読み込み中…</p>
+            ) : tcPunches.length === 0 ? (
+              <p className="settings-hint">この日の打刻はまだありません。</p>
+            ) : (
+              <ul className="settings-sf-list">
+                {tcPunches.map((p) => (
+                  <li key={p.id} className="settings-sf-row attend-shift-list-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                    <div style={{ display: "flex", alignItems: "center", width: "100%", gap: "0.35rem" }}>
+                      <span className="settings-sf-name">
+                        {p.kind === "CLOCK_IN"
+                          ? "出勤"
+                          : p.kind === "CLOCK_OUT"
+                            ? "退勤"
+                            : p.kind === "BREAK_START"
+                              ? "休憩入"
+                              : p.kind === "BREAK_END"
+                                ? "休憩終"
+                                : p.kind}
+                      </span>
+                      <span className="settings-sf-meta">{new Date(p.punchedAt).toLocaleString("ja-JP")}</span>
+                      <button
+                        type="button"
+                        className="settings-secondary"
+                        style={{ marginLeft: "auto", flexShrink: 0 }}
+                        disabled={tcLoading}
+                        onClick={() => void deleteTimecardPunch(p.id)}
+                      >
+                        削除
+                      </button>
+                    </div>
+                    {p.kind === "CLOCK_IN" && formatAlcoholBrief(p.alcoholCheck) ? (
+                      <span className="settings-hint" style={{ marginTop: "0.15rem" }}>
+                        アルコール: {formatAlcoholBrief(p.alcoholCheck)}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
-          <h3 className="attend-shift-section-title">打刻一覧</h3>
-          {!tcEmployeeId ? (
-            <p className="settings-hint">従業員を選ぶと打刻一覧が表示されます。</p>
-          ) : tcLoading ? (
-            <p className="settings-hint">読み込み中…</p>
-          ) : tcPunches.length === 0 ? (
-            <p className="settings-hint">この日の打刻はまだありません。</p>
-          ) : (
-            <ul className="settings-sf-list">
-              {tcPunches.map((p) => (
-                <li key={p.id} className="settings-sf-row attend-shift-list-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
-                  <div style={{ display: "flex", alignItems: "center", width: "100%", gap: "0.35rem" }}>
-                    <span className="settings-sf-name">
-                      {p.kind === "CLOCK_IN"
-                        ? "出勤"
-                        : p.kind === "CLOCK_OUT"
-                          ? "退勤"
-                          : p.kind === "BREAK_START"
-                            ? "休憩入"
-                            : p.kind === "BREAK_END"
-                              ? "休憩終"
-                              : p.kind}
-                    </span>
-                    <span className="settings-sf-meta">{new Date(p.punchedAt).toLocaleString("ja-JP")}</span>
-                    <button
-                      type="button"
-                      className="settings-secondary"
-                      style={{ marginLeft: "auto", flexShrink: 0 }}
-                      disabled={tcLoading}
-                      onClick={() => void deleteTimecardPunch(p.id)}
-                    >
-                      削除
-                    </button>
-                  </div>
-                  {p.kind === "CLOCK_IN" && formatAlcoholBrief(p.alcoholCheck) ? (
-                    <span className="settings-hint" style={{ marginTop: "0.15rem" }}>
-                      アルコール: {formatAlcoholBrief(p.alcoholCheck)}
-                    </span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
+          <div className="attend-tc-col attend-tc-col--list">
+            <h3 className="attend-shift-section-title">タイムカード一覧</h3>
+            <div className="attend-shift-month-nav attend-tc-list-month">
+              <button type="button" className="settings-secondary" disabled={tcListLoading} onClick={() => setTcListYm((p) => shiftYearMonth(p, -1))}>
+                前の月
+              </button>
+              <strong>{tcListYm}</strong>
+              <button type="button" className="settings-secondary" disabled={tcListLoading} onClick={() => setTcListYm((p) => shiftYearMonth(p, 1))}>
+                次の月
+              </button>
+            </div>
+            {tcListLoading ? (
+              <p className="settings-hint">読み込み中…</p>
+            ) : tcListRows.length === 0 ? (
+              <p className="settings-hint">この月の打刻はまだありません。</p>
+            ) : (
+              <div className="attend-tc-summary-table-wrap">
+                <table className="attend-tc-summary-table">
+                  <thead>
+                    <tr>
+                      <th>日付</th>
+                      <th>氏名</th>
+                      <th>出勤</th>
+                      <th>休憩入</th>
+                      <th>休憩終</th>
+                      <th>退勤</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tcListRows.map((row) => (
+                      <tr key={`${row.employeeId}-${row.businessDate}`}>
+                        <td>{row.businessDate}</td>
+                        <td>
+                          {row.familyName} {row.givenName}
+                        </td>
+                        <td>{row.clockIn?.hm ?? "—"}</td>
+                        <td>{row.breakStart?.hm ?? "—"}</td>
+                        <td>{row.breakEnd?.hm ?? "—"}</td>
+                        <td>{row.clockOut?.hm ?? "—"}</td>
+                        <td>
+                          <div className="attend-tc-summary-actions">
+                            <button
+                              type="button"
+                              className="settings-secondary"
+                              disabled={tcLoading || tcListLoading}
+                              onClick={() => openTcEditRow(row)}
+                            >
+                              修正
+                            </button>
+                            <button
+                              type="button"
+                              className="settings-secondary"
+                              disabled={tcLoading || tcListLoading}
+                              onClick={() => void deleteTcSummaryDay(row)}
+                            >
+                              全削除
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="attend-tc-col attend-tc-col--wage">
+            <h3 className="attend-shift-section-title">賃金</h3>
+            <p className="settings-hint">時給は従業員の報酬期間（時給）に基づき、出勤〜退勤から休憩を差し引いた時間で概算しています。</p>
+            {tcListLoading ? (
+              <p className="settings-hint">読み込み中…</p>
+            ) : tcListRows.length === 0 ? (
+              <p className="settings-hint">この月の打刻はまだありません。</p>
+            ) : (
+              <ul className="attend-tc-wage-list">
+                {tcListRows.map((row) => (
+                  <li key={`w-${row.employeeId}-${row.businessDate}`} className="attend-tc-wage-row">
+                    <div className="attend-tc-wage-row-head">
+                      <span className="attend-tc-wage-date">{row.businessDate}</span>
+                      <span className="attend-tc-wage-name">
+                        {row.familyName} {row.givenName}
+                      </span>
+                    </div>
+                    <div className="attend-tc-wage-amount">
+                      {row.wageYen != null ? `${row.wageYen.toLocaleString("ja-JP")}円` : "—"}
+                    </div>
+                    <div className="settings-hint attend-tc-wage-rate">時給 {row.baseHourlyYen.toLocaleString("ja-JP")}円</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1453,6 +1685,65 @@ export default function AttendanceMenuPage(): JSX.Element {
             <div className="pricing-modal-actions">
               <button type="button" disabled={adjustBusy} onClick={() => setAdjustDialogDate(null)}>
                 閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {tcEdit ? (
+        <div
+          className="pricing-modal-backdrop"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setTcEdit(null);
+          }}
+        >
+          <div
+            className="pricing-modal attend-shift-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tc-edit-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h2 id="tc-edit-title" className="pricing-modal-title">
+              打刻の修正（{tcEdit.businessDate}）
+            </h2>
+            <div className="attend-shift-dialog-scroll">
+              <p className="settings-hint" style={{ marginTop: 0 }}>
+                {tcEdit.displayName}
+              </p>
+              <div className="settings-form">
+                {tcEdit.fields.map((f) => (
+                  <div key={f.punchId}>
+                    <label htmlFor={`tc-edit-${f.punchId}`}>{f.label}</label>
+                    <input
+                      id={`tc-edit-${f.punchId}`}
+                      type="datetime-local"
+                      value={f.local}
+                      onChange={(e) =>
+                        setTcEdit((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                fields: prev.fields.map((x) =>
+                                  x.punchId === f.punchId ? { ...x, local: e.target.value } : x,
+                                ),
+                              }
+                            : prev,
+                        )
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="pricing-modal-actions">
+              <button type="button" className="settings-primary" disabled={tcEditBusy} onClick={() => void saveTcEditForm()}>
+                保存
+              </button>
+              <button type="button" disabled={tcEditBusy} onClick={() => setTcEdit(null)}>
+                キャンセル
               </button>
             </div>
           </div>

@@ -59,6 +59,75 @@ const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** 0:00〜48:59（例: 翌4時 = 28:00） */
 const FLEX_HM = /^(\d{1,2}):(\d{2})$/;
 
+type CompPeriodPick = { validFrom: Date; validTo: Date | null; baseHourlyYen: number };
+
+function baseHourlyYenAt(periods: CompPeriodPick[], businessDate: string): number {
+  const anchor = new Date(`${businessDate}T12:00:00+09:00`);
+  const matching = periods.filter((p) => p.validFrom <= anchor && (p.validTo == null || p.validTo >= anchor));
+  matching.sort((a, b) => b.validFrom.getTime() - a.validFrom.getTime());
+  return matching[0]?.baseHourlyYen ?? 0;
+}
+
+function hmTokyoFromDate(d: Date): string {
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+}
+
+function computeWageYen(
+  clockIn: Date | null,
+  breakStart: Date | null,
+  breakEnd: Date | null,
+  clockOut: Date | null,
+  hourlyYen: number,
+): number | null {
+  if (!hourlyYen || hourlyYen < 0) return null;
+  if (!clockIn || !clockOut || clockOut.getTime() <= clockIn.getTime()) return null;
+  let breakMs = 0;
+  if (breakStart && breakEnd && breakEnd.getTime() > breakStart.getTime()) {
+    breakMs = breakEnd.getTime() - breakStart.getTime();
+    breakMs = Math.min(breakMs, clockOut.getTime() - clockIn.getTime());
+    breakMs = Math.max(0, breakMs);
+  }
+  const workMs = Math.max(0, clockOut.getTime() - clockIn.getTime() - breakMs);
+  const hours = workMs / 3600000;
+  return Math.round(hours * hourlyYen);
+}
+
+type PunchForSummary = { id: string; kind: TimeCardPunchKind; punchedAt: Date };
+
+function summarizeDayPunches(sorted: PunchForSummary[]): {
+  clockIn: PunchForSummary | null;
+  breakStart: PunchForSummary | null;
+  breakEnd: PunchForSummary | null;
+  clockOut: PunchForSummary | null;
+} {
+  const clockIn = sorted.find((p) => p.kind === TimeCardPunchKind.CLOCK_IN) ?? null;
+  const clockOut = [...sorted].reverse().find((p) => p.kind === TimeCardPunchKind.CLOCK_OUT) ?? null;
+  let breakStart: PunchForSummary | null = null;
+  for (const p of sorted) {
+    if (p.kind !== TimeCardPunchKind.BREAK_START) continue;
+    if (clockIn && p.punchedAt.getTime() < clockIn.punchedAt.getTime()) continue;
+    breakStart = p;
+    break;
+  }
+  let breakEnd: PunchForSummary | null = null;
+  if (breakStart) {
+    for (const p of sorted) {
+      if (p.kind !== TimeCardPunchKind.BREAK_END) continue;
+      if (p.punchedAt.getTime() >= breakStart.punchedAt.getTime()) {
+        breakEnd = p;
+        break;
+      }
+    }
+  }
+  return { clockIn, breakStart, breakEnd, clockOut };
+}
+
 type DaySlot = { start: string; end: string };
 
 function isValidFlexHm(s: string): boolean {
@@ -636,5 +705,174 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
 
     await prisma.timeCardPunch.delete({ where: { id: punchId, tenantId } });
     return reply.send({ ok: true });
+  });
+
+  app.patch<{ Params: { punchId?: string }; Body: Record<string, unknown> }>(
+    "/timecard/punches/:punchId",
+    async (req, reply) => {
+      const { tenantId, sub: userId } = jwtUser(req);
+      const access = await loadUserAccess(userId, tenantId);
+      const punchId = String(req.params?.punchId ?? "").trim();
+      if (!punchId) return reply.code(400).send({ error: "punchId が必要です" });
+
+      const punchedAtRaw = req.body?.punchedAt;
+      if (typeof punchedAtRaw !== "string" || !punchedAtRaw.trim()) {
+        return reply.code(400).send({ error: "punchedAt は ISO 日時文字列で指定してください" });
+      }
+      const punchedAt = new Date(punchedAtRaw.trim());
+      if (Number.isNaN(punchedAt.getTime())) {
+        return reply.code(400).send({ error: "punchedAt が不正です" });
+      }
+
+      const existing = await prisma.timeCardPunch.findFirst({
+        where: { id: punchId, tenantId },
+        select: { id: true, employeeId: true },
+      });
+      if (!existing) return reply.code(404).send({ error: "打刻が見つかりません" });
+
+      if (access.isStaffShiftOnly) {
+        if (!access.employeeId || existing.employeeId !== access.employeeId) {
+          return reply.code(403).send({ error: "この打刻を修正する権限がありません" });
+        }
+      }
+
+      await prisma.timeCardPunch.update({
+        where: { id: punchId, tenantId },
+        data: { punchedAt },
+      });
+
+      return reply.send({ ok: true, id: punchId, punchedAt: punchedAt.toISOString() });
+    },
+  );
+
+  app.get<{ Querystring: { yearMonth?: string } }>("/timecard/month-summary", async (req, reply) => {
+    const { tenantId, sub: userId } = jwtUser(req);
+    const access = await loadUserAccess(userId, tenantId);
+    const yearMonth = String(req.query?.yearMonth ?? "").trim();
+
+    if (!YM_RE.test(yearMonth)) {
+      return reply.code(400).send({ error: "yearMonth は yyyy-MM 形式で指定してください" });
+    }
+
+    if (access.isStaffShiftOnly && !access.employeeId) {
+      return reply.code(403).send({ error: "従業員に紐づいていないため一覧を参照できません" });
+    }
+
+    const datePrefix = `${yearMonth}-`;
+
+    const punches = await prisma.timeCardPunch.findMany({
+      where: {
+        tenantId,
+        businessDate: { startsWith: datePrefix },
+        ...(access.isStaffShiftOnly && access.employeeId ? { employeeId: access.employeeId } : {}),
+      },
+      include: {
+        employee: { select: { familyName: true, givenName: true } },
+      },
+      orderBy: [{ employeeId: "asc" }, { businessDate: "asc" }, { punchedAt: "asc" }],
+    });
+
+    const groupMap = new Map<
+      string,
+      {
+        employeeId: string;
+        businessDate: string;
+        familyName: string;
+        givenName: string;
+        items: PunchForSummary[];
+      }
+    >();
+
+    for (const p of punches) {
+      const key = `${p.employeeId}\t${p.businessDate}`;
+      let g = groupMap.get(key);
+      if (!g) {
+        g = {
+          employeeId: p.employeeId,
+          businessDate: p.businessDate,
+          familyName: p.employee.familyName,
+          givenName: p.employee.givenName,
+          items: [],
+        };
+        groupMap.set(key, g);
+      }
+      g.items.push({ id: p.id, kind: p.kind, punchedAt: p.punchedAt });
+    }
+
+    const empIds = [...new Set([...groupMap.values()].map((g) => g.employeeId))];
+    const allPeriods =
+      empIds.length === 0
+        ? []
+        : await prisma.employeeCompensationPeriod.findMany({
+            where: { employeeId: { in: empIds } },
+            select: { employeeId: true, validFrom: true, validTo: true, baseHourlyYen: true },
+          });
+
+    const periodsByEmp = new Map<string, CompPeriodPick[]>();
+    for (const p of allPeriods) {
+      if (!periodsByEmp.has(p.employeeId)) periodsByEmp.set(p.employeeId, []);
+      periodsByEmp.get(p.employeeId)!.push({
+        validFrom: p.validFrom,
+        validTo: p.validTo,
+        baseHourlyYen: p.baseHourlyYen,
+      });
+    }
+
+    const rows: Array<{
+      employeeId: string;
+      familyName: string;
+      givenName: string;
+      businessDate: string;
+      clockIn: { id: string; punchedAt: string; hm: string } | null;
+      breakStart: { id: string; punchedAt: string; hm: string } | null;
+      breakEnd: { id: string; punchedAt: string; hm: string } | null;
+      clockOut: { id: string; punchedAt: string; hm: string } | null;
+      baseHourlyYen: number;
+      wageYen: number | null;
+    }> = [];
+
+    for (const g of groupMap.values()) {
+      const sum = summarizeDayPunches(g.items);
+      const periods = periodsByEmp.get(g.employeeId) ?? [];
+      const baseHourlyYen = baseHourlyYenAt(periods, g.businessDate);
+      const wageYen = computeWageYen(
+        sum.clockIn?.punchedAt ?? null,
+        sum.breakStart?.punchedAt ?? null,
+        sum.breakEnd?.punchedAt ?? null,
+        sum.clockOut?.punchedAt ?? null,
+        baseHourlyYen,
+      );
+
+      const slot = (x: PunchForSummary | null) =>
+        x
+          ? {
+              id: x.id,
+              punchedAt: x.punchedAt.toISOString(),
+              hm: hmTokyoFromDate(x.punchedAt),
+            }
+          : null;
+
+      rows.push({
+        employeeId: g.employeeId,
+        familyName: g.familyName,
+        givenName: g.givenName,
+        businessDate: g.businessDate,
+        clockIn: slot(sum.clockIn),
+        breakStart: slot(sum.breakStart),
+        breakEnd: slot(sum.breakEnd),
+        clockOut: slot(sum.clockOut),
+        baseHourlyYen,
+        wageYen,
+      });
+    }
+
+    rows.sort((a, b) => {
+      const c = a.businessDate.localeCompare(b.businessDate);
+      if (c !== 0) return c;
+      const n = `${a.familyName}${a.givenName}`.localeCompare(`${b.familyName}${b.givenName}`, "ja");
+      return n;
+    });
+
+    return { yearMonth, rows };
   });
 }
