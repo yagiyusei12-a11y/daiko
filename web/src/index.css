@@ -295,14 +295,16 @@ textarea {
   gap: 0.5rem;
 }
 
-.app-sidebar-logout {
+.app-sidebar-footer button.app-sidebar-logout,
+button.app-sidebar-logout {
   display: block;
   width: 100%;
+  margin-top: 0;
   padding: 0.45rem 0.75rem;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff !important;
   font-weight: 600;
   font-size: 0.78rem;
   cursor: pointer;
@@ -310,14 +312,16 @@ textarea {
   text-align: center;
 }
 
-.app-sidebar-logout:hover {
-  background: rgba(255, 255, 255, 0.26);
-  border-color: rgba(255, 255, 255, 0.6);
-  color: #fff;
+.app-sidebar-footer button.app-sidebar-logout:hover,
+button.app-sidebar-logout:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.65);
+  color: #fff !important;
 }
 
-.app-sidebar-logout:focus-visible {
-  outline: 2px solid var(--color-accent);
+.app-sidebar-footer button.app-sidebar-logout:focus-visible,
+button.app-sidebar-logout:focus-visible {
+  outline: 2px solid #60a5fa;
   outline-offset: 2px;
 }
 

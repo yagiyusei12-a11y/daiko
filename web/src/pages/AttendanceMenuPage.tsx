@@ -629,7 +629,8 @@ export default function AttendanceMenuPage(): JSX.Element {
   const { me } = useAuth();
   const { flashSaved } = useSavedToast();
   const staffOnly = me ? isStaffShiftOnlyMe(me.permissions) : false;
-  const canPickEmployee = me ? isFullNavMe(me.permissions) : false;
+  const isAdmin = me ? isFullNavMe(me.permissions) : false;
+  const canPickEmployee = isAdmin;
 
   const [tab, setTab] = useState("shift");
   const [err, setErr] = useState<string | null>(null);
@@ -1215,12 +1216,9 @@ export default function AttendanceMenuPage(): JSX.Element {
               ))}
             </select>
           ) : (
-            <>
-              <p className="settings-readout attend-tc-name-readout">{me?.employeeDisplayName ?? "—"}</p>
-              {me?.employeeId ? (
-                <p className="settings-hint">ログイン中のユーザーに紐づく従業員です。他の従業員を選ぶには管理者権限が必要です。</p>
-              ) : null}
-            </>
+            <p style={{ margin: "0.25rem 0 0.5rem", fontWeight: 600, fontSize: "0.95rem" }}>
+              {me?.employeeDisplayName ?? "—"}
+            </p>
           )}
 
           <div className="settings-toolbar" style={{ marginTop: "0.75rem" }}>
@@ -1407,12 +1405,9 @@ export default function AttendanceMenuPage(): JSX.Element {
                 ))}
               </select>
             ) : (
-              <>
-                <p className="settings-readout attend-tc-name-readout">{me?.employeeDisplayName ?? "—"}</p>
-                {me?.employeeId ? (
-                  <p className="settings-hint">ログイン中のユーザーに紐づく従業員です。他の従業員を選ぶには管理者権限が必要です。</p>
-                ) : null}
-              </>
+              <p style={{ margin: "0.25rem 0 0.5rem", fontWeight: 600, fontSize: "0.95rem" }}>
+                {me?.employeeDisplayName ?? "—"}
+              </p>
             )}
 
             <label htmlFor="tc-date">日付（事業日）</label>
@@ -1598,7 +1593,9 @@ export default function AttendanceMenuPage(): JSX.Element {
           ))}
         </select>
       ) : (
-        <p className="settings-readout attend-tc-name-readout">{me?.employeeDisplayName ?? "—"}</p>
+        <p style={{ margin: "0.25rem 0 0.5rem", fontWeight: 600, fontSize: "0.95rem" }}>
+          {me?.employeeDisplayName ?? "—"}
+        </p>
       )}
 
       <label style={{ marginTop: "0.75rem" }}>期間</label>
