@@ -17,7 +17,8 @@ import {
   DispatchReservationSlotTakenError,
   YMD_RE,
 } from "../lib/dispatch-reservation.js";
-import { businessSlotsToMinuteIntervals, computeLiffAvailabilitySlots } from "../lib/liff-availability.js";
+import { businessSlotsToMinuteIntervals, clipIntervalsForOnlineLatestClose, computeLiffAvailabilitySlots, bookingMatchesIntervals } from "../lib/liff-availability.js";
+import { coerceOnlineBookingFromCustomJson } from "../lib/online-booking-settings.js";
 import { resolveLineUserForTenant } from "../lib/line-tenant-auth.js";
 import {
   coerceReservationTimingFromCustomJson,
@@ -26,7 +27,7 @@ import {
   parseTripEstimateMinutesFromQuery,
   resolveVirtualConcurrentSlotsForDate,
 } from "../lib/reservation-timing-settings.js";
-import { parseTokyoLocalDateTimeToUtc } from "../lib/tokyo-datetime.js";
+import { parseTokyoLocalDateTimeToUtc, businessDateYmdFromTokyoLocalDatetime } from "../lib/tokyo-datetime.js";
 
 function bearerIdToken(req: FastifyRequest): string | null {
   const raw = req.headers.authorization;
@@ -81,9 +82,34 @@ export async function registerLiffBookingRoutes(app: FastifyInstance): Promise<v
     const blockedMinutes = computeBlockedMinutes(estParsed.estimateMinutes, timing);
 
     const basics = coerceBusinessBasicsFromCustomJson(settings?.customJson);
+    const obSettings = coerceOnlineBookingFromCustomJson(settings?.customJson);
     const businessHours = resolveBusinessHoursForYmd(date, basics);
-    const businessIntervalsMin = businessSlotsToMinuteIntervals(businessHours);
+    if (basics.temporaryClosureDates.includes(date) || businessHours.length === 0) {
+      return {
+        tenantId,
+        date,
+        timeZone: "Asia/Tokyo",
+        tripEstimateMinutes: estParsed.estimateMinutes,
+        blockedMinutes,
+        slots: [],
+        availabilityMode: timing.availabilityMode,
+      };
+    }
+    const rawIntervals = businessSlotsToMinuteIntervals(businessHours);
+    const businessIntervalsMin = clipIntervalsForOnlineLatestClose(rawIntervals, obSettings.onlineLatestCloseHm);
+    if (businessIntervalsMin.length === 0) {
+      return {
+        tenantId,
+        date,
+        timeZone: "Asia/Tokyo",
+        tripEstimateMinutes: estParsed.estimateMinutes,
+        blockedMinutes,
+        slots: [],
+        availabilityMode: timing.availabilityMode,
+      };
+    }
 
+    const rollHour = settings?.businessDayRollHour ?? 4;
     const slots = await computeLiffAvailabilitySlots({
       tenantId,
       dateYmd: date,
@@ -91,6 +117,7 @@ export async function registerLiffBookingRoutes(app: FastifyInstance): Promise<v
       businessIntervalsMin,
       availabilityMode: timing.availabilityMode,
       virtualConcurrentSlots: resolveVirtualConcurrentSlotsForDate(date, timing),
+      businessDayRollHour: rollHour,
     });
 
     return {
@@ -133,6 +160,11 @@ export async function registerLiffBookingRoutes(app: FastifyInstance): Promise<v
     }
     if (!startLocal) return reply.code(400).send({ error: "日時を入力してください" });
 
+    const scheduleDate = String(b.date ?? "").trim() || startLocal.slice(0, 10);
+    if (!YMD_RE.test(scheduleDate)) {
+      return reply.code(400).send({ error: "date（予約画面の日付）が不正です" });
+    }
+
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
     if (!tenant) return reply.code(404).send({ error: "テナントが見つかりません" });
 
@@ -152,9 +184,28 @@ export async function registerLiffBookingRoutes(app: FastifyInstance): Promise<v
     }
     const endsAt = new Date(startsAt.getTime() + blockedMinutes * 60 * 1000);
 
-    const businessDateTokyo = startLocal.slice(0, 10);
-    if (!YMD_RE.test(businessDateTokyo)) {
+    const rollHour = settings?.businessDayRollHour ?? 4;
+    const businessDateTokyo = businessDateYmdFromTokyoLocalDatetime(startLocal, rollHour);
+    if (!businessDateTokyo || !YMD_RE.test(businessDateTokyo)) {
       return reply.code(400).send({ error: "日時に日付が含まれていません" });
+    }
+
+    const basics = coerceBusinessBasicsFromCustomJson(settings?.customJson);
+    const obSettings = coerceOnlineBookingFromCustomJson(settings?.customJson);
+    if (basics.temporaryClosureDates.includes(scheduleDate)) {
+      return reply.code(400).send({ error: "ご指定の日は休業のため受付できません" });
+    }
+    const businessHours = resolveBusinessHoursForYmd(scheduleDate, basics);
+    if (businessHours.length === 0) {
+      return reply.code(400).send({ error: "ご指定の日は休業のため受付できません" });
+    }
+    const rawIntervals = businessSlotsToMinuteIntervals(businessHours);
+    const bookableIntervals = clipIntervalsForOnlineLatestClose(rawIntervals, obSettings.onlineLatestCloseHm);
+    if (
+      bookableIntervals.length === 0 ||
+      !bookingMatchesIntervals(scheduleDate, startsAt, blockedMinutes, bookableIntervals)
+    ) {
+      return reply.code(400).send({ error: "ご指定のお時間はネット予約を受け付けていません" });
     }
 
     try {

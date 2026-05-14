@@ -30,6 +30,7 @@ type OnlineBookingApi = {
   message: string;
   durationOptions: number[];
   daysAhead: number;
+  onlineLatestCloseHm: string | null;
   tenantSlug: string;
   reservationTiming: ReservationTimingForm;
 };
@@ -58,6 +59,8 @@ export default function OnlineBookingSettingsPanel({
   const [message, setMessage] = useState("");
   const [durationOptions, setDurationOptions] = useState<number[]>([30, 45, 60, 75, 90, 120, 150, 180, 240]);
   const [daysAhead, setDaysAhead] = useState<number>(30);
+  /** ネット予約の空き枠終了（28時間表記 HH:mm）。空なら営業終了まで */
+  const [onlineLatestCloseHm, setOnlineLatestCloseHm] = useState("");
   const [rt, setRt] = useState<ReservationTimingForm>(RT_DEFAULT);
 
   const load = useCallback(async () => {
@@ -73,6 +76,7 @@ export default function OnlineBookingSettingsPanel({
     setMessage(r.data.message);
     setDurationOptions(r.data.durationOptions);
     setDaysAhead(r.data.daysAhead);
+    setOnlineLatestCloseHm(r.data.onlineLatestCloseHm?.trim() ?? "");
     setTenantSlug(r.data.tenantSlug);
     const incoming = r.data.reservationTiming;
     if (incoming && typeof incoming === "object") {
@@ -113,6 +117,7 @@ export default function OnlineBookingSettingsPanel({
         message,
         durationOptions,
         daysAhead,
+        onlineLatestCloseHm: onlineLatestCloseHm.trim() || null,
         reservationTiming: {
           defaultTripEstimateMinutes: rt.defaultTripEstimateMinutes,
           blockedTimeMode: rt.blockedTimeMode,
@@ -265,6 +270,18 @@ export default function OnlineBookingSettingsPanel({
       </div>
       <p className="settings-hint">
         例: 30 なら今日から30日後の分まで予約できます。0にすると日付に制限をかけません。
+      </p>
+
+      <label style={{ marginTop: "0.75rem" }}>ネット予約の終了時刻（28時間表記・任意）</label>
+      <input
+        type="text"
+        placeholder="例: 26:00（空欄＝営業時間の終わりまで枠を表示）"
+        style={{ maxWidth: "22rem" }}
+        value={onlineLatestCloseHm}
+        onChange={(e) => setOnlineLatestCloseHm(e.target.value)}
+      />
+      <p className="settings-hint" style={{ marginTop: 0 }}>
+        営業が28時まででも、ここを26:00にするとゲスト予約の空きは26時までしか出ません（LIFF・ゲスト予約の両方）。
       </p>
 
       <hr style={{ margin: "1.25rem 0", border: 0, borderTop: "1px solid var(--color-border)" }} />

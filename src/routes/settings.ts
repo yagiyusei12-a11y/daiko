@@ -805,10 +805,10 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
   app.put<{ Body: Record<string, unknown> }>("/online-booking", async (req, reply) => {
     const { tenantId } = jwtUser(req);
     const body = (req.body || {}) as Record<string, unknown>;
-    const parsed = parseOnlineBookingPut(body);
+    const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+    const parsed = parseOnlineBookingPut(body, coerceOnlineBookingFromCustomJson(s?.customJson));
     if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
 
-    const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
     const prevRoot = asObj(s?.customJson);
     let nextCustom = mergeOnlineBookingIntoCustomJson(prevRoot, parsed.value);
 

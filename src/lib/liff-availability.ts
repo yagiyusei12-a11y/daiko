@@ -7,7 +7,7 @@ import {
 } from "./dispatch-reservation.js";
 import { prisma } from "../db.js";
 import type { AvailabilityMode } from "./reservation-timing-settings.js";
-import { tokyoDayRangeUtc } from "./tokyo-datetime.js";
+import { minutesSinceTokyoMidnight, tokyoDayRangeUtc } from "./tokyo-datetime.js";
 
 export type LiffAvailabilitySlot = { startLocal: string; endLocal: string; availableCount: number };
 
@@ -25,8 +25,36 @@ export function businessSlotsToMinuteIntervals(slots: BusinessHoursSlot[]): [num
   return out.length > 0 ? out : [[0, 24 * 60]];
 }
 
+/** ネット予約の終了（HH:mm）で営業区間を切り詰め。null/空は営業のまま。 */
+export function clipIntervalsForOnlineLatestClose(
+  intervals: [number, number][],
+  latestCloseHm: string | null | undefined,
+): [number, number][] {
+  if (!latestCloseHm || typeof latestCloseHm !== "string" || !latestCloseHm.trim()) return intervals;
+  const cap = flexHmToMinutesSinceMidnight(latestCloseHm.trim());
+  if (cap === null || cap <= 0) return intervals;
+  const out: [number, number][] = [];
+  for (const [a, b] of intervals) {
+    const b2 = Math.min(b, cap);
+    if (b2 > a) out.push([a, b2]);
+  }
+  return out.length > 0 ? out : [];
+}
+
 function canPlaceBookingAt(slotStartMin: number, durationMin: number, intervals: [number, number][]): boolean {
   return intervals.some(([a, b]) => a <= slotStartMin && slotStartMin + durationMin <= b);
+}
+
+/** 予約開始が scheduleYmd の 0:00 基準の区間に収まるか */
+export function bookingMatchesIntervals(
+  scheduleYmd: string,
+  startsAt: Date,
+  durationMinutes: number,
+  intervals: [number, number][],
+): boolean {
+  const m = minutesSinceTokyoMidnight(scheduleYmd, startsAt);
+  if (!Number.isFinite(m)) return false;
+  return canPlaceBookingAt(m, durationMinutes, intervals);
 }
 
 export function utcDateToTokyoLocalDateTime(d: Date): string {
@@ -51,13 +79,18 @@ export async function computeLiffAvailabilitySlots(params: {
   businessIntervalsMin: [number, number][];
   availabilityMode?: AvailabilityMode;
   virtualConcurrentSlots?: number;
+  /** 0〜6。予約取得の終端を翌朝まで延ばす */
+  businessDayRollHour?: number;
 }): Promise<LiffAvailabilitySlot[]> {
   const range = tokyoDayRangeUtc(params.dateYmd);
   if (!range) return [];
 
+  const rollH = Math.max(0, Math.min(6, Math.floor(params.businessDayRollHour ?? 0)));
+  const rangeEnd = new Date(range.end.getTime() + rollH * 60 * 60 * 1000);
+
   const resWhere = {
     tenantId: params.tenantId,
-    startsAt: { lt: range.end },
+    startsAt: { lt: rangeEnd },
     endsAt: { gt: range.start },
   };
 
@@ -76,7 +109,9 @@ export async function computeLiffAvailabilitySlots(params: {
   const step = 15;
   const dur = params.durationMinutes;
 
-  for (let m = 0; m <= 24 * 60 - dur; m += step) {
+  const maxEnd = Math.max(24 * 60, ...params.businessIntervalsMin.map(([, b]) => b));
+  const maxStart = maxEnd - dur;
+  for (let m = 0; m <= maxStart; m += step) {
     if (!canPlaceBookingAt(m, dur, params.businessIntervalsMin)) continue;
 
     const bookingStart = new Date(range.start.getTime() + m * 60 * 1000);

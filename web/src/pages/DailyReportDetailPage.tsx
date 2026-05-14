@@ -268,7 +268,7 @@ function TripWizard({
   const [destination, setDestination] = useState(trip.destination);
   const [fareYen, setFareYen] = useState(trip.fareYen);
   const [parkingAdvanceYen, setParkingAdvanceYen] = useState(trip.parkingAdvanceYen ?? 0);
-  const [tripPaymentMethod, setTripPaymentMethod] = useState(() => (trip.tripPaymentMethod ?? "CASH").trim() || "CASH");
+  const [tripPaymentMethod, setTripPaymentMethod] = useState(() => (trip.tripPaymentMethod ?? "").trim());
   const [tripReceiptIssued, setTripReceiptIssued] = useState(() => Boolean(trip.tripReceiptIssued));
   const [tripStartKm, setTripStartKm] = useState(() => tripMeterKmFromM(trip.tripMeterStartM));
   const [tripEndKm, setTripEndKm] = useState(() => tripMeterKmFromM(trip.tripMeterEndM));
@@ -296,7 +296,12 @@ function TripWizard({
     setDestination(trip.destination);
     setFareYen(trip.fareYen);
     setParkingAdvanceYen(trip.parkingAdvanceYen ?? 0);
-    setTripPaymentMethod((trip.tripPaymentMethod ?? "CASH").trim() || "CASH");
+    const rawPm = (trip.tripPaymentMethod ?? "").trim();
+    if (paymentMethods.length > 0) {
+      setTripPaymentMethod(paymentMethods.includes(rawPm) ? rawPm : (paymentMethods[0] ?? rawPm));
+    } else {
+      setTripPaymentMethod(rawPm);
+    }
     setTripReceiptIssued(Boolean(trip.tripReceiptIssued));
     setTripStartKm(tripMeterKmFromM(trip.tripMeterStartM));
     setTripEndKm(tripMeterKmFromM(trip.tripMeterEndM));
@@ -313,7 +318,7 @@ function TripWizard({
     setApplyEarlyMorningFlatYen(trip.applyEarlyMorningFlatYen);
     setApplyLateNightFlatYen(trip.applyLateNightFlatYen);
     setApplyEarlyRushFlatYen(trip.applyEarlyRushFlatYen);
-  }, [trip]);
+  }, [trip, paymentMethods]);
 
   useEffect(() => {
     if (!schedulePrefill) return;
@@ -329,7 +334,15 @@ function TripWizard({
 
   const distanceKmAuto = useMemo(() => Math.max(0, tripEndKm - tripStartKm), [tripEndKm, tripStartKm]);
   const travelMinutesAuto = useMemo(() => travelMinutesBetween(departedLocal, arrivedLocal), [departedLocal, arrivedLocal]);
-  const tripTotalYen = useMemo(() => fareYen + parkingAdvanceYen, [fareYen, parkingAdvanceYen]);
+  const ancillaryYen = useMemo(() => {
+    let s = 0;
+    if (features.includes("pickup") && pickup.apply) s += Math.max(0, Math.floor(pickup.yen));
+    if (features.includes("leftHand") && leftHand.apply) s += Math.max(0, Math.floor(leftHand.yen));
+    if (features.includes("foreignCar") && foreignCar.apply) s += Math.max(0, Math.floor(foreignCar.yen));
+    if (features.includes("cancel") && cancel.apply) s += Math.max(0, Math.floor(cancel.yen));
+    return s;
+  }, [features, pickup, leftHand, foreignCar, cancel]);
+  const tripTotalYen = useMemo(() => fareYen + parkingAdvanceYen + ancillaryYen, [fareYen, parkingAdvanceYen, ancillaryYen]);
 
   const tariffCap = useMemo(() => tariffVersions.find((t) => t.id === tariffVersionId), [tariffVersions, tariffVersionId]);
   const showNightPct = (tariffCap?.nightSurchargeBps ?? 0) > 0;
@@ -531,32 +544,31 @@ function TripWizard({
         />
         <p className="settings-hint">売上・運賃とは別に記録されます。</p>
         <label>支払方法</label>
-        <select value={tripPaymentMethod} onChange={(e) => setTripPaymentMethod(e.target.value)}>
-          {paymentMethods.length > 0 ? (
-            <>
-              {!paymentMethods.includes(tripPaymentMethod) && (
-                <option value={tripPaymentMethod}>{tripPaymentMethod}</option>
-              )}
-              {paymentMethods.map((pm) => (
-                <option key={pm} value={pm}>{pm}</option>
-              ))}
-            </>
-          ) : (
-            <>
-              <option value="CASH">現金</option>
-              <option value="CARD">カード</option>
-              <option value="PAYPAY">PayPay</option>
-              <option value="RECEIVABLE">売掛</option>
-              <option value="OTHER">その他</option>
-            </>
-          )}
-        </select>
+        {paymentMethods.length > 0 ? (
+          <select value={tripPaymentMethod} onChange={(e) => setTripPaymentMethod(e.target.value)}>
+            {!paymentMethods.includes(tripPaymentMethod) && tripPaymentMethod ? (
+              <option value={tripPaymentMethod}>{tripPaymentMethod}（保存値・候補に無い場合）</option>
+            ) : null}
+            {paymentMethods.map((pm) => (
+              <option key={pm} value={pm}>
+                {pm}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <>
+            <p className="settings-hint" style={{ margin: 0 }}>
+              設定の「基本情報」で支払方法（候補）を登録すると、ここから選べるようになります。
+            </p>
+            <input type="text" readOnly value={tripPaymentMethod || "—"} title="候補未登録のため表示のみ" />
+          </>
+        )}
         <label className="settings-inline-check" style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.25rem" }}>
           <input type="checkbox" checked={tripReceiptIssued} onChange={(e) => setTripReceiptIssued(e.target.checked)} />
           領収書を発行した
         </label>
         <p style={{ margin: "0.35rem 0 0", fontWeight: 600, fontSize: "0.95rem" }}>
-          合計（運賃＋駐車場料金）: ¥{tripTotalYen.toLocaleString("ja-JP")}
+          合計（運賃＋駐車場料金＋付帯料金）: ¥{tripTotalYen.toLocaleString("ja-JP")}
         </p>
 
         {showSurchargeDetails ? (

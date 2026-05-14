@@ -9,6 +9,7 @@ type OnlineBookingInfo = {
   message: string;
   durationOptions: number[];
   daysAhead: number;
+  onlineLatestCloseHm?: string | null;
 };
 
 type ReservationTimingInfo = {
@@ -182,6 +183,7 @@ export default function GuestBookingPage(): JSX.Element {
     const r = await publicFetch<CreateOk>(`/public/book/${encodeURIComponent(slug)}/reservations`, {
       method: "POST",
       json: {
+        date,
         startLocal: selectedSlot,
         tripEstimateMinutes,
         customerName: customerName.trim(),
