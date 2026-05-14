@@ -11,7 +11,7 @@
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { JommuKirokuboModel } from "./jommu-types.js";
+import type { JommuKirokuboModel, JommuTripRow } from "./jommu-types.js";
 
 const TEMPLATE_DIR = path.join(process.cwd(), "templates", "jommu-print");
 
@@ -51,6 +51,29 @@ function meterKm(v: string): string {
   return t ? `${e(t)}㎞` : "㎞";
 }
 
+/** 依頼者〜料金のいずれかに帳票として載せる内容があるか（運転車両・同伴列の表示可否） */
+function rowShowsVehicleAndCompanion(trip: JommuTripRow): boolean {
+  if (
+    trip.clientName.trim() ||
+    trip.charterVehicleNo.trim() ||
+    trip.origin.trim() ||
+    trip.viaText.trim() ||
+    trip.destination.trim()
+  ) {
+    return true;
+  }
+  if (trip.departedHm.trim()) return true;
+  if (trip.arrivedHm.trim()) return true;
+  const fareNum = Number(String(trip.fareYen).replace(/,/g, "").trim());
+  if (Number.isFinite(fareNum) && fareNum !== 0) return true;
+  const distRaw = String(trip.distanceKm).replace(/,/g, "").trim();
+  if (distRaw) {
+    const d = parseFloat(distRaw);
+    if (Number.isFinite(d) && d > 0) return true;
+  }
+  return false;
+}
+
 function buildRecordRow(m: JommuKirokuboModel, i: number): string {
   const n = i + 1;
   const trip = m.trips[i];
@@ -65,10 +88,14 @@ function buildRecordRow(m: JommuKirokuboModel, i: number): string {
       <td class="tc">：</td>
       <td class="tr">${kmCell("")}</td>
       <td class="tr">${yenCell("")}</td>
-      <td class="tc">代行</td>
-      <td>${companion}</td>
+      <td class="tc"></td>
+      <td></td>
     </tr>`;
   }
+
+  const showLast = rowShowsVehicleAndCompanion(trip);
+  const vehicleTd = showLast ? `<td class="tc">代行</td>` : `<td class="tc"></td>`;
+  const companionTd = showLast ? `<td>${companion}</td>` : `<td></td>`;
 
   return `<tr>
     <th class="no">${n}</th>
@@ -81,8 +108,8 @@ function buildRecordRow(m: JommuKirokuboModel, i: number): string {
     <td class="tc">${e(trip.arrivedHm) || "："}</td>
     <td class="tr">${kmCell(trip.distanceKm)}</td>
     <td class="tr">${yenCell(trip.fareYen)}</td>
-    <td class="tc">代行</td>
-    <td>${companion}</td>
+    ${vehicleTd}
+    ${companionTd}
   </tr>`;
 }
 
