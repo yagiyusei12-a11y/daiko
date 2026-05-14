@@ -59,15 +59,44 @@ const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** 0:00〜48:59（例: 翌4時 = 28:00） */
 const FLEX_HM = /^(\d{1,2}):(\d{2})$/;
 
-type CompPeriodPick = { validFrom: Date; validTo: Date | null; baseHourlyYen: number; mainHourlyYen: number };
+type CompPeriodPick = {
+  validFrom: Date;
+  validTo: Date | null;
+  baseHourlyYen: number;
+  mainHourlyYen: number;
+  partnerHourlyYen: number;
+  phoneHourlyYen: number;
+};
 
-function effectiveMainHourlyYenAt(periods: CompPeriodPick[], businessDate: string): number {
+/** 確定シフトの担当種別（dutiesJson）からロールラベルを決定 */
+function roleFromDuties(duties: string[]): "客車" | "随伴車" | "電話" | null {
+  if (duties.includes("客車")) return "客車";
+  if (duties.includes("随伴車")) return "随伴車";
+  if (duties.includes("電話")) return "電話";
+  return null;
+}
+
+function effectiveHourlyYenAt(
+  periods: CompPeriodPick[],
+  businessDate: string,
+  role: "客車" | "随伴車" | "電話" | null,
+): { hourlyYen: number; roleLabel: string | null } {
   const anchor = new Date(`${businessDate}T12:00:00+09:00`);
   const matching = periods.filter((p) => p.validFrom <= anchor && (p.validTo == null || p.validTo >= anchor));
   matching.sort((a, b) => b.validFrom.getTime() - a.validFrom.getTime());
   const cur = matching[0];
-  if (!cur) return 0;
-  return cur.mainHourlyYen > 0 ? cur.mainHourlyYen : cur.baseHourlyYen;
+  if (!cur) return { hourlyYen: 0, roleLabel: role };
+
+  const base = cur.mainHourlyYen > 0 ? cur.mainHourlyYen : cur.baseHourlyYen;
+
+  if (role === "随伴車" && cur.partnerHourlyYen > 0) {
+    return { hourlyYen: cur.partnerHourlyYen, roleLabel: "随伴車" };
+  }
+  if (role === "電話" && cur.phoneHourlyYen > 0) {
+    return { hourlyYen: cur.phoneHourlyYen, roleLabel: "電話" };
+  }
+  // 客車 or 未設定 → mainHourlyYen
+  return { hourlyYen: base, roleLabel: role ?? "客車" };
 }
 
 function hmTokyoFromDate(d: Date): string {
@@ -807,7 +836,15 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
         ? []
         : await prisma.employeeCompensationPeriod.findMany({
             where: { employeeId: { in: empIds } },
-            select: { employeeId: true, validFrom: true, validTo: true, baseHourlyYen: true, mainHourlyYen: true },
+            select: {
+              employeeId: true,
+              validFrom: true,
+              validTo: true,
+              baseHourlyYen: true,
+              mainHourlyYen: true,
+              partnerHourlyYen: true,
+              phoneHourlyYen: true,
+            },
           });
 
     const periodsByEmp = new Map<string, CompPeriodPick[]>();
@@ -818,7 +855,30 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
         validTo: p.validTo,
         baseHourlyYen: p.baseHourlyYen,
         mainHourlyYen: p.mainHourlyYen,
+        partnerHourlyYen: p.partnerHourlyYen,
+        phoneHourlyYen: p.phoneHourlyYen,
       });
+    }
+
+    // 確定シフトの担当種別を一括取得
+    const confirmedShifts =
+      groupMap.size === 0
+        ? []
+        : await prisma.confirmedShiftDay.findMany({
+            where: {
+              tenantId,
+              businessDate: { startsWith: datePrefix },
+              ...(access.isStaffShiftOnly && access.employeeId ? { employeeId: access.employeeId } : {}),
+            },
+            select: { employeeId: true, businessDate: true, dutiesJson: true },
+          });
+
+    const shiftDutiesMap = new Map<string, string[]>();
+    for (const s of confirmedShifts) {
+      const duties = Array.isArray(s.dutiesJson)
+        ? (s.dutiesJson as unknown[]).filter((x): x is string => typeof x === "string")
+        : [];
+      shiftDutiesMap.set(`${s.employeeId}\t${s.businessDate}`, duties);
     }
 
     const rows: Array<{
@@ -831,19 +891,22 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
       breakEnd: { id: string; punchedAt: string; hm: string } | null;
       clockOut: { id: string; punchedAt: string; hm: string } | null;
       baseHourlyYen: number;
+      roleLabel: string | null;
       wageYen: number | null;
     }> = [];
 
     for (const g of groupMap.values()) {
       const sum = summarizeDayPunches(g.items);
       const periods = periodsByEmp.get(g.employeeId) ?? [];
-      const baseHourlyYen = effectiveMainHourlyYenAt(periods, g.businessDate);
+      const duties = shiftDutiesMap.get(`${g.employeeId}\t${g.businessDate}`) ?? [];
+      const role = roleFromDuties(duties);
+      const { hourlyYen, roleLabel } = effectiveHourlyYenAt(periods, g.businessDate, role);
       const wageYen = computeWageYen(
         sum.clockIn?.punchedAt ?? null,
         sum.breakStart?.punchedAt ?? null,
         sum.breakEnd?.punchedAt ?? null,
         sum.clockOut?.punchedAt ?? null,
-        baseHourlyYen,
+        hourlyYen,
       );
 
       const slot = (x: PunchForSummary | null) =>
@@ -864,7 +927,8 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
         breakStart: slot(sum.breakStart),
         breakEnd: slot(sum.breakEnd),
         clockOut: slot(sum.clockOut),
-        baseHourlyYen,
+        baseHourlyYen: hourlyYen,
+        roleLabel,
         wageYen,
       });
     }

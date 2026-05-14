@@ -99,6 +99,7 @@ type EmployeeCompRowDraft = {
   compensationType: EmployeeCompCompensationType;
   mainHourlyYen: string;
   partnerHourlyYen: string;
+  phoneHourlyYen: string;
   mainCommissionPct: string;
   partnerCommissionPct: string;
 };
@@ -259,6 +260,7 @@ export default function SettingsMenuPage(): JSX.Element {
           compensationType: string;
           mainHourlyYen: number;
           partnerHourlyYen: number;
+          phoneHourlyYen: number;
           mainCommissionPct: string;
           partnerCommissionPct: string;
         } | null;
@@ -282,6 +284,7 @@ export default function SettingsMenuPage(): JSX.Element {
           compensationType,
           mainHourlyYen: row.period != null ? String(row.period.mainHourlyYen) : "",
           partnerHourlyYen: row.period != null ? String(row.period.partnerHourlyYen) : "",
+          phoneHourlyYen: row.period != null ? String(row.period.phoneHourlyYen) : "",
           mainCommissionPct: row.period?.mainCommissionPct ?? "",
           partnerCommissionPct: row.period?.partnerCommissionPct ?? "",
         };
@@ -561,6 +564,7 @@ export default function SettingsMenuPage(): JSX.Element {
           compensationType: c.compensationType,
           mainHourlyYen: c.mainHourlyYen,
           partnerHourlyYen: c.partnerHourlyYen,
+          phoneHourlyYen: c.phoneHourlyYen,
           mainCommissionPct: c.mainCommissionPct,
           partnerCommissionPct: c.partnerCommissionPct,
         })),
@@ -971,6 +975,7 @@ export default function SettingsMenuPage(): JSX.Element {
                 <th>賃金体系</th>
                 <th>客車時給（円）</th>
                 <th>随伴車時給（円）</th>
+                <th>電話時給（円）</th>
                 <th>客車歩合（%）</th>
                 <th>随伴車歩合（%）</th>
               </tr>
@@ -1027,6 +1032,21 @@ export default function SettingsMenuPage(): JSX.Element {
                       onChange={(e) =>
                         setCompRows((xs) =>
                           xs.map((x) => (x.employeeId === row.employeeId ? { ...x, partnerHourlyYen: e.target.value } : x)),
+                        )
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="settings-comp-num"
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      aria-label={`${row.familyName} 電話時給`}
+                      value={row.phoneHourlyYen}
+                      onChange={(e) =>
+                        setCompRows((xs) =>
+                          xs.map((x) => (x.employeeId === row.employeeId ? { ...x, phoneHourlyYen: e.target.value } : x)),
                         )
                       }
                     />

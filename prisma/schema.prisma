@@ -345,6 +345,8 @@ model EmployeeCompensationPeriod {
   mainHourlyYen    Int             @default(0)
   /// 随伴車の時給（円）
   partnerHourlyYen Int             @default(0)
+  /// 電話担当の時給（円）
+  phoneHourlyYen   Int             @default(0)
   /// 客車側歩合（basis points: 1% = 100）
   commissionMainRateBps    Int     @default(0)
   /// 随伴側歩合（basis points）

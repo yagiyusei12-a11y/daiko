@@ -822,6 +822,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
         compensationType: CompensationType;
         mainHourlyYen: number;
         partnerHourlyYen: number;
+        phoneHourlyYen: number;
         mainCommissionPct: string;
         partnerCommissionPct: string;
       } | null;
@@ -839,6 +840,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
               compensationType: p.compensationType,
               mainHourlyYen: p.mainHourlyYen,
               partnerHourlyYen: p.partnerHourlyYen,
+              phoneHourlyYen: p.phoneHourlyYen,
               mainCommissionPct: bpsToPctDisplay(p.commissionMainRateBps),
               partnerCommissionPct: bpsToPctDisplay(p.commissionPartnerRateBps),
             }
@@ -882,6 +884,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
 
           const mainHourlyYen = parseYenInt(o.mainHourlyYen);
           const partnerHourlyYen = parseYenInt(o.partnerHourlyYen);
+          const phoneHourlyYen = parseYenInt(o.phoneHourlyYen);
           const commissionMainRateBps = pctToBps(o.mainCommissionPct);
           const commissionPartnerRateBps = pctToBps(o.partnerCommissionPct);
           const baseHourlyYen = mainHourlyYen;
@@ -899,6 +902,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
             compensationType,
             mainHourlyYen,
             partnerHourlyYen,
+            phoneHourlyYen,
             baseHourlyYen,
             commissionMainRateBps,
             commissionPartnerRateBps,
