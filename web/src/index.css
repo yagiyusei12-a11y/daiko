@@ -886,6 +886,32 @@ button.settings-danger:disabled {
   z-index: 1;
 }
 
+.salary-table .salary-amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 6rem;
+}
+.salary-table .salary-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.75rem;
+}
+.salary-breakdown-time {
+  color: var(--color-muted);
+}
+.salary-breakdown-rate {
+  font-weight: 500;
+}
+.salary-total-row td {
+  font-weight: bold;
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-border));
+}
+.salary-total-row td:first-child {
+  text-align: right;
+}
+
 .settings-comp-num {
   width: 100%;
   max-width: 6.5rem;

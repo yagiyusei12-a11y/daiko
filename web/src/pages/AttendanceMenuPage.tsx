@@ -26,6 +26,33 @@ type ShiftDaySlot = { start: string; end: string };
 type ConfirmedDayInfo = { startTime: string; endTime: string; duties: string[] };
 
 type TcMonthSummarySlot = { id: string; punchedAt: string; hm: string };
+
+function computeWorkMinutes(row: {
+  clockIn: TcMonthSummarySlot | null;
+  breakStart: TcMonthSummarySlot | null;
+  breakEnd: TcMonthSummarySlot | null;
+  clockOut: TcMonthSummarySlot | null;
+}): number | null {
+  if (!row.clockIn?.punchedAt || !row.clockOut?.punchedAt) return null;
+  const inMs = new Date(row.clockIn.punchedAt).getTime();
+  const outMs = new Date(row.clockOut.punchedAt).getTime();
+  if (outMs <= inMs) return null;
+  let workMs = outMs - inMs;
+  if (row.breakStart?.punchedAt && row.breakEnd?.punchedAt) {
+    const bsMs = new Date(row.breakStart.punchedAt).getTime();
+    const beMs = new Date(row.breakEnd.punchedAt).getTime();
+    if (beMs > bsMs) workMs -= beMs - bsMs;
+  }
+  return Math.max(0, Math.floor(workMs / 60000));
+}
+
+function formatWorkDuration(minutes: number | null): string {
+  if (minutes == null) return "—";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}時間${m}分` : `${h}時間`;
+}
+
 type TcMonthSummaryRow = {
   employeeId: string;
   familyName: string;
@@ -662,6 +689,11 @@ export default function AttendanceMenuPage(): JSX.Element {
   } | null>(null);
   const [tcEditBusy, setTcEditBusy] = useState(false);
 
+  const [salaryEmpId, setSalaryEmpId] = useState("");
+  const [salaryYm, setSalaryYm] = useState(currentYearMonth);
+  const [salaryRows, setSalaryRows] = useState<TcMonthSummaryRow[]>([]);
+  const [salaryLoading, setSalaryLoading] = useState(false);
+
   const roster = useMemo(
     () => employees.filter((e) => e.status === "ACTIVE" && !e.retiredAt),
     [employees],
@@ -687,9 +719,11 @@ export default function AttendanceMenuPage(): JSX.Element {
     if (!canPickEmployee) {
       setSelectedEmployeeId(me.employeeId);
       setTcEmployeeId(me.employeeId);
+      setSalaryEmpId(me.employeeId);
     } else {
       setSelectedEmployeeId((v) => v || me.employeeId);
       setTcEmployeeId((v) => v || me.employeeId);
+      setSalaryEmpId((v) => v || me.employeeId);
     }
   }, [me?.employeeId, canPickEmployee]);
 
@@ -710,6 +744,24 @@ export default function AttendanceMenuPage(): JSX.Element {
   useEffect(() => {
     if (tab === "timecard" || tab === "timecard-list") void loadTcList();
   }, [tab, tcListYm, loadTcList]);
+
+  const loadSalaryData = useCallback(async () => {
+    setSalaryLoading(true);
+    const r = await apiFetch<{ rows: TcMonthSummaryRow[] }>(
+      `/attendance/timecard/month-summary?yearMonth=${encodeURIComponent(salaryYm)}`,
+    );
+    setSalaryLoading(false);
+    if (!r.ok) {
+      setErr(r.error);
+      setSalaryRows([]);
+      return;
+    }
+    setSalaryRows(r.data.rows ?? []);
+  }, [salaryYm]);
+
+  useEffect(() => {
+    if (tab === "salary") void loadSalaryData();
+  }, [tab, salaryYm, loadSalaryData]);
 
   const loadMonthApp = useCallback(
     async (ym: string) => {
@@ -1555,11 +1607,140 @@ export default function AttendanceMenuPage(): JSX.Element {
     </div>
   );
 
+  const salaryFilteredRows = useMemo(
+    () => (salaryEmpId ? salaryRows.filter((r) => r.employeeId === salaryEmpId) : []),
+    [salaryRows, salaryEmpId],
+  );
+  const salaryTotal = useMemo(
+    () => salaryFilteredRows.reduce((s, r) => s + (r.wageYen ?? 0), 0),
+    [salaryFilteredRows],
+  );
+
+  const salaryPanel = (
+    <div className="settings-form attend-shift-root">
+      <label>氏名</label>
+      {canPickEmployee ? (
+        <select value={salaryEmpId} onChange={(e) => setSalaryEmpId(e.target.value)}>
+          <option value="">選択してください</option>
+          {roster.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.familyName} {e.givenName}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <p className="settings-readout attend-tc-name-readout">{me?.employeeDisplayName ?? "—"}</p>
+      )}
+
+      <label style={{ marginTop: "0.75rem" }}>期間</label>
+      <div className="attend-shift-month-nav" style={{ marginTop: 0 }}>
+        <button
+          type="button"
+          className="settings-secondary"
+          disabled={salaryLoading}
+          onClick={() => setSalaryYm((p) => shiftYearMonth(p, -1))}
+        >
+          前の月
+        </button>
+        <input
+          type="month"
+          value={salaryYm}
+          onChange={(e) => setSalaryYm(e.target.value || currentYearMonth())}
+          style={{ textAlign: "center", minWidth: "9rem" }}
+        />
+        <button
+          type="button"
+          className="settings-secondary"
+          disabled={salaryLoading}
+          onClick={() => setSalaryYm((p) => shiftYearMonth(p, 1))}
+        >
+          次の月
+        </button>
+      </div>
+      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.4rem" }}>
+        <button type="button" className="settings-secondary" onClick={() => setSalaryYm(currentYearMonth())}>
+          今月
+        </button>
+        <button
+          type="button"
+          className="settings-secondary"
+          onClick={() => setSalaryYm(shiftYearMonth(currentYearMonth(), -1))}
+        >
+          先月
+        </button>
+      </div>
+
+      {salaryLoading ? (
+        <p className="settings-hint" style={{ marginTop: "1rem" }}>
+          読み込み中…
+        </p>
+      ) : !salaryEmpId ? (
+        <p className="settings-hint" style={{ marginTop: "1rem" }}>
+          従業員を選択してください。
+        </p>
+      ) : salaryFilteredRows.length === 0 ? (
+        <p className="settings-hint" style={{ marginTop: "1rem" }}>
+          この期間の打刻はありません。
+        </p>
+      ) : (
+        <div className="settings-comp-table-wrap" style={{ marginTop: "1rem" }}>
+          <table className="settings-comp-table salary-table">
+            <thead>
+              <tr>
+                <th>日付</th>
+                <th>勤務時間</th>
+                <th>内訳</th>
+                <th>給料</th>
+              </tr>
+            </thead>
+            <tbody>
+              {salaryFilteredRows.map((row) => {
+                const workMin = computeWorkMinutes(row);
+                return (
+                  <tr key={row.businessDate}>
+                    <td>{row.businessDate}</td>
+                    <td>{formatWorkDuration(workMin)}</td>
+                    <td className="salary-breakdown">
+                      {row.clockIn?.hm && row.clockOut?.hm ? (
+                        <span className="salary-breakdown-time">
+                          {row.clockIn.hm}〜{row.clockOut.hm}
+                          {row.breakStart?.hm && row.breakEnd?.hm
+                            ? `（休憩 ${row.breakStart.hm}〜${row.breakEnd.hm}）`
+                            : ""}
+                        </span>
+                      ) : null}
+                      <span className="salary-breakdown-rate">
+                        {row.roleLabel ? `${row.roleLabel}・` : ""}時給{row.baseHourlyYen.toLocaleString("ja-JP")}円
+                        {workMin != null
+                          ? ` × ${Math.floor(workMin / 60)}h${workMin % 60 > 0 ? `${workMin % 60}m` : ""}`
+                          : ""}
+                      </span>
+                    </td>
+                    <td className="salary-amount">
+                      {row.wageYen != null ? `${row.wageYen.toLocaleString("ja-JP")}円` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="salary-total-row">
+                <td colSpan={3}>合計</td>
+                <td className="salary-amount">{salaryTotal.toLocaleString("ja-JP")}円</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
   const tabItems: TabDef[] = [
     { id: "shift", label: "シフト", children: shiftPanel },
     { id: "adjust", label: "シフト調整", children: adjustPanel },
     { id: "timecard", label: "タイムカード", children: timeCardPanel },
     { id: "timecard-list", label: "タイムカード一覧", children: timeCardListPanel },
+    { id: "salary", label: "給料", children: salaryPanel },
   ];
 
   const visTabs = me ? filterSubTabsForMe("attendance", tabItems, me) : tabItems;

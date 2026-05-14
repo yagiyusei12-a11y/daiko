@@ -42,6 +42,7 @@ export const STAFF_SUB_TAB_LABELS: Record<string, { id: string; label: string }[
     { id: "adjust", label: "シフト調整" },
     { id: "timecard", label: "タイムカード" },
     { id: "timecard-list", label: "タイムカード一覧" },
+    { id: "salary", label: "給料" },
   ],
 };
 
