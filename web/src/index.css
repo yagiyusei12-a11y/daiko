@@ -288,35 +288,30 @@ textarea {
 .app-sidebar-footer {
   padding: 0.7rem 0.75rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-nav-bg);
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.app-sidebar-employee {
-  font-size: 0.75rem;
-  color: rgba(248, 250, 252, 0.72);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .app-sidebar-logout {
-  padding: 0.4rem 0.75rem;
-  border-radius: var(--radius-pill);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  background: rgba(255, 255, 255, 0.12);
-  color: #f8fafc;
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   cursor: pointer;
   transition: var(--transition-fast);
   text-align: center;
 }
 
 .app-sidebar-logout:hover {
-  background: rgba(255, 255, 255, 0.22);
-  border-color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.26);
+  border-color: rgba(255, 255, 255, 0.6);
   color: #fff;
 }
 

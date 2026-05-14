@@ -89,7 +89,6 @@ export default function Shell(): JSX.Element {
         <div className="app-sidebar-brand">{me.tradeName?.trim() || me.tenant.name}</div>
         <div className="app-sidebar-nav">{navLinks}</div>
         <div className="app-sidebar-footer">
-          <span className="app-sidebar-employee">{me.employeeDisplayName}</span>
           <button type="button" className="app-sidebar-logout" onClick={logout}>
             ログアウト
           </button>
