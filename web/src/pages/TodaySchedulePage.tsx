@@ -390,6 +390,22 @@ export default function TodaySchedulePage(): JSX.Element {
     void load();
   }
 
+  async function cancelReservation(): Promise<void> {
+    if (!detailRv) return;
+    if (!window.confirm(`「${detailRv.customerName || "この予定"}」をキャンセルしますか？`)) return;
+    setDetailBusy(true);
+    setErr(null);
+    const r = await apiFetch(`/dispatch/reservations/${encodeURIComponent(detailRv.id)}`, { method: "DELETE" });
+    setDetailBusy(false);
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    flashSaved();
+    setDetailRv(null);
+    void load();
+  }
+
   const reservationsByDriver = useMemo(() => {
     const m = new Map<string, ReservationRow[]>();
     for (const row of data?.reservations ?? []) {
@@ -1003,8 +1019,17 @@ export default function TodaySchedulePage(): JSX.Element {
               <button type="button" className="settings-primary" disabled={detailBusy} onClick={() => void saveDetailModal()}>
                 保存
               </button>
-              <button type="button" onClick={() => setDetailRv(null)}>
+              <button type="button" disabled={detailBusy} onClick={() => setDetailRv(null)}>
                 閉じる
+              </button>
+              <button
+                type="button"
+                className="settings-danger"
+                disabled={detailBusy}
+                style={{ marginLeft: "auto" }}
+                onClick={() => void cancelReservation()}
+              >
+                予定をキャンセル
               </button>
             </div>
           </div>

@@ -419,4 +419,26 @@ export async function registerDispatchRoutes(app: FastifyInstance): Promise<void
       throw e;
     }
   });
+
+  app.delete<{ Params: { id: string } }>("/reservations/:id", async (req, reply) => {
+    const { tenantId, sub: userId } = jwtUser(req);
+    const access = await loadUserAccess(userId, tenantId);
+    const id = String(req.params.id ?? "").trim();
+    if (!id) return reply.code(400).send({ error: "id が不正です" });
+
+    const cur = await prisma.dispatchReservation.findFirst({
+      where: { id, tenantId },
+      select: { id: true, driverEmployeeId: true },
+    });
+    if (!cur) return reply.code(404).send({ error: "予約が見つかりません" });
+
+    if (access.isStaffShiftOnly && access.employeeId) {
+      if (cur.driverEmployeeId !== null && cur.driverEmployeeId !== access.employeeId) {
+        return reply.code(403).send({ error: "この予約を削除する権限がありません" });
+      }
+    }
+
+    await prisma.dispatchReservation.delete({ where: { id } });
+    return reply.send({ ok: true });
+  });
 }
