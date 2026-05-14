@@ -662,10 +662,32 @@ export default function AttendanceMenuPage(): JSX.Element {
   const [adjustUiRows, setAdjustUiRows] = useState<AdjustUiRow[]>([]);
   const [adjustRowBusy, setAdjustRowBusy] = useState<string | null>(null);
 
-  const [tcDate, setTcDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  });
+  const [dayChangeHour, setDayChangeHour] = useState(28);
+
+  function tokyoBusinessDate(dch: number): string {
+    const now = new Date();
+    const tokyoParts = new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Asia/Tokyo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).formatToParts(now);
+    const get = (t: string) => tokyoParts.find((p) => p.type === t)?.value ?? "00";
+    const ymd = `${get("year")}-${get("month")}-${get("day")}`;
+    const hour = Number(get("hour"));
+    const rollHour = dch - 24;
+    if (rollHour > 0 && hour < rollHour) {
+      // まだ事業日が変わっていない → 前日の事業日
+      const prev = new Date(`${ymd}T12:00:00+09:00`);
+      prev.setDate(prev.getDate() - 1);
+      return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-${String(prev.getDate()).padStart(2, "0")}`;
+    }
+    return ymd;
+  }
+
+  const [tcDate, setTcDate] = useState(() => tokyoBusinessDate(28));
   const [tcEmployeeId, setTcEmployeeId] = useState("");
   const [tcPunches, setTcPunches] = useState<
     Array<{ id: string; kind: string; punchedAt: string; alcoholCheck?: unknown }>
@@ -714,6 +736,12 @@ export default function AttendanceMenuPage(): JSX.Element {
 
   useEffect(() => {
     void loadEmployees();
+    void apiFetch<{ dayChangeHour?: number }>("/settings/basics").then((r) => {
+      if (!r.ok) return;
+      const dch = typeof r.data.dayChangeHour === "number" ? r.data.dayChangeHour : 28;
+      setDayChangeHour(dch);
+      setTcDate(tokyoBusinessDate(dch));
+    });
   }, [loadEmployees]);
 
   useEffect(() => {

@@ -282,7 +282,9 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
     const basics = coerceBusinessBasicsFromCustomJson(s?.customJson);
     const staffMenuVisibility = coerceStaffMenuVisibilityFromCustomJson(s?.customJson);
-    return { ...basics, staffMenuVisibility };
+    const rollHour = s?.businessDayRollHour ?? 4;
+    // ユーザー向けに 28時間表記で返す（rollHour=4 → dayChangeHour=28）
+    return { ...basics, staffMenuVisibility, dayChangeHour: rollHour + 24 };
   });
 
   app.put<{ Body: Record<string, unknown> }>("/basics", async (req, reply) => {
@@ -304,15 +306,28 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
       nextCustom = mergeStaffMenuVisibilityIntoCustomJson(nextCustom, smParsed.value);
     }
 
+    // dayChangeHour は 28時間表記（24〜30）で受け取り、0〜6 の rollHour に変換
+    let newRollHour: number | undefined;
+    if (smRaw.dayChangeHour !== undefined) {
+      const dch = Number(smRaw.dayChangeHour);
+      if (!Number.isInteger(dch) || dch < 24 || dch > 30) {
+        return reply.code(400).send({ error: "dayChangeHour は 24〜30 の整数で指定してください（例: 28 = 28:00）" });
+      }
+      newRollHour = dch - 24;
+    }
+
     await prisma.tenantSettings.upsert({
       where: { tenantId },
       create: {
         tenantId,
-        businessDayRollHour: 4,
+        businessDayRollHour: newRollHour ?? 4,
         featureFlags: {},
         customJson: nextCustom as Prisma.InputJsonValue,
       },
-      update: { customJson: nextCustom as Prisma.InputJsonValue },
+      update: {
+        customJson: nextCustom as Prisma.InputJsonValue,
+        ...(newRollHour !== undefined ? { businessDayRollHour: newRollHour } : {}),
+      },
     });
     return reply.send({ ok: true });
   });

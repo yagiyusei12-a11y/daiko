@@ -102,14 +102,32 @@ function effectiveHourlyYenAt(
   return { hourlyYen: base, roleLabel: role ?? "客車" };
 }
 
-function hmTokyoFromDate(d: Date): string {
+/**
+ * 事業日ロールオーバー考慮の時刻表示。
+ * 打刻が businessDate の翌暦日かつ hour < rollHour の場合、
+ * 24+hour:mm 形式（例 01:30 → 25:30）で返す。
+ */
+function hmFlexFromDate(d: Date, businessDate: string, rollHour: number): string {
   if (Number.isNaN(d.getTime())) return "";
-  return new Intl.DateTimeFormat("ja-JP", {
+  const tokyoParts = new Intl.DateTimeFormat("ja-JP", {
     timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-  }).format(d);
+  }).formatToParts(d);
+  const get = (type: string) => tokyoParts.find((p) => p.type === type)?.value ?? "00";
+  const tokyoDate = `${get("year")}-${get("month")}-${get("day")}`;
+  const tokyoHour = Number(get("hour"));
+  const tokyoMin = get("minute");
+
+  if (rollHour > 0 && tokyoDate > businessDate && tokyoHour < rollHour) {
+    // 翌暦日の rollHour 未満 → 28時間表記
+    return `${String(24 + tokyoHour).padStart(2, "0")}:${tokyoMin}`;
+  }
+  return `${String(tokyoHour).padStart(2, "0")}:${tokyoMin}`;
 }
 
 function computeWageYen(
@@ -793,6 +811,8 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
     }
 
     const datePrefix = `${yearMonth}-`;
+    const tenantSettings = await prisma.tenantSettings.findUnique({ where: { tenantId }, select: { businessDayRollHour: true } });
+    const rollHour = tenantSettings?.businessDayRollHour ?? 4;
 
     const punches = await prisma.timeCardPunch.findMany({
       where: {
@@ -917,7 +937,7 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
           ? {
               id: x.id,
               punchedAt: x.punchedAt.toISOString(),
-              hm: hmTokyoFromDate(x.punchedAt),
+              hm: hmFlexFromDate(x.punchedAt, g.businessDate, rollHour),
             }
           : null;
 

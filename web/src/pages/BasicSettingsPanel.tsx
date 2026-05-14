@@ -50,6 +50,7 @@ type BasicsApi = {
   regularHolidays?: RegularHolidayEntry[];
   temporaryClosureDates?: string[];
   breathalyzers?: BreathalyzerEntry[];
+  dayChangeHour?: number;
   staffMenuVisibility?: {
     allowedHeaderNavIds: string[] | null;
     allowedSubTabIdsByNav: Partial<Record<string, string[]>>;
@@ -226,6 +227,7 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
   const { flashSaved } = useSavedToast();
   const [localErr, setLocalErr] = useState<string | null>(null);
   const [draft, setDraft] = useState<BusinessBasicsV2 | null>(null);
+  const [dayChangeHour, setDayChangeHour] = useState(28);
   const [hoursSubTab, setHoursSubTab] = useState<"default" | "weekday" | "special">("default");
   const [hoursWeekday, setHoursWeekday] = useState(1);
   const [specialDateDialogOpen, setSpecialDateDialogOpen] = useState(false);
@@ -254,6 +256,7 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
       return;
     }
     setDraft(fromApiBasics(r.data));
+    setDayChangeHour(typeof r.data.dayChangeHour === "number" ? r.data.dayChangeHour : 28);
     setStaffVis(staffVisDraftFromApi(r.data.staffMenuVisibility ?? null));
   }, [setErr]);
 
@@ -288,6 +291,11 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
     setBusy(true);
     setErr(null);
     setLocalErr(null);
+    const dch = Math.round(dayChangeHour);
+    if (dch < 24 || dch > 30) {
+      setLocalErr("日付変更時間は 24〜30 の範囲で入力してください（例: 28 = 28:00）。");
+      return;
+    }
     const r = await apiFetch("/settings/basics", {
       method: "PUT",
       json: {
@@ -298,6 +306,7 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
         regularHolidays: draft.regularHolidays,
         temporaryClosureDates: draft.temporaryClosureDates,
         breathalyzers: draft.breathalyzers,
+        dayChangeHour: dch,
         staffMenuVisibility: {
           allowedHeaderNavIds: smPut.allowedHeaderNavIds,
           allowedSubTabIdsByNav: smPut.allowedSubTabIdsByNav,
@@ -549,6 +558,27 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
           )}
         </div>
       ) : null}
+      </div>
+
+      <div className="settings-section-panel">
+        <h3 className="settings-subtitle">日付変更時間</h3>
+        <p className="settings-hint">
+          この時刻を過ぎると翌事業日になります。例: 28 にすると「28:00（＝翌暦日 4:00）」まで前の事業日として扱います。タイムカード・日報などシステム全体に適用されます。
+        </p>
+        <div className="settings-toolbar" style={{ alignItems: "center", gap: "0.5rem" }}>
+          <input
+            id="day-change-hour"
+            type="number"
+            min={24}
+            max={30}
+            step={1}
+            value={dayChangeHour}
+            onChange={(e) => setDayChangeHour(Number(e.target.value))}
+            style={{ width: "6rem" }}
+          />
+          <label htmlFor="day-change-hour" style={{ margin: 0 }}>時</label>
+          <span className="settings-hint" style={{ margin: 0 }}>（24〜30、通常は 28）</span>
+        </div>
       </div>
 
       <div className="settings-section-panel">
