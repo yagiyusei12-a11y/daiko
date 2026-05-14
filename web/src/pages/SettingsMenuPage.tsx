@@ -774,8 +774,8 @@ export default function SettingsMenuPage(): JSX.Element {
     <p className="settings-hint">読み込み中…</p>
   );
 
-  const employeesPanel = (
-    <div className="settings-three-col">
+  const employeesRosterPanel = (
+    <div className="settings-two-col">
       <div>
         <div className="settings-toolbar">
           <button type="button" onClick={() => fillEmpForm(null)}>
@@ -962,145 +962,147 @@ export default function SettingsMenuPage(): JSX.Element {
           </>
         )}
       </div>
-      <div className="settings-comp-col">
-        <h3 className="settings-subtitle">賃金</h3>
-        <p className="settings-hint" style={{ marginTop: 0 }}>
-          現在有効な報酬です。「賃金を保存」で一覧の全員分をまとめて保存します（未登録の従業員は今日付の報酬期間が作成されます）。歩合率は百分率（5.5% は 5.5 と入力）。
-        </p>
-        <div className="settings-comp-table-wrap">
-          <table className="settings-comp-table">
-            <thead>
-              <tr>
-                <th>氏名</th>
-                <th>賃金体系</th>
-                <th>客車時給（円）</th>
-                <th>随伴車時給（円）</th>
-                <th>電話時給（円）</th>
-                <th>客車歩合（%）</th>
-                <th>随伴車歩合（%）</th>
+    </div>
+  );
+
+  const employeesCompPanel = (
+    <div className="settings-comp-col">
+      <p className="settings-hint" style={{ marginTop: 0 }}>
+        現在有効な報酬です。「賃金を保存」で一覧の全員分をまとめて保存します（未登録の従業員は今日付の報酬期間が作成されます）。歩合率は百分率（5.5% は 5.5 と入力）。
+      </p>
+      <div className="settings-comp-table-wrap">
+        <table className="settings-comp-table">
+          <thead>
+            <tr>
+              <th>氏名</th>
+              <th>賃金体系</th>
+              <th>客車時給（円）</th>
+              <th>随伴車時給（円）</th>
+              <th>電話時給（円）</th>
+              <th>客車歩合（%）</th>
+              <th>随伴車歩合（%）</th>
+            </tr>
+          </thead>
+          <tbody>
+            {compRows.map((row) => (
+              <tr key={row.employeeId} className={row.status === "RETIRED" ? "settings-comp-row--retired" : undefined}>
+                <td>
+                  {row.familyName} {row.givenName}
+                </td>
+                <td>
+                  <select
+                    className="settings-comp-select"
+                    value={row.compensationType}
+                    aria-label={`${row.familyName} 賃金体系`}
+                    onChange={(e) =>
+                      setCompRows((xs) =>
+                        xs.map((x) =>
+                          x.employeeId === row.employeeId
+                            ? { ...x, compensationType: e.target.value as EmployeeCompCompensationType }
+                            : x,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="HOURLY_ONLY">時給</option>
+                    <option value="COMMISSION_ONLY">歩合</option>
+                    <option value="HOURLY_AND_COMMISSION">時給+歩合</option>
+                  </select>
+                </td>
+                <td>
+                  <input
+                    className="settings-comp-num"
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    aria-label={`${row.familyName} 客車時給`}
+                    value={row.mainHourlyYen}
+                    onChange={(e) =>
+                      setCompRows((xs) =>
+                        xs.map((x) => (x.employeeId === row.employeeId ? { ...x, mainHourlyYen: e.target.value } : x)),
+                      )
+                    }
+                  />
+                </td>
+                <td>
+                  <input
+                    className="settings-comp-num"
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    aria-label={`${row.familyName} 随伴車時給`}
+                    value={row.partnerHourlyYen}
+                    onChange={(e) =>
+                      setCompRows((xs) =>
+                        xs.map((x) => (x.employeeId === row.employeeId ? { ...x, partnerHourlyYen: e.target.value } : x)),
+                      )
+                    }
+                  />
+                </td>
+                <td>
+                  <input
+                    className="settings-comp-num"
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    aria-label={`${row.familyName} 電話時給`}
+                    value={row.phoneHourlyYen}
+                    onChange={(e) =>
+                      setCompRows((xs) =>
+                        xs.map((x) => (x.employeeId === row.employeeId ? { ...x, phoneHourlyYen: e.target.value } : x)),
+                      )
+                    }
+                  />
+                </td>
+                <td>
+                  <input
+                    className="settings-comp-num"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.01}
+                    inputMode="decimal"
+                    aria-label={`${row.familyName} 客車歩合`}
+                    value={row.mainCommissionPct}
+                    onChange={(e) =>
+                      setCompRows((xs) =>
+                        xs.map((x) => (x.employeeId === row.employeeId ? { ...x, mainCommissionPct: e.target.value } : x)),
+                      )
+                    }
+                  />
+                </td>
+                <td>
+                  <input
+                    className="settings-comp-num"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.01}
+                    inputMode="decimal"
+                    aria-label={`${row.familyName} 随伴車歩合`}
+                    value={row.partnerCommissionPct}
+                    onChange={(e) =>
+                      setCompRows((xs) =>
+                        xs.map((x) =>
+                          x.employeeId === row.employeeId ? { ...x, partnerCommissionPct: e.target.value } : x,
+                        )
+                      )
+                    }
+                  />
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {compRows.map((row) => (
-                <tr key={row.employeeId} className={row.status === "RETIRED" ? "settings-comp-row--retired" : undefined}>
-                  <td>
-                    {row.familyName} {row.givenName}
-                  </td>
-                  <td>
-                    <select
-                      className="settings-comp-select"
-                      value={row.compensationType}
-                      aria-label={`${row.familyName} 賃金体系`}
-                      onChange={(e) =>
-                        setCompRows((xs) =>
-                          xs.map((x) =>
-                            x.employeeId === row.employeeId
-                              ? { ...x, compensationType: e.target.value as EmployeeCompCompensationType }
-                              : x,
-                          ),
-                        )
-                      }
-                    >
-                      <option value="HOURLY_ONLY">時給</option>
-                      <option value="COMMISSION_ONLY">歩合</option>
-                      <option value="HOURLY_AND_COMMISSION">時給+歩合</option>
-                    </select>
-                  </td>
-                  <td>
-                    <input
-                      className="settings-comp-num"
-                      type="number"
-                      min={0}
-                      inputMode="numeric"
-                      aria-label={`${row.familyName} 客車時給`}
-                      value={row.mainHourlyYen}
-                      onChange={(e) =>
-                        setCompRows((xs) =>
-                          xs.map((x) => (x.employeeId === row.employeeId ? { ...x, mainHourlyYen: e.target.value } : x)),
-                        )
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      className="settings-comp-num"
-                      type="number"
-                      min={0}
-                      inputMode="numeric"
-                      aria-label={`${row.familyName} 随伴車時給`}
-                      value={row.partnerHourlyYen}
-                      onChange={(e) =>
-                        setCompRows((xs) =>
-                          xs.map((x) => (x.employeeId === row.employeeId ? { ...x, partnerHourlyYen: e.target.value } : x)),
-                        )
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      className="settings-comp-num"
-                      type="number"
-                      min={0}
-                      inputMode="numeric"
-                      aria-label={`${row.familyName} 電話時給`}
-                      value={row.phoneHourlyYen}
-                      onChange={(e) =>
-                        setCompRows((xs) =>
-                          xs.map((x) => (x.employeeId === row.employeeId ? { ...x, phoneHourlyYen: e.target.value } : x)),
-                        )
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      className="settings-comp-num"
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={0.01}
-                      inputMode="decimal"
-                      aria-label={`${row.familyName} 客車歩合`}
-                      value={row.mainCommissionPct}
-                      onChange={(e) =>
-                        setCompRows((xs) =>
-                          xs.map((x) => (x.employeeId === row.employeeId ? { ...x, mainCommissionPct: e.target.value } : x)),
-                        )
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      className="settings-comp-num"
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={0.01}
-                      inputMode="decimal"
-                      aria-label={`${row.familyName} 随伴車歩合`}
-                      value={row.partnerCommissionPct}
-                      onChange={(e) =>
-                        setCompRows((xs) =>
-                          xs.map((x) =>
-                            x.employeeId === row.employeeId ? { ...x, partnerCommissionPct: e.target.value } : x,
-                          ),
-                        )
-                      }
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <button
-          type="button"
-          className="settings-primary"
-          disabled={compBusy || busy || compRows.length === 0}
-          onClick={() => void saveEmployeeCompensation()}
-        >
-          賃金を保存
-        </button>
+            ))}
+          </tbody>
+        </table>
       </div>
+      <button
+        type="button"
+        className="settings-primary"
+        disabled={compBusy || busy || compRows.length === 0}
+        onClick={() => void saveEmployeeCompensation()}
+      >
+        賃金を保存
+      </button>
     </div>
   );
 
@@ -1217,7 +1219,8 @@ export default function SettingsMenuPage(): JSX.Element {
   const tabItems: TabDef[] = [
     { id: "company", label: "会社情報", children: companyPanel },
     { id: "basics", label: "基本", children: basicsPanel },
-    { id: "employees", label: "従業員", children: employeesPanel },
+    { id: "employees-roster", label: "名簿", children: employeesRosterPanel },
+    { id: "employees-compensation", label: "賃金", children: employeesCompPanel },
     { id: "vehicles", label: "随伴車", children: vehiclesPanel },
     { id: "till", label: "レジ", children: tillPanel },
     { id: "pricing", label: "料金", children: pricingPanel },

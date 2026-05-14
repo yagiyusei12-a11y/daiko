@@ -27,7 +27,7 @@ export type StaffHeaderNavId = (typeof STAFF_HEADER_NAV_IDS)[number];
 
 /** ヘッダー直下の各画面のタブ id（Tabs の id と一致） */
 export const STAFF_SUB_TAB_IDS: Record<string, readonly string[]> = {
-  settings: ["company", "basics", "employees", "vehicles", "till", "pricing", "online-booking"],
+  settings: ["company", "basics", "employees-roster", "employees-compensation", "vehicles", "till", "pricing", "online-booking"],
   documents: ["nippo", "meibo", "seiyaku", "nintei", "yakkan", "shido", "kujo", "henko"],
   attendance: ["shift", "adjust", "timecard"],
 };

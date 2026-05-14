@@ -20,7 +20,8 @@ export const STAFF_SUB_TAB_LABELS: Record<string, { id: string; label: string }[
   settings: [
     { id: "company", label: "会社情報" },
     { id: "basics", label: "基本" },
-    { id: "employees", label: "従業員" },
+    { id: "employees-roster", label: "名簿" },
+    { id: "employees-compensation", label: "賃金" },
     { id: "vehicles", label: "随伴車" },
     { id: "till", label: "レジ" },
     { id: "pricing", label: "料金" },
