@@ -15,6 +15,7 @@ import {
   computeBlockedMinutes,
   parseTripEstimateMinutesFromBody,
   parseTripEstimateMinutesFromQuery,
+  resolveVirtualConcurrentSlotsForDate,
 } from "../lib/reservation-timing-settings.js";
 import {
   coerceDetail,
@@ -139,7 +140,7 @@ export async function registerPublicBookingRoutes(app: FastifyInstance): Promise
       durationMinutes: blockedMinutes,
       businessIntervalsMin,
       availabilityMode: timing.availabilityMode,
-      virtualConcurrentSlots: timing.virtualConcurrentSlots,
+      virtualConcurrentSlots: resolveVirtualConcurrentSlotsForDate(date, timing),
     });
 
     return {
@@ -246,7 +247,7 @@ export async function registerPublicBookingRoutes(app: FastifyInstance): Promise
             startsAt,
             endsAt,
             detail,
-            virtualConcurrentSlots: timing.virtualConcurrentSlots,
+            virtualConcurrentSlots: resolveVirtualConcurrentSlotsForDate(businessDateTokyo, timing),
           });
           return { id: created.id };
         }

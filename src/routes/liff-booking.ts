@@ -24,6 +24,7 @@ import {
   computeBlockedMinutes,
   parseTripEstimateMinutesFromBody,
   parseTripEstimateMinutesFromQuery,
+  resolveVirtualConcurrentSlotsForDate,
 } from "../lib/reservation-timing-settings.js";
 import { parseTokyoLocalDateTimeToUtc } from "../lib/tokyo-datetime.js";
 
@@ -89,7 +90,7 @@ export async function registerLiffBookingRoutes(app: FastifyInstance): Promise<v
       durationMinutes: blockedMinutes,
       businessIntervalsMin,
       availabilityMode: timing.availabilityMode,
-      virtualConcurrentSlots: timing.virtualConcurrentSlots,
+      virtualConcurrentSlots: resolveVirtualConcurrentSlotsForDate(date, timing),
     });
 
     return {
@@ -164,7 +165,7 @@ export async function registerLiffBookingRoutes(app: FastifyInstance): Promise<v
           startsAt,
           endsAt,
           detail,
-          virtualConcurrentSlots: timing.virtualConcurrentSlots,
+          virtualConcurrentSlots: resolveVirtualConcurrentSlotsForDate(businessDateTokyo, timing),
         });
         return { id: created.id, driverEmployeeId: created.driverEmployeeId };
       }

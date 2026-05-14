@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../api";
-import { SCHEDULE_UNASSIGNED_DRIVER_ID } from "../lib/schedule-constants";
+import { SCHEDULE_UNASSIGNED_DRIVER_ID, scheduleDbUnassignedToDriverColumnKey } from "../lib/schedule-constants";
 import { useSavedToast } from "../saved-toast";
 import { useDeviceKind } from "../hooks/useDeviceKind";
 import { Card, Err } from "../ui";
@@ -43,6 +43,36 @@ function minutesSinceTokyoDay(ymd: string, iso: string): number {
   return Math.floor((new Date(iso).getTime() - tokyoMidnightUtcMs(ymd)) / 60000);
 }
 
+function formatUtcAsTokyoDatetimeLocal(d: Date): string {
+  const datePart = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+  const timePart = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+  return `${datePart}T${timePart}`;
+}
+
+function formatHmFromDayMinutes(ymd: string, iso: string): string {
+  const m = minutesSinceTokyoDay(ymd, iso);
+  const neg = m < 0;
+  const abs = Math.abs(m);
+  const h = Math.floor(abs / 60);
+  const min = abs % 60;
+  const core = `${h}:${String(min).padStart(2, "0")}`;
+  return neg ? `−${core}` : core;
+}
+
+function snap15(n: number): number {
+  return Math.round(n / 15) * 15;
+}
+
 function formatDayTitleJa(ymd: string): string {
   const [y, m, d] = ymd.split("-").map(Number);
   if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return ymd;
@@ -66,6 +96,7 @@ type ReservationRow = {
   startsAt: string;
   endsAt: string;
   driverEmployeeId: string | null;
+  virtualLane: number | null;
   vehicleId: string | null;
   detail: {
     customerName: string;
@@ -81,6 +112,8 @@ type ReservationRow = {
 type SchedulePayload = {
   date: string;
   businessHours: BusinessHourSlot[];
+  availabilityMode: string;
+  effectiveVirtualSlots: number;
   drivers: DriverRow[];
   reservations: ReservationRow[];
 };
@@ -98,6 +131,29 @@ type OnlineBookingForSchedule = {
 };
 
 const FALLBACK_DURATION_OPTIONS = Array.from({ length: 32 }, (_, i) => (i + 1) * 15);
+
+function reservationColumnKey(rv: ReservationRow, availabilityMode: string): string {
+  if (rv.driverEmployeeId) return rv.driverEmployeeId;
+  if (availabilityMode === "virtual_concurrent") {
+    return scheduleDbUnassignedToDriverColumnKey(rv.virtualLane);
+  }
+  return SCHEDULE_UNASSIGNED_DRIVER_ID;
+}
+
+type DragMode = "move" | "resize-l" | "resize-r";
+
+type DragCtx = {
+  pointerId: number;
+  rv: ReservationRow;
+  kind: DragMode;
+  transpose: boolean;
+  spanPx: number;
+  axisSpanMin: number;
+  originClient: number;
+  startMin: number;
+  endMin: number;
+  last: { a: number; b: number };
+};
 
 export default function TodaySchedulePage(): JSX.Element {
   const { flashSaved } = useSavedToast();
@@ -124,6 +180,24 @@ export default function TodaySchedulePage(): JSX.Element {
   const [tripEstimateMinutes, setTripEstimateMinutes] = useState(60);
   const [driverEmployeeId, setDriverEmployeeId] = useState("");
   const [vehicleId, setVehicleId] = useState("");
+
+  const [detailRv, setDetailRv] = useState<ReservationRow | null>(null);
+  const [detailBusy, setDetailBusy] = useState(false);
+  const [mStartLocal, setMStartLocal] = useState("");
+  const [mDuration, setMDuration] = useState(60);
+  const [mDriver, setMDriver] = useState("");
+  const [mVehicleId, setMVehicleId] = useState("");
+  const [mCustomerName, setMCustomerName] = useState("");
+  const [mPhone, setMPhone] = useState("");
+  const [mPickup, setMPickup] = useState("");
+  const [mVia, setMVia] = useState<string[]>([""]);
+  const [mDropoff, setMDropoff] = useState("");
+  const [mVehicleNumber, setMVehicleNumber] = useState("");
+  const [mParking, setMParking] = useState("");
+
+  const [dragPreview, setDragPreview] = useState<Record<string, { a: number; b: number }>>({});
+  const dragRef = useRef<DragCtx | null>(null);
+  const dragMovedRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -192,10 +266,17 @@ export default function TodaySchedulePage(): JSX.Element {
   const scheduleHeadPx = 36;
   const scheduleGridPx = scheduleAxis.slotCount * scheduleSlotPx;
 
+  const availabilityMode = data?.availabilityMode ?? "confirmed_shifts";
+
   const onlyUnassignedDriverColumn = useMemo(() => {
     const ds = data?.drivers;
-    return Boolean(ds && ds.length === 1 && ds[0].employeeId === SCHEDULE_UNASSIGNED_DRIVER_ID);
-  }, [data?.drivers]);
+    return Boolean(
+      ds &&
+        ds.length === 1 &&
+        ds[0].employeeId === SCHEDULE_UNASSIGNED_DRIVER_ID &&
+        availabilityMode !== "virtual_concurrent",
+    );
+  }, [data?.drivers, availabilityMode]);
 
   function openDialog(): void {
     setCustomerName("");
@@ -211,6 +292,25 @@ export default function TodaySchedulePage(): JSX.Element {
     const first = data?.drivers[0]?.employeeId ?? "";
     setDriverEmployeeId(first);
     setDialogOpen(true);
+    setErr(null);
+  }
+
+  function openDetail(rv: ReservationRow): void {
+    setDetailRv(rv);
+    setMStartLocal(formatUtcAsTokyoDatetimeLocal(new Date(rv.startsAt)));
+    const dur = Math.round((new Date(rv.endsAt).getTime() - new Date(rv.startsAt).getTime()) / 60000);
+    setMDuration(scheduleDurationOptions.includes(dur) ? dur : scheduleDurationOptions[0] ?? dur);
+    const dKey = reservationColumnKey(rv, availabilityMode);
+    const matchDriver = data?.drivers.some((d) => d.employeeId === dKey) ? dKey : data?.drivers[0]?.employeeId ?? "";
+    setMDriver(matchDriver);
+    setMVehicleId(rv.vehicleId ?? "");
+    setMCustomerName(rv.detail.customerName);
+    setMPhone(rv.detail.phone);
+    setMPickup(rv.detail.pickup);
+    setMVia(rv.detail.viaStops?.length ? [...rv.detail.viaStops] : [""]);
+    setMDropoff(rv.detail.dropoff);
+    setMVehicleNumber(rv.detail.vehicleNumber);
+    setMParking(rv.detail.parking);
     setErr(null);
   }
 
@@ -246,16 +346,182 @@ export default function TodaySchedulePage(): JSX.Element {
     void load();
   }
 
+  async function saveDetailModal(): Promise<void> {
+    if (!detailRv) return;
+    setDetailBusy(true);
+    setErr(null);
+    const via = mVia.map((s) => s.trim()).filter(Boolean);
+    const r = await apiFetch(`/dispatch/reservations/${encodeURIComponent(detailRv.id)}`, {
+      method: "PATCH",
+      json: {
+        startLocal: mStartLocal,
+        durationMinutes: mDuration,
+        driverEmployeeId: mDriver,
+        vehicleId: mVehicleId || null,
+        detail: {
+          customerName: mCustomerName.trim(),
+          phone: mPhone.trim(),
+          pickup: mPickup.trim(),
+          viaStops: via,
+          dropoff: mDropoff.trim(),
+          vehicleNumber: mVehicleNumber.trim(),
+          parking: mParking.trim(),
+        },
+      },
+    });
+    setDetailBusy(false);
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    flashSaved();
+    setDetailRv(null);
+    void load();
+  }
+
   const reservationsByDriver = useMemo(() => {
     const m = new Map<string, ReservationRow[]>();
     for (const row of data?.reservations ?? []) {
-      const id = row.driverEmployeeId ?? SCHEDULE_UNASSIGNED_DRIVER_ID;
+      const id = reservationColumnKey(row, availabilityMode);
       const arr = m.get(id) ?? [];
       arr.push(row);
       m.set(id, arr);
     }
     return m;
-  }, [data?.reservations]);
+  }, [data?.reservations, availabilityMode]);
+
+  const durationSelectOptions = useMemo(() => {
+    const s = new Set(scheduleDurationOptions);
+    if (detailRv) {
+      const cur = Math.round(
+        (new Date(detailRv.endsAt).getTime() - new Date(detailRv.startsAt).getTime()) / 60000,
+      );
+      if (Number.isFinite(cur) && cur > 0) s.add(cur);
+    }
+    return [...s].sort((a, b) => a - b);
+  }, [scheduleDurationOptions, detailRv]);
+
+  function effectiveMinutes(rv: ReservationRow): { a: number; b: number } {
+    const pr = dragPreview[rv.id];
+    if (pr) return pr;
+    return {
+      a: minutesSinceTokyoDay(viewDate, rv.startsAt),
+      b: minutesSinceTokyoDay(viewDate, rv.endsAt),
+    };
+  }
+
+  function beginDrag(
+    e: React.PointerEvent,
+    rv: ReservationRow,
+    track: HTMLDivElement,
+    transpose: boolean,
+  ): void {
+    if (e.button !== 0) return;
+    const rect = track.getBoundingClientRect();
+    const spanPx = transpose ? rect.height : rect.width;
+    if (spanPx <= 0) return;
+    const axisSpanMin = scheduleAxis.mx - scheduleAxis.mn;
+    const a0 = minutesSinceTokyoDay(viewDate, rv.startsAt);
+    const b0 = minutesSinceTokyoDay(viewDate, rv.endsAt);
+    const client = transpose ? e.clientY : e.clientX;
+    const edge = 10;
+    const pos = transpose ? e.clientY - rect.top : e.clientX - rect.left;
+    let kind: DragMode = "move";
+    if (pos < edge) kind = "resize-l";
+    else if (pos > spanPx - edge) kind = "resize-r";
+    dragMovedRef.current = false;
+    dragRef.current = {
+      pointerId: e.pointerId,
+      rv,
+      kind,
+      transpose,
+      spanPx,
+      axisSpanMin,
+      originClient: client,
+      startMin: a0,
+      endMin: b0,
+      last: { a: a0, b: b0 },
+    };
+
+    function onMove(ev: PointerEvent): void {
+      const d = dragRef.current;
+      if (!d || ev.pointerId !== d.pointerId) return;
+      const cur = d.transpose ? ev.clientY : ev.clientX;
+      const deltaPx = cur - d.originClient;
+      if (Math.abs(deltaPx) > 2) dragMovedRef.current = true;
+      const deltaMin = (deltaPx / d.spanPx) * d.axisSpanMin;
+      let a = d.startMin;
+      let b = d.endMin;
+      if (d.kind === "move") {
+        const sh = snap15(deltaMin);
+        a = snap15(d.startMin + sh);
+        b = snap15(d.endMin + sh);
+      } else if (d.kind === "resize-l") {
+        a = snap15(d.startMin + deltaMin);
+        if (a >= b - 15) a = b - 15;
+      } else {
+        b = snap15(d.endMin + deltaMin);
+        if (b <= a + 15) b = a + 15;
+      }
+      d.last = { a, b };
+      setDragPreview((prev) => ({ ...prev, [d.rv.id]: { a, b } }));
+    }
+
+    function onUp(ev: PointerEvent): void {
+      const d = dragRef.current;
+      if (!d || ev.pointerId !== d.pointerId) return;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      dragRef.current = null;
+      const fin = d.last;
+      const moved = dragMovedRef.current;
+      setDragPreview((prev) => {
+        const next = { ...prev };
+        delete next[d.rv.id];
+        return next;
+      });
+      if (!moved) {
+        openDetail(d.rv);
+        return;
+      }
+      const origA = minutesSinceTokyoDay(viewDate, d.rv.startsAt);
+      const origB = minutesSinceTokyoDay(viewDate, d.rv.endsAt);
+      if (fin.a === origA && fin.b === origB) return;
+      const base = tokyoMidnightUtcMs(viewDate);
+      const startIso = new Date(base + fin.a * 60000).toISOString();
+      void (async () => {
+        const startLocalStr = formatUtcAsTokyoDatetimeLocal(new Date(startIso));
+        const dur = fin.b - fin.a;
+        const r = await apiFetch(`/dispatch/reservations/${encodeURIComponent(d.rv.id)}`, {
+          method: "PATCH",
+          json: {
+            startLocal: startLocalStr,
+            durationMinutes: dur,
+          },
+        });
+        if (!r.ok) {
+          setErr(r.error);
+          void load();
+          return;
+        }
+        flashSaved();
+        void load();
+      })();
+    }
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    e.preventDefault();
+  }
+
+  function barLabel(rv: ReservationRow): string {
+    const hm = formatHmFromDayMinutes(viewDate, rv.startsAt);
+    const p = (rv.detail.pickup || "").trim();
+    const head = p.length > 18 ? `${p.slice(0, 17)}…` : p;
+    return `${head} ${hm}`.trim();
+  }
 
   return (
     <Card title="運行スケジュール">
@@ -287,130 +553,177 @@ export default function TodaySchedulePage(): JSX.Element {
               この日は客車の確定シフトがありません。「未予定」を選ぶと、担当者を決める前に運行予定だけ登録できます。
             </p>
           ) : null}
+          {availabilityMode === "virtual_concurrent" && data.drivers.length > 1 ? (
+            <p className="settings-hint" style={{ marginBottom: "0.75rem" }}>
+              この日の同時上限は {data.effectiveVirtualSlots} 件です。未予定は複数列で重ならない範囲に並びます。
+            </p>
+          ) : null}
           {scheduleTranspose ? (
-        <div className="attend-schedule-wrap attend-schedule-wrap--transpose">
-          <div className="attend-schedule-transpose-inner">
-            <div className="attend-schedule-time-rail" style={{ width: "2.35rem", flexShrink: 0 }}>
-              <div className="attend-schedule-corner" style={{ minHeight: scheduleHeadPx, boxSizing: "border-box" }} />
-              <div style={{ height: scheduleGridPx, position: "relative", borderTop: "1px solid var(--color-border)" }}>
-                {Array.from({ length: scheduleAxis.slotCount }, (_, i) => {
-                  const t = scheduleAxis.mn + i * scheduleAxis.step;
-                  const h = Math.floor(t / 60);
-                  const m = t % 60;
-                  const show = m === 0;
+            <div className="attend-schedule-wrap attend-schedule-wrap--transpose">
+              <div className="attend-schedule-transpose-inner">
+                <div className="attend-schedule-time-rail" style={{ width: "2.35rem", flexShrink: 0 }}>
+                  <div className="attend-schedule-corner" style={{ minHeight: scheduleHeadPx, boxSizing: "border-box" }} />
+                  <div style={{ height: scheduleGridPx, position: "relative", borderTop: "1px solid var(--color-border)" }}>
+                    {Array.from({ length: scheduleAxis.slotCount }, (_, i) => {
+                      const t = scheduleAxis.mn + i * scheduleAxis.step;
+                      const h = Math.floor(t / 60);
+                      const m = t % 60;
+                      const show = m === 0;
+                      return (
+                        <div
+                          key={i}
+                          className={`attend-schedule-tick-slot${show ? " attend-schedule-tick-slot--hour" : ""}`}
+                          style={{
+                            position: "absolute",
+                            left: 0,
+                            width: "100%",
+                            top: `${(i / scheduleAxis.slotCount) * 100}%`,
+                            height: `${100 / scheduleAxis.slotCount}%`,
+                            boxSizing: "border-box",
+                            borderBottom: "1px solid color-mix(in srgb, var(--color-border) 55%, transparent)",
+                            fontSize: "0.62rem",
+                            color: "var(--color-muted)",
+                            textAlign: "right",
+                            paddingRight: 2,
+                            lineHeight: 1,
+                          }}
+                        >
+                          {show ? `${h}` : ""}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                {data.drivers.map((row) => {
+                  const resList = reservationsByDriver.get(row.employeeId) ?? [];
                   return (
                     <div
-                      key={i}
-                      className={`attend-schedule-tick-slot${show ? " attend-schedule-tick-slot--hour" : ""}`}
-                      style={{
-                        position: "absolute",
-                        left: 0,
-                        width: "100%",
-                        top: `${(i / scheduleAxis.slotCount) * 100}%`,
-                        height: `${100 / scheduleAxis.slotCount}%`,
-                        boxSizing: "border-box",
-                        borderBottom: "1px solid color-mix(in srgb, var(--color-border) 55%, transparent)",
-                        fontSize: "0.62rem",
-                        color: "var(--color-muted)",
-                        textAlign: "right",
-                        paddingRight: 2,
-                        lineHeight: 1,
-                      }}
+                      key={row.employeeId}
+                      className="attend-schedule-driver-col"
+                      style={{ width: "4.75rem", flexShrink: 0, borderLeft: "1px solid var(--color-border)" }}
                     >
-                      {show ? `${h}` : ""}
+                      <div
+                        className="attend-schedule-col-head"
+                        style={{
+                          minHeight: scheduleHeadPx,
+                          maxHeight: scheduleHeadPx,
+                          boxSizing: "border-box",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          textAlign: "center",
+                          padding: "0.2rem",
+                          fontSize: "0.78rem",
+                          fontWeight: 600,
+                          borderBottom: "1px solid var(--color-border)",
+                        }}
+                      >
+                        {row.name}
+                      </div>
+                      <div
+                        className="attend-schedule-track"
+                        style={{ height: scheduleGridPx, position: "relative", background: "var(--color-surface)" }}
+                      >
+                        {resList.map((rv) => {
+                          const { a, b } = effectiveMinutes(rv);
+                          const bar = scheduleBarPercentages(a, b, scheduleAxis);
+                          const label = barLabel(rv);
+                          return (
+                            <button
+                              key={rv.id}
+                              type="button"
+                              className="attend-schedule-bar attend-schedule-bar--transpose attend-schedule-bar--reservation"
+                              style={{
+                                top: `${bar.startPct}%`,
+                                height: `${bar.sizePct}%`,
+                                border: "none",
+                                padding: 0,
+                                cursor: "grab",
+                                overflow: "hidden",
+                                fontSize: "0.55rem",
+                                color: "#fff",
+                                lineHeight: 1.1,
+                                textAlign: "center",
+                              }}
+                              title={`${rv.detail.customerName} ${rv.detail.pickup}→${rv.detail.dropoff}`}
+                              onPointerDown={(e) => {
+                                const track = e.currentTarget.parentElement as HTMLDivElement;
+                                beginDrag(e, rv, track, true);
+                              }}
+                            >
+                              <span style={{ pointerEvents: "none", display: "block", padding: "0 1px" }}>{label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}
               </div>
             </div>
-            {data.drivers.map((row) => {
-              const resList = reservationsByDriver.get(row.employeeId) ?? [];
-              return (
-                <div
-                  key={row.employeeId}
-                  className="attend-schedule-driver-col"
-                  style={{ width: "4.75rem", flexShrink: 0, borderLeft: "1px solid var(--color-border)" }}
-                >
-                  <div
-                    className="attend-schedule-col-head"
-                    style={{
-                      minHeight: scheduleHeadPx,
-                      maxHeight: scheduleHeadPx,
-                      boxSizing: "border-box",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      textAlign: "center",
-                      padding: "0.2rem",
-                      fontSize: "0.78rem",
-                      fontWeight: 600,
-                      borderBottom: "1px solid var(--color-border)",
-                    }}
-                  >
-                    {row.name}
-                  </div>
-                  <div style={{ height: scheduleGridPx, position: "relative", background: "var(--color-surface)" }}>
-                    {resList.map((rv) => {
-                      const a = minutesSinceTokyoDay(viewDate, rv.startsAt);
-                      const b = minutesSinceTokyoDay(viewDate, rv.endsAt);
-                      const bar = scheduleBarPercentages(a, b, scheduleAxis);
-                      return (
-                        <div
-                          key={rv.id}
-                          className="attend-schedule-bar attend-schedule-bar--transpose attend-schedule-bar--reservation"
-                          style={{ top: `${bar.startPct}%`, height: `${bar.sizePct}%` }}
-                          title={`${rv.detail.customerName} ${rv.detail.pickup}→${rv.detail.dropoff}`}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
           ) : (
-        <div className="attend-schedule-wrap">
-          <div className="attend-schedule-axis">
-            <div className="attend-schedule-corner" />
-            <div className="attend-schedule-ticks" style={{ gridTemplateColumns: `repeat(${scheduleAxis.slotCount}, minmax(0, 1fr))` }}>
-              {Array.from({ length: scheduleAxis.slotCount }, (_, i) => {
-                const t = scheduleAxis.mn + i * scheduleAxis.step;
-                const h = Math.floor(t / 60);
-                const m = t % 60;
-                const show = m === 0;
-                return (
-                  <span key={i} className={`attend-schedule-tick${show ? " attend-schedule-tick--hour" : ""}`}>
-                    {show ? `${h}` : ""}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-          {data.drivers.map((row) => {
-            const resList = reservationsByDriver.get(row.employeeId) ?? [];
-            return (
-              <div key={row.employeeId} className="attend-schedule-row">
-                <div className="attend-schedule-name">{row.name}</div>
-                <div className="attend-schedule-track">
-                  {resList.map((rv) => {
-                    const a = minutesSinceTokyoDay(viewDate, rv.startsAt);
-                    const b = minutesSinceTokyoDay(viewDate, rv.endsAt);
-                    const bar = scheduleBarPercentages(a, b, scheduleAxis);
+            <div className="attend-schedule-wrap">
+              <div className="attend-schedule-axis">
+                <div className="attend-schedule-corner" />
+                <div
+                  className="attend-schedule-ticks"
+                  style={{ gridTemplateColumns: `repeat(${scheduleAxis.slotCount}, minmax(0, 1fr))` }}
+                >
+                  {Array.from({ length: scheduleAxis.slotCount }, (_, i) => {
+                    const t = scheduleAxis.mn + i * scheduleAxis.step;
+                    const h = Math.floor(t / 60);
+                    const m = t % 60;
+                    const show = m === 0;
                     return (
-                      <div
-                        key={rv.id}
-                        className="attend-schedule-bar attend-schedule-bar--reservation"
-                        style={{ left: `${bar.startPct}%`, width: `${bar.sizePct}%` }}
-                        title={`${rv.detail.customerName} ${rv.detail.pickup}→${rv.detail.dropoff}`}
-                      />
+                      <span key={i} className={`attend-schedule-tick${show ? " attend-schedule-tick--hour" : ""}`}>
+                        {show ? `${h}` : ""}
+                      </span>
                     );
                   })}
                 </div>
               </div>
-            );
-          })}
-        </div>
+              {data.drivers.map((row) => {
+                const resList = reservationsByDriver.get(row.employeeId) ?? [];
+                return (
+                  <div key={row.employeeId} className="attend-schedule-row">
+                    <div className="attend-schedule-name">{row.name}</div>
+                    <div className="attend-schedule-track">
+                      {resList.map((rv) => {
+                        const { a, b } = effectiveMinutes(rv);
+                        const bar = scheduleBarPercentages(a, b, scheduleAxis);
+                        const label = barLabel(rv);
+                        return (
+                          <button
+                            key={rv.id}
+                            type="button"
+                            className="attend-schedule-bar attend-schedule-bar--reservation"
+                            style={{
+                              left: `${bar.startPct}%`,
+                              width: `${bar.sizePct}%`,
+                              border: "none",
+                              padding: "0 2px",
+                              cursor: "grab",
+                              overflow: "hidden",
+                              fontSize: "0.58rem",
+                              color: "#fff",
+                              whiteSpace: "nowrap",
+                              textOverflow: "ellipsis",
+                            }}
+                            title={`${rv.detail.customerName} ${rv.detail.pickup}→${rv.detail.dropoff}`}
+                            onPointerDown={(e) => {
+                              const track = e.currentTarget.parentElement as HTMLDivElement;
+                              beginDrag(e, rv, track, false);
+                            }}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </>
       ) : null}
@@ -524,6 +837,101 @@ export default function TodaySchedulePage(): JSX.Element {
               </button>
               <button type="button" onClick={() => setDialogOpen(false)}>
                 キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {detailRv ? (
+        <div
+          className="pricing-modal-backdrop"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setDetailRv(null);
+          }}
+        >
+          <div
+            className="pricing-modal attend-shift-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sched-det-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h2 id="sched-det-title" className="pricing-modal-title">
+              運行予定
+            </h2>
+            <div className="attend-shift-dialog-scroll">
+              <div className="settings-form">
+                <label htmlFor="sd-start">日時（開始）</label>
+                <input id="sd-start" type="datetime-local" value={mStartLocal} onChange={(e) => setMStartLocal(e.target.value)} />
+                <label htmlFor="sd-dur">ブロック時間（分・15分刻み）</label>
+                <select id="sd-dur" value={mDuration} onChange={(e) => setMDuration(Number(e.target.value))}>
+                  {durationSelectOptions.map((m) => (
+                    <option key={m} value={m}>
+                      {m} 分
+                    </option>
+                  ))}
+                </select>
+                <label htmlFor="sd-driver">客車担当</label>
+                <select id="sd-driver" value={mDriver} onChange={(e) => setMDriver(e.target.value)}>
+                  {(data?.drivers ?? []).map((d) => (
+                    <option key={d.employeeId} value={d.employeeId}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+                <label htmlFor="sd-veh">随伴車</label>
+                <select id="sd-veh" value={mVehicleId} onChange={(e) => setMVehicleId(e.target.value)}>
+                  <option value="">なし</option>
+                  {vehicles.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+                <label htmlFor="sd-cust">客名</label>
+                <input id="sd-cust" type="text" value={mCustomerName} onChange={(e) => setMCustomerName(e.target.value)} />
+                <label htmlFor="sd-phone">電話</label>
+                <input id="sd-phone" type="tel" value={mPhone} onChange={(e) => setMPhone(e.target.value)} />
+                <label htmlFor="sd-pu">迎え先</label>
+                <input id="sd-pu" type="text" value={mPickup} onChange={(e) => setMPickup(e.target.value)} />
+                <label>経由</label>
+                {mVia.map((v, idx) => (
+                  <div key={idx} className="settings-toolbar" style={{ gap: "0.35rem" }}>
+                    <input
+                      type="text"
+                      style={{ flex: 1, minWidth: 0 }}
+                      value={v}
+                      onChange={(e) => setMVia((prev) => prev.map((x, i) => (i === idx ? e.target.value : x)))}
+                    />
+                    <button
+                      type="button"
+                      className="settings-secondary"
+                      onClick={() => setMVia((prev) => prev.filter((_, i) => i !== idx))}
+                      disabled={mVia.length <= 1}
+                    >
+                      削除
+                    </button>
+                  </div>
+                ))}
+                <button type="button" className="settings-secondary" onClick={() => setMVia((prev) => [...prev, ""])}>
+                  経由を追加
+                </button>
+                <label htmlFor="sd-do">送り先</label>
+                <input id="sd-do" type="text" value={mDropoff} onChange={(e) => setMDropoff(e.target.value)} />
+                <label htmlFor="sd-vno">車のナンバー</label>
+                <input id="sd-vno" type="text" value={mVehicleNumber} onChange={(e) => setMVehicleNumber(e.target.value)} />
+                <label htmlFor="sd-park">駐車場</label>
+                <input id="sd-park" type="text" value={mParking} onChange={(e) => setMParking(e.target.value)} />
+              </div>
+            </div>
+            <div className="pricing-modal-actions">
+              <button type="button" className="settings-primary" disabled={detailBusy} onClick={() => void saveDetailModal()}>
+                保存
+              </button>
+              <button type="button" onClick={() => setDetailRv(null)}>
+                閉じる
               </button>
             </div>
           </div>

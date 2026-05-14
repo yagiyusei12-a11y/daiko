@@ -22,8 +22,13 @@ export type ReservationTimingSettings = {
   /** add 時に目安へ足す分 */
   blockedTimeAddMinutes: number;
   availabilityMode: AvailabilityMode;
-  /** virtual_concurrent 時の同時予約上限 */
+  /** virtual_concurrent 時の同時予約上限（日別未指定時のデフォルト） */
   virtualConcurrentSlots: number;
+  /**
+   * 日別の同時予約上限（yyyy-MM-dd → 1〜50）。キーが無い日は virtualConcurrentSlots。
+   * 将来カレンダーUIで編集しやすくする余地あり。
+   */
+  virtualSlotsByDate: Record<string, number>;
 };
 
 const DEFAULTS: ReservationTimingSettings = {
@@ -33,10 +38,36 @@ const DEFAULTS: ReservationTimingSettings = {
   blockedTimeAddMinutes: 10,
   availabilityMode: "confirmed_shifts",
   virtualConcurrentSlots: 2,
+  virtualSlotsByDate: {},
 };
 
 function clampInt(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, Math.floor(n)));
+}
+
+const YMD_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_VIRTUAL_SLOTS_BY_DATE_ENTRIES = 400;
+
+/** 指定日の仮想同時枠の上限（1〜50） */
+export function resolveVirtualConcurrentSlotsForDate(ymd: string, cfg: ReservationTimingSettings): number {
+  const raw = cfg.virtualSlotsByDate[ymd];
+  if (raw !== undefined && Number.isInteger(raw) && raw >= 1 && raw <= 50) {
+    return raw;
+  }
+  return Math.max(1, Math.min(50, Math.floor(cfg.virtualConcurrentSlots)));
+}
+
+function coerceVirtualSlotsByDate(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!YMD_KEY_RE.test(k)) continue;
+    const n = typeof v === "number" ? Math.floor(v) : Number(v);
+    if (!Number.isInteger(n) || n < 1 || n > 50) continue;
+    out[k] = n;
+    if (Object.keys(out).length >= MAX_VIRTUAL_SLOTS_BY_DATE_ENTRIES) break;
+  }
+  return out;
 }
 
 /** 15〜480 に収め、15 分単位へ切り上げ（ブロック時間は控えめに取りすぎないよう上限クランプ） */
@@ -62,7 +93,7 @@ export function computeBlockedMinutes(estimateMinutes: number, cfg: ReservationT
 export function coerceReservationTimingFromCustomJson(customJson: unknown): ReservationTimingSettings {
   const root = asObj(customJson);
   const raw = root.reservationTiming;
-  if (!raw || typeof raw !== "object") return { ...DEFAULTS };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ...DEFAULTS };
   const o = raw as JsonObj;
 
   let defaultTripEstimateMinutes =
@@ -96,6 +127,8 @@ export function coerceReservationTimingFromCustomJson(customJson: unknown): Rese
     virtualConcurrentSlots = DEFAULTS.virtualConcurrentSlots;
   }
 
+  const virtualSlotsByDate = coerceVirtualSlotsByDate(o.virtualSlotsByDate);
+
   return {
     defaultTripEstimateMinutes,
     blockedTimeMode,
@@ -103,6 +136,7 @@ export function coerceReservationTimingFromCustomJson(customJson: unknown): Rese
     blockedTimeAddMinutes,
     availabilityMode,
     virtualConcurrentSlots,
+    virtualSlotsByDate,
   };
 }
 
@@ -150,6 +184,28 @@ export function parseReservationTimingPut(
     return { ok: false, error: "virtualConcurrentSlots は 1〜50 の整数にしてください" };
   }
 
+  let virtualSlotsByDate: Record<string, number> = {};
+  if (o.virtualSlotsByDate !== undefined && o.virtualSlotsByDate !== null) {
+    if (typeof o.virtualSlotsByDate !== "object" || Array.isArray(o.virtualSlotsByDate)) {
+      return { ok: false, error: "virtualSlotsByDate はオブジェクトで指定してください" };
+    }
+    let count = 0;
+    for (const [k, v] of Object.entries(o.virtualSlotsByDate as Record<string, unknown>)) {
+      if (!YMD_KEY_RE.test(k)) {
+        return { ok: false, error: `virtualSlotsByDate のキーは yyyy-MM-dd 形式にしてください: ${k}` };
+      }
+      const n = typeof v === "number" ? Math.floor(v) : Number(v);
+      if (!Number.isInteger(n) || n < 1 || n > 50) {
+        return { ok: false, error: `virtualSlotsByDate.${k} は 1〜50 の整数にしてください` };
+      }
+      virtualSlotsByDate[k] = n;
+      count++;
+      if (count > MAX_VIRTUAL_SLOTS_BY_DATE_ENTRIES) {
+        return { ok: false, error: `virtualSlotsByDate は最大 ${MAX_VIRTUAL_SLOTS_BY_DATE_ENTRIES} 件までです` };
+      }
+    }
+  }
+
   return {
     ok: true,
     value: {
@@ -159,6 +215,7 @@ export function parseReservationTimingPut(
       blockedTimeAddMinutes,
       availabilityMode,
       virtualConcurrentSlots,
+      virtualSlotsByDate,
     },
   };
 }

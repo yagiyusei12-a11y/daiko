@@ -621,6 +621,8 @@ model DispatchReservation {
   /// 運行予定の客車担当（確定シフトの客車と整合させる）
   driverEmployeeId String?
   driverEmployee     Employee? @relation("DispatchReservationDriver", fields: [driverEmployeeId], references: [id], onDelete: SetNull)
+  /// 担当 null のときの未予定列（1〜）。担当ありのときは null。
+  virtualLane Int?
   title     String
   note      String?
   /// 客名・経路・車番など（運行予定フォーム）

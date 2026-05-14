@@ -30,3 +30,20 @@ export function minutesSinceTokyoMidnight(ymd: string, at: Date): number {
   if (!range) return NaN;
   return Math.floor((at.getTime() - range.start.getTime()) / 60000);
 }
+
+/** UTC の瞬間を、東京の壁時計で解釈した `datetime-local` 用 `yyyy-MM-ddTHH:mm` */
+export function formatUtcAsTokyoDatetimeLocal(d: Date): string {
+  const datePart = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+  const timePart = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+  return `${datePart}T${timePart}`;
+}

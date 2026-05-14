@@ -1,6 +1,15 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 import { tokyoDayRangeUtc } from "./tokyo-datetime.js";
+import type { ReservationTimingSettings } from "./reservation-timing-settings.js";
+import { resolveVirtualConcurrentSlotsForDate } from "./reservation-timing-settings.js";
+
+export class DispatchReservationNotFoundError extends Error {
+  constructor() {
+    super("予約が見つかりません");
+    this.name = "DispatchReservationNotFoundError";
+  }
+}
 
 export const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DUTY_WHITELIST = new Set(["客車", "随伴車", "電話", "スケジュール"]);
@@ -144,12 +153,14 @@ export async function countTenantOverlappingReservations(
   tenantId: string,
   startsAt: Date,
   endsAt: Date,
+  excludeReservationId?: string,
 ): Promise<number> {
   return db.dispatchReservation.count({
     where: {
       tenantId,
       startsAt: { lt: endsAt },
       endsAt: { gt: startsAt },
+      ...(excludeReservationId ? { id: { not: excludeReservationId } } : {}),
     },
   });
 }
@@ -177,6 +188,45 @@ function assertDurationMinutes(durationMinutes: number): void {
   }
 }
 
+/** 未割当かつ同一レーンで時間重なる予約があるか（virtualLane null はレーン1扱い） */
+export async function hasOverlappingUnassignedInLane(
+  db: Pick<Prisma.TransactionClient, "dispatchReservation">,
+  tenantId: string,
+  lane: number,
+  startsAt: Date,
+  endsAt: Date,
+  excludeReservationId?: string,
+): Promise<boolean> {
+  const base = {
+    tenantId,
+    driverEmployeeId: null,
+    startsAt: { lt: endsAt },
+    endsAt: { gt: startsAt },
+    ...(excludeReservationId ? { id: { not: excludeReservationId } } : {}),
+  } as const;
+  const where =
+    lane <= 1
+      ? { ...base, OR: [{ virtualLane: 1 }, { virtualLane: null }] }
+      : { ...base, virtualLane: lane };
+  const hit = await db.dispatchReservation.findFirst({ where, select: { id: true } });
+  return Boolean(hit);
+}
+
+export async function pickFirstFreeVirtualLane(
+  tx: Pick<Prisma.TransactionClient, "dispatchReservation">,
+  tenantId: string,
+  startsAt: Date,
+  endsAt: Date,
+  cap: number,
+): Promise<number | null> {
+  const c = Math.max(1, Math.min(50, Math.floor(cap)));
+  for (let lane = 1; lane <= c; lane++) {
+    const busy = await hasOverlappingUnassignedInLane(tx, tenantId, lane, startsAt, endsAt);
+    if (!busy) return lane;
+  }
+  return null;
+}
+
 export async function createDispatchReservationExplicitInTransaction(
   tx: Prisma.TransactionClient,
   args: {
@@ -186,20 +236,75 @@ export async function createDispatchReservationExplicitInTransaction(
     startsAt: Date;
     endsAt: Date;
     detail: DispatchDetail;
+    /** 担当 null のときのみ有効（1〜50）。担当ありのときは無視され null 保存。 */
+    virtualLane?: number | null;
+    /** 担当 null かつ仮想枠モードのとき、テナント同時上限を検証する */
+    unassignedVirtual?: { businessDateTokyo: string; timing: ReservationTimingSettings };
   },
 ): Promise<{ id: string }> {
   assertDurationMinutes(Math.round((args.endsAt.getTime() - args.startsAt.getTime()) / 60000));
 
-  const overlap = await hasOverlappingReservation(tx, args.tenantId, args.driverEmployeeId, args.startsAt, args.endsAt);
-  if (overlap) throw new DispatchReservationOverlapError();
-
   const title = `${args.detail.customerName}（${args.detail.pickup}→${args.detail.dropoff}）`.slice(0, 240);
+
+  if (args.driverEmployeeId !== null) {
+    const overlap = await hasOverlappingReservation(
+      tx,
+      args.tenantId,
+      args.driverEmployeeId,
+      args.startsAt,
+      args.endsAt,
+    );
+    if (overlap) throw new DispatchReservationOverlapError();
+
+    const row = await tx.dispatchReservation.create({
+      data: {
+        tenantId: args.tenantId,
+        vehicleId: args.vehicleId,
+        driverEmployeeId: args.driverEmployeeId,
+        virtualLane: null,
+        title,
+        detailJson: args.detail as unknown as Prisma.InputJsonValue,
+        startsAt: args.startsAt,
+        endsAt: args.endsAt,
+      },
+      select: { id: true },
+    });
+    return { id: row.id };
+  }
+
+  const v = args.virtualLane;
+  const virtualLaneDb =
+    v != null && Number.isInteger(v) && v >= 1 && v <= 50 ? v : 1;
+
+  const laneBusy = await hasOverlappingUnassignedInLane(
+    tx,
+    args.tenantId,
+    virtualLaneDb,
+    args.startsAt,
+    args.endsAt,
+  );
+  if (laneBusy) {
+    throw new DispatchReservationOverlapError("この未予定列の同じ時間帯に別の予定があります");
+  }
+
+  if (args.unassignedVirtual?.timing.availabilityMode === "virtual_concurrent") {
+    const cap = resolveVirtualConcurrentSlotsForDate(
+      args.unassignedVirtual.businessDateTokyo,
+      args.unassignedVirtual.timing,
+    );
+    if (virtualLaneDb > cap) {
+      throw new DispatchReservationOverlapError(`未予定列は 1〜${cap} のみです`);
+    }
+    const n = await countTenantOverlappingReservations(tx, args.tenantId, args.startsAt, args.endsAt);
+    if (n >= cap) throw new DispatchReservationSlotTakenError();
+  }
 
   const row = await tx.dispatchReservation.create({
     data: {
       tenantId: args.tenantId,
       vehicleId: args.vehicleId,
-      driverEmployeeId: args.driverEmployeeId,
+      driverEmployeeId: null,
+      virtualLane: virtualLaneDb,
       title,
       detailJson: args.detail as unknown as Prisma.InputJsonValue,
       startsAt: args.startsAt,
@@ -217,6 +322,8 @@ export async function createDispatchReservationExplicit(args: {
   startsAt: Date;
   endsAt: Date;
   detail: DispatchDetail;
+  virtualLane?: number | null;
+  unassignedVirtual?: { businessDateTokyo: string; timing: ReservationTimingSettings };
 }): Promise<{ id: string }> {
   const maxAttempts = 5;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -313,12 +420,16 @@ export async function createDispatchReservationVirtualConcurrent(args: {
           const n = await countTenantOverlappingReservations(tx, args.tenantId, args.startsAt, args.endsAt);
           if (n >= cap) throw new DispatchReservationSlotTakenError();
 
+          const lane = await pickFirstFreeVirtualLane(tx, args.tenantId, args.startsAt, args.endsAt, cap);
+          if (lane === null) throw new DispatchReservationSlotTakenError();
+
           const title = `${args.detail.customerName}（${args.detail.pickup}→${args.detail.dropoff}）`.slice(0, 240);
           const row = await tx.dispatchReservation.create({
             data: {
               tenantId: args.tenantId,
               vehicleId: null,
               driverEmployeeId: null,
+              virtualLane: lane,
               title,
               detailJson: args.detail as unknown as Prisma.InputJsonValue,
               startsAt: args.startsAt,
@@ -337,4 +448,99 @@ export async function createDispatchReservationVirtualConcurrent(args: {
     }
   }
   throw new DispatchReservationSlotTakenError("同時更新が集中しました。空き状況を更新して再度お試しください");
+}
+
+export type DispatchReservationPatch = {
+  startsAt?: Date;
+  endsAt?: Date;
+  driverEmployeeId?: string | null;
+  virtualLane?: number | null;
+  vehicleId?: string | null;
+  detail?: DispatchDetail;
+};
+
+export async function updateDispatchReservationWithPatch(args: {
+  tenantId: string;
+  reservationId: string;
+  patch: DispatchReservationPatch;
+  timing: ReservationTimingSettings;
+  businessDateTokyo: string;
+}): Promise<void> {
+  const maxAttempts = 6;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      await prisma.$transaction(
+        async (tx) => {
+          const cur = await tx.dispatchReservation.findFirst({
+            where: { id: args.reservationId, tenantId: args.tenantId },
+            select: {
+              id: true,
+              driverEmployeeId: true,
+              virtualLane: true,
+              vehicleId: true,
+              startsAt: true,
+              endsAt: true,
+              detailJson: true,
+            },
+          });
+          if (!cur) throw new DispatchReservationNotFoundError();
+
+          const startsAt = args.patch.startsAt ?? cur.startsAt;
+          const endsAt = args.patch.endsAt ?? cur.endsAt;
+          if (startsAt >= endsAt) throw new DispatchReservationOverlapError("終了は開始より後にしてください");
+
+          let driverEmployeeId =
+            args.patch.driverEmployeeId !== undefined ? args.patch.driverEmployeeId : cur.driverEmployeeId;
+          let virtualLane = args.patch.virtualLane !== undefined ? args.patch.virtualLane : cur.virtualLane;
+          const vehicleId = args.patch.vehicleId !== undefined ? args.patch.vehicleId : cur.vehicleId;
+          const detail = args.patch.detail ?? coerceDetail(cur.detailJson);
+
+          if (driverEmployeeId !== null) {
+            virtualLane = null;
+            const busy = await hasOverlappingReservation(tx, args.tenantId, driverEmployeeId, startsAt, endsAt, cur.id);
+            if (busy) throw new DispatchReservationOverlapError();
+          } else {
+            const lane = virtualLane == null || virtualLane < 1 ? 1 : Math.min(50, Math.floor(virtualLane));
+            virtualLane = lane;
+            if (args.timing.availabilityMode === "virtual_concurrent") {
+              const cap = resolveVirtualConcurrentSlotsForDate(args.businessDateTokyo, args.timing);
+              if (lane > cap) {
+                throw new DispatchReservationOverlapError(`未予定列は 1〜${cap} のみです`);
+              }
+              const n = await countTenantOverlappingReservations(tx, args.tenantId, startsAt, endsAt, cur.id);
+              if (n >= cap) throw new DispatchReservationSlotTakenError();
+              const laneBusy = await hasOverlappingUnassignedInLane(tx, args.tenantId, lane, startsAt, endsAt, cur.id);
+              if (laneBusy) {
+                throw new DispatchReservationOverlapError("この未予定列の同じ時間帯に別の予定があります");
+              }
+            }
+          }
+
+          const title = `${detail.customerName}（${detail.pickup}→${detail.dropoff}）`.slice(0, 240);
+
+          await tx.dispatchReservation.update({
+            where: { id: cur.id },
+            data: {
+              startsAt,
+              endsAt,
+              driverEmployeeId,
+              virtualLane: driverEmployeeId === null ? virtualLane : null,
+              vehicleId,
+              detailJson: detail as unknown as Prisma.InputJsonValue,
+              title,
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+      return;
+    } catch (e) {
+      if (e instanceof DispatchReservationNotFoundError) throw e;
+      if (e instanceof DispatchReservationOverlapError) throw e;
+      if (e instanceof DispatchReservationSlotTakenError) throw e;
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") continue;
+      throw e;
+    }
+  }
+  throw new DispatchReservationOverlapError("同時更新が集中しました。少し待って再度お試しください");
 }

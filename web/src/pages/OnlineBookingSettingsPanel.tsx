@@ -12,6 +12,7 @@ type ReservationTimingForm = {
   blockedTimeAddMinutes: number;
   availabilityMode: "confirmed_shifts" | "virtual_concurrent";
   virtualConcurrentSlots: number;
+  virtualSlotsByDate: Record<string, number>;
 };
 
 const RT_DEFAULT: ReservationTimingForm = {
@@ -21,6 +22,7 @@ const RT_DEFAULT: ReservationTimingForm = {
   blockedTimeAddMinutes: 10,
   availabilityMode: "confirmed_shifts",
   virtualConcurrentSlots: 2,
+  virtualSlotsByDate: {},
 };
 
 type OnlineBookingApi = {
@@ -74,11 +76,18 @@ export default function OnlineBookingSettingsPanel({
     setTenantSlug(r.data.tenantSlug);
     const incoming = r.data.reservationTiming;
     if (incoming && typeof incoming === "object") {
+      const vs =
+        incoming.virtualSlotsByDate &&
+        typeof incoming.virtualSlotsByDate === "object" &&
+        !Array.isArray(incoming.virtualSlotsByDate)
+          ? { ...(incoming.virtualSlotsByDate as Record<string, number>) }
+          : {};
       setRt({
         ...RT_DEFAULT,
         ...incoming,
         blockedTimeMode: incoming.blockedTimeMode === "add" ? "add" : "multiply",
         availabilityMode: incoming.availabilityMode === "virtual_concurrent" ? "virtual_concurrent" : "confirmed_shifts",
+        virtualSlotsByDate: vs,
       });
     } else {
       setRt(RT_DEFAULT);
@@ -111,6 +120,7 @@ export default function OnlineBookingSettingsPanel({
           blockedTimeAddMinutes: rt.blockedTimeAddMinutes,
           availabilityMode: rt.availabilityMode,
           virtualConcurrentSlots: rt.virtualConcurrentSlots,
+          virtualSlotsByDate: rt.virtualSlotsByDate,
         },
       },
     });
@@ -370,6 +380,94 @@ export default function OnlineBookingSettingsPanel({
           <p className="settings-hint" style={{ marginTop: "0.35rem" }}>
             仮想枠では予約は担当未割当（未予定列）で作成され、後から担当を割り当てる想定です。上限はトランザクションで担保します。
           </p>
+          <div style={{ marginTop: "0.75rem" }}>
+            <p style={{ margin: "0 0 0.35rem", fontWeight: 600, fontSize: "0.9rem" }}>日別の同時上限（任意）</p>
+            <p className="settings-hint" style={{ marginBottom: "0.5rem" }}>
+              キーは yyyy-MM-dd、未設定の日は上の全体デフォルトを使います。将来カレンダーUIに拡張可。
+            </p>
+            <table className="dash-driver-table" style={{ maxWidth: "28rem" }}>
+              <thead>
+                <tr>
+                  <th>日付</th>
+                  <th>上限</th>
+                  <th style={{ width: "4rem" }} />
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(rt.virtualSlotsByDate)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([ymd, slots]) => (
+                    <tr key={ymd}>
+                      <td>
+                        <input
+                          type="date"
+                          value={ymd}
+                          onChange={(e) => {
+                            const next = e.target.value;
+                            if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) return;
+                            setRt((p) => {
+                              const copy = { ...p.virtualSlotsByDate };
+                              delete copy[ymd];
+                              copy[next] = slots;
+                              return { ...p, virtualSlotsByDate: copy };
+                            });
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min={1}
+                          max={50}
+                          step={1}
+                          style={{ width: "5rem" }}
+                          value={slots}
+                          onChange={(e) =>
+                            setRt((p) => ({
+                              ...p,
+                              virtualSlotsByDate: {
+                                ...p.virtualSlotsByDate,
+                                [ymd]: Math.floor(Number(e.target.value) || 1),
+                              },
+                            }))
+                          }
+                        />
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="settings-secondary"
+                          onClick={() =>
+                            setRt((p) => {
+                              const copy = { ...p.virtualSlotsByDate };
+                              delete copy[ymd];
+                              return { ...p, virtualSlotsByDate: copy };
+                            })
+                          }
+                        >
+                          削除
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+            <div className="settings-toolbar" style={{ marginTop: "0.5rem", gap: "0.35rem" }}>
+              <button
+                type="button"
+                className="settings-secondary"
+                onClick={() => {
+                  const t = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date()).slice(0, 10);
+                  setRt((p) => ({
+                    ...p,
+                    virtualSlotsByDate: { ...p.virtualSlotsByDate, [t]: p.virtualConcurrentSlots },
+                  }));
+                }}
+              >
+                今日の行を追加
+              </button>
+            </div>
+          </div>
         </div>
       ) : (
         <p className="settings-hint" style={{ marginTop: "0.35rem" }}>
