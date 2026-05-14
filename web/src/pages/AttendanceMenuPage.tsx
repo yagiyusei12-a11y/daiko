@@ -1505,104 +1505,72 @@ export default function AttendanceMenuPage(): JSX.Element {
       {staffOnly && !me?.employeeId ? (
         <p className="settings-hint">このアカウントは従業員に紐づいていないため、タイムカードを利用できません。</p>
       ) : (
-        <div className="attend-tc-layout">
-          <div className="attend-tc-col attend-tc-col--list">
-            <h3 className="attend-shift-section-title">タイムカード一覧</h3>
-            <div className="attend-shift-month-nav attend-tc-list-month">
-              <button type="button" className="settings-secondary" disabled={tcListLoading} onClick={() => setTcListYm((p) => shiftYearMonth(p, -1))}>
-                前の月
-              </button>
-              <strong>{tcListYm}</strong>
-              <button type="button" className="settings-secondary" disabled={tcListLoading} onClick={() => setTcListYm((p) => shiftYearMonth(p, 1))}>
-                次の月
-              </button>
-            </div>
-            {tcListLoading ? (
-              <p className="settings-hint">読み込み中…</p>
-            ) : tcListRows.length === 0 ? (
-              <p className="settings-hint">この月の打刻はまだありません。</p>
-            ) : (
-              <div className="attend-tc-summary-table-wrap">
-                <table className="attend-tc-summary-table">
-                  <thead>
-                    <tr>
-                      <th>日付</th>
-                      <th>氏名</th>
-                      <th>出勤</th>
-                      <th>休憩入</th>
-                      <th>休憩終</th>
-                      <th>退勤</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tcListRows.map((row) => (
-                      <tr key={`${row.employeeId}-${row.businessDate}`}>
-                        <td>{row.businessDate}</td>
-                        <td>
-                          {row.familyName} {row.givenName}
-                        </td>
-                        <td>{row.clockIn?.hm ?? "—"}</td>
-                        <td>{row.breakStart?.hm ?? "—"}</td>
-                        <td>{row.breakEnd?.hm ?? "—"}</td>
-                        <td>{row.clockOut?.hm ?? "—"}</td>
-                        <td>
-                          <div className="attend-tc-summary-actions">
-                            <button
-                              type="button"
-                              className="settings-secondary"
-                              disabled={tcLoading || tcListLoading}
-                              onClick={() => openTcEditRow(row)}
-                            >
-                              修正
-                            </button>
-                            <button
-                              type="button"
-                              className="settings-secondary"
-                              disabled={tcLoading || tcListLoading}
-                              onClick={() => void deleteTcSummaryDay(row)}
-                            >
-                              全削除
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+        <>
+          <div className="attend-shift-month-nav attend-tc-list-month">
+            <button type="button" className="settings-secondary" disabled={tcListLoading} onClick={() => setTcListYm((p) => shiftYearMonth(p, -1))}>
+              前の月
+            </button>
+            <strong>{tcListYm}</strong>
+            <button type="button" className="settings-secondary" disabled={tcListLoading} onClick={() => setTcListYm((p) => shiftYearMonth(p, 1))}>
+              次の月
+            </button>
           </div>
-
-          <div className="attend-tc-col attend-tc-col--wage">
-            <h3 className="attend-shift-section-title">賃金</h3>
-            <p className="settings-hint">確定シフトの担当種別（客車・随伴車・電話）に応じた時給を自動で選択し、出勤〜退勤から休憩を差し引いた時間で概算します。シフト未登録の日は客車時給を使用します。</p>
-            {tcListLoading ? (
-              <p className="settings-hint">読み込み中…</p>
-            ) : tcListRows.length === 0 ? (
-              <p className="settings-hint">この月の打刻はまだありません。</p>
-            ) : (
-              <ul className="attend-tc-wage-list">
-                {tcListRows.map((row) => (
-                  <li key={`w-${row.employeeId}-${row.businessDate}`} className="attend-tc-wage-row">
-                    <div className="attend-tc-wage-row-head">
-                      <span className="attend-tc-wage-date">{row.businessDate}</span>
-                      <span className="attend-tc-wage-name">
+          {tcListLoading ? (
+            <p className="settings-hint">読み込み中…</p>
+          ) : tcListRows.length === 0 ? (
+            <p className="settings-hint">この月の打刻はまだありません。</p>
+          ) : (
+            <div className="attend-tc-summary-table-wrap">
+              <table className="attend-tc-summary-table">
+                <thead>
+                  <tr>
+                    <th>日付</th>
+                    <th>氏名</th>
+                    <th>出勤</th>
+                    <th>休憩入</th>
+                    <th>休憩終</th>
+                    <th>退勤</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tcListRows.map((row) => (
+                    <tr key={`${row.employeeId}-${row.businessDate}`}>
+                      <td>{row.businessDate}</td>
+                      <td>
                         {row.familyName} {row.givenName}
-                      </span>
-                    </div>
-                    <div className="attend-tc-wage-amount">
-                      {row.wageYen != null ? `${row.wageYen.toLocaleString("ja-JP")}円` : "—"}
-                    </div>
-                    <div className="settings-hint attend-tc-wage-rate">
-                      {row.roleLabel ? `${row.roleLabel}・` : ""}時給 {row.baseHourlyYen.toLocaleString("ja-JP")}円
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
+                      </td>
+                      <td>{row.clockIn?.hm ?? "—"}</td>
+                      <td>{row.breakStart?.hm ?? "—"}</td>
+                      <td>{row.breakEnd?.hm ?? "—"}</td>
+                      <td>{row.clockOut?.hm ?? "—"}</td>
+                      <td>
+                        <div className="attend-tc-summary-actions">
+                          <button
+                            type="button"
+                            className="settings-secondary"
+                            disabled={tcLoading || tcListLoading}
+                            onClick={() => openTcEditRow(row)}
+                          >
+                            修正
+                          </button>
+                          <button
+                            type="button"
+                            className="settings-secondary"
+                            disabled={tcLoading || tcListLoading}
+                            onClick={() => void deleteTcSummaryDay(row)}
+                          >
+                            全削除
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
