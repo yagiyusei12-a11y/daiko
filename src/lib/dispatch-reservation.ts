@@ -138,6 +138,22 @@ export async function hasOverlappingReservation(
   return Boolean(overlap);
 }
 
+/** テナント内で時間帯が重なる予約件数（仮想枠・同時上限用） */
+export async function countTenantOverlappingReservations(
+  db: Pick<Prisma.TransactionClient, "dispatchReservation">,
+  tenantId: string,
+  startsAt: Date,
+  endsAt: Date,
+): Promise<number> {
+  return db.dispatchReservation.count({
+    where: {
+      tenantId,
+      startsAt: { lt: endsAt },
+      endsAt: { gt: startsAt },
+    },
+  });
+}
+
 export const SLOT_TAKEN_CODE = "SLOT_TAKEN" as const;
 
 export class DispatchReservationSlotTakenError extends Error {
@@ -265,6 +281,52 @@ export async function createDispatchReservationPoolAssign(args: {
           }
 
           throw new DispatchReservationSlotTakenError();
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (e) {
+      if (e instanceof DispatchReservationSlotTakenError) throw e;
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") continue;
+      throw e;
+    }
+  }
+  throw new DispatchReservationSlotTakenError("同時更新が集中しました。空き状況を更新して再度お試しください");
+}
+
+export async function createDispatchReservationVirtualConcurrent(args: {
+  tenantId: string;
+  businessDateTokyo: string;
+  startsAt: Date;
+  endsAt: Date;
+  detail: DispatchDetail;
+  virtualConcurrentSlots: number;
+}): Promise<{ id: string; driverEmployeeId: null }> {
+  const durationMinutes = Math.round((args.endsAt.getTime() - args.startsAt.getTime()) / 60000);
+  assertDurationMinutes(durationMinutes);
+  const cap = Math.max(1, Math.min(50, Math.floor(args.virtualConcurrentSlots)));
+
+  const maxAttempts = 6;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          const n = await countTenantOverlappingReservations(tx, args.tenantId, args.startsAt, args.endsAt);
+          if (n >= cap) throw new DispatchReservationSlotTakenError();
+
+          const title = `${args.detail.customerName}（${args.detail.pickup}→${args.detail.dropoff}）`.slice(0, 240);
+          const row = await tx.dispatchReservation.create({
+            data: {
+              tenantId: args.tenantId,
+              vehicleId: null,
+              driverEmployeeId: null,
+              title,
+              detailJson: args.detail as unknown as Prisma.InputJsonValue,
+              startsAt: args.startsAt,
+              endsAt: args.endsAt,
+            },
+            select: { id: true },
+          });
+          return { id: row.id, driverEmployeeId: null };
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );

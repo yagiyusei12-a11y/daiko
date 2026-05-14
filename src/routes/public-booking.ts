@@ -11,8 +11,15 @@ import { prisma } from "../db.js";
 import { coerceBusinessBasicsFromCustomJson, resolveBusinessHoursForYmd } from "../lib/business-basics.js";
 import { coerceOnlineBookingFromCustomJson } from "../lib/online-booking-settings.js";
 import {
+  coerceReservationTimingFromCustomJson,
+  computeBlockedMinutes,
+  parseTripEstimateMinutesFromBody,
+  parseTripEstimateMinutesFromQuery,
+} from "../lib/reservation-timing-settings.js";
+import {
   coerceDetail,
   createDispatchReservationPoolAssign,
+  createDispatchReservationVirtualConcurrent,
   DispatchReservationSlotTakenError,
   YMD_RE,
 } from "../lib/dispatch-reservation.js";
@@ -67,6 +74,7 @@ export async function registerPublicBookingRoutes(app: FastifyInstance): Promise
       const settings = await prisma.tenantSettings.findUnique({ where: { tenantId: tenant.id } });
       const basics = coerceBusinessBasicsFromCustomJson(settings?.customJson);
       const obSettings = coerceOnlineBookingFromCustomJson(settings?.customJson);
+      const reservationTiming = coerceReservationTimingFromCustomJson(settings?.customJson);
       const businessHours = resolveBusinessHoursForYmd(date, basics);
       const isClosed = basics.temporaryClosureDates.includes(date) || businessHours.length === 0;
 
@@ -82,50 +90,67 @@ export async function registerPublicBookingRoutes(app: FastifyInstance): Promise
           durationOptions: obSettings.durationOptions,
           daysAhead: obSettings.daysAhead,
         },
+        reservationTiming,
       };
     },
   );
 
   app.get<{
     Params: { slug: string };
-    Querystring: { date?: string; durationMinutes?: string };
+    Querystring: { date?: string; durationMinutes?: string; tripEstimateMinutes?: string };
   }>("/book/:slug/availability", async (req, reply) => {
     const tenant = await findTenantBySlug(String(req.params.slug ?? "").trim());
     if (!tenant) return reply.code(404).send({ error: "お店が見つかりません" });
 
     const date = String(req.query.date ?? "").trim();
-    const durationRaw = req.query.durationMinutes;
-    const durationMinutes =
-      durationRaw === undefined || durationRaw === "" ? 60 : Number(String(durationRaw).trim());
+    const tripRaw = req.query.tripEstimateMinutes;
+    const durRaw = req.query.durationMinutes;
 
     if (!YMD_RE.test(date)) {
       return reply.code(400).send({ error: "date は yyyy-MM-dd で指定してください" });
     }
-    if (
-      !Number.isFinite(durationMinutes) ||
-      durationMinutes < 15 ||
-      durationMinutes > 480 ||
-      durationMinutes % 15 !== 0
-    ) {
-      return reply.code(400).send({ error: "ご利用時間は 15〜480 分で 15 分刻みにしてください" });
-    }
 
     const settings = await prisma.tenantSettings.findUnique({ where: { tenantId: tenant.id } });
+    const timing = coerceReservationTimingFromCustomJson(settings?.customJson);
+
+    const estParsed = parseTripEstimateMinutesFromQuery(tripRaw, durRaw);
+    if (!estParsed.ok) return reply.code(400).send({ error: estParsed.error });
+
+    const blockedMinutes = computeBlockedMinutes(estParsed.estimateMinutes, timing);
+
     const basics = coerceBusinessBasicsFromCustomJson(settings?.customJson);
     const businessHours = resolveBusinessHoursForYmd(date, basics);
     if (basics.temporaryClosureDates.includes(date) || businessHours.length === 0) {
-      return { tenantId: tenant.id, date, durationMinutes, isClosed: true, slots: [] };
+      return {
+        tenantId: tenant.id,
+        date,
+        tripEstimateMinutes: estParsed.estimateMinutes,
+        blockedMinutes,
+        isClosed: true,
+        slots: [],
+        availabilityMode: timing.availabilityMode,
+      };
     }
     const businessIntervalsMin = businessSlotsToMinuteIntervals(businessHours);
 
     const slots = await computeLiffAvailabilitySlots({
       tenantId: tenant.id,
       dateYmd: date,
-      durationMinutes,
+      durationMinutes: blockedMinutes,
       businessIntervalsMin,
+      availabilityMode: timing.availabilityMode,
+      virtualConcurrentSlots: timing.virtualConcurrentSlots,
     });
 
-    return { tenantId: tenant.id, date, durationMinutes, isClosed: false, slots };
+    return {
+      tenantId: tenant.id,
+      date,
+      tripEstimateMinutes: estParsed.estimateMinutes,
+      blockedMinutes,
+      isClosed: false,
+      slots,
+      availabilityMode: timing.availabilityMode,
+    };
   });
 
   app.post<{ Params: { slug: string }; Body: Record<string, unknown> }>(
@@ -148,7 +173,6 @@ export async function registerPublicBookingRoutes(app: FastifyInstance): Promise
       }
 
       const startLocal = String(b.startLocal ?? "").trim();
-      const durationMinutes = typeof b.durationMinutes === "number" ? b.durationMinutes : Number(b.durationMinutes);
 
       const detailRaw = {
         customerName: b.customerName,
@@ -168,20 +192,19 @@ export async function registerPublicBookingRoutes(app: FastifyInstance): Promise
         return reply.code(400).send({ error: "迎え先と送り先を入力してください" });
       }
       if (!startLocal) return reply.code(400).send({ error: "ご希望の日時を入力してください" });
-      if (
-        !Number.isFinite(durationMinutes) ||
-        durationMinutes < 15 ||
-        durationMinutes > 480 ||
-        durationMinutes % 15 !== 0
-      ) {
-        return reply.code(400).send({ error: "ご利用時間は 15〜480 分で 15 分刻みにしてください" });
-      }
+
+      const settings = await prisma.tenantSettings.findUnique({ where: { tenantId: tenant.id } });
+      const timing = coerceReservationTimingFromCustomJson(settings?.customJson);
+
+      const estParsed = parseTripEstimateMinutesFromBody(b as Record<string, unknown>);
+      if (!estParsed.ok) return reply.code(400).send({ error: estParsed.error });
+      const blockedMinutes = computeBlockedMinutes(estParsed.estimateMinutes, timing);
 
       const startsAt = parseTokyoLocalDateTimeToUtc(startLocal);
       if (!startsAt || Number.isNaN(startsAt.getTime())) {
         return reply.code(400).send({ error: "日時の形式が不正です" });
       }
-      const endsAt = new Date(startsAt.getTime() + durationMinutes * 60 * 1000);
+      const endsAt = new Date(startsAt.getTime() + blockedMinutes * 60 * 1000);
 
       const businessDateTokyo = startLocal.slice(0, 10);
       if (!YMD_RE.test(businessDateTokyo)) {
@@ -189,7 +212,6 @@ export async function registerPublicBookingRoutes(app: FastifyInstance): Promise
       }
 
       // 営業時間外/休業日チェック
-      const settings = await prisma.tenantSettings.findUnique({ where: { tenantId: tenant.id } });
       const basics = coerceBusinessBasicsFromCustomJson(settings?.customJson);
       const businessHours = resolveBusinessHoursForYmd(businessDateTokyo, basics);
       if (basics.temporaryClosureDates.includes(businessDateTokyo) || businessHours.length === 0) {
@@ -217,6 +239,17 @@ export async function registerPublicBookingRoutes(app: FastifyInstance): Promise
       }
 
       try {
+        if (timing.availabilityMode === "virtual_concurrent") {
+          const created = await createDispatchReservationVirtualConcurrent({
+            tenantId: tenant.id,
+            businessDateTokyo,
+            startsAt,
+            endsAt,
+            detail,
+            virtualConcurrentSlots: timing.virtualConcurrentSlots,
+          });
+          return { id: created.id };
+        }
         const created = await createDispatchReservationPoolAssign({
           tenantId: tenant.id,
           businessDateTokyo,

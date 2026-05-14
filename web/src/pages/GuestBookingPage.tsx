@@ -11,6 +11,15 @@ type OnlineBookingInfo = {
   daysAhead: number;
 };
 
+type ReservationTimingInfo = {
+  defaultTripEstimateMinutes: number;
+  blockedTimeMode: string;
+  blockedTimeMultiply: number;
+  blockedTimeAddMinutes: number;
+  availabilityMode: string;
+  virtualConcurrentSlots: number;
+};
+
 type BookingInitResp = {
   tenant: { name: string };
   date: string;
@@ -18,6 +27,7 @@ type BookingInitResp = {
   businessHours: BusinessHourSlot[];
   isClosed: boolean;
   onlineBooking: OnlineBookingInfo;
+  reservationTiming: ReservationTimingInfo;
 };
 
 type AvailabilitySlot = { startLocal: string; endLocal: string; availableCount: number };
@@ -25,14 +35,25 @@ type AvailabilitySlot = { startLocal: string; endLocal: string; availableCount: 
 type AvailabilityResp = {
   tenantId: string;
   date: string;
-  durationMinutes: number;
+  tripEstimateMinutes: number;
+  blockedMinutes: number;
   isClosed: boolean;
   slots: AvailabilitySlot[];
+  availabilityMode: string;
 };
 
 type CreateOk = { id: string };
 
 const DEFAULT_DURATION_OPTIONS = [30, 45, 60, 75, 90, 120, 150, 180, 240];
+
+const DEFAULT_RESERVATION_TIMING: ReservationTimingInfo = {
+  defaultTripEstimateMinutes: 60,
+  blockedTimeMode: "multiply",
+  blockedTimeMultiply: 2,
+  blockedTimeAddMinutes: 10,
+  availabilityMode: "confirmed_shifts",
+  virtualConcurrentSlots: 2,
+};
 
 function tokyoTodayYmd(): string {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date()).slice(0, 10);
@@ -71,7 +92,7 @@ export default function GuestBookingPage(): JSX.Element {
   });
 
   const [date, setDate] = useState<string>(tokyoTodayYmd);
-  const [durationMinutes, setDurationMinutes] = useState<number>(60);
+  const [tripEstimateMinutes, setTripEstimateMinutes] = useState<number>(60);
 
   const [availability, setAvailability] = useState<AvailabilityResp | null>(null);
   const [availLoading, setAvailLoading] = useState(false);
@@ -106,10 +127,12 @@ export default function GuestBookingPage(): JSX.Element {
         setInit(r.data);
         if (r.data.onlineBooking) {
           setObInfo(r.data.onlineBooking);
-          // durationOptions が変わったとき、現在選択中の duration が含まれていなければ最初の値に戻す
-          setDurationMinutes((prev) => {
+          const rt = { ...DEFAULT_RESERVATION_TIMING, ...(r.data.reservationTiming ?? {}) };
+          setTripEstimateMinutes((prev) => {
             const opts = r.data.onlineBooking.durationOptions;
-            return opts.includes(prev) ? prev : (opts[0] ?? 60);
+            const def = rt.defaultTripEstimateMinutes;
+            const fallback = opts.includes(def) ? def : opts[0] ?? 60;
+            return opts.includes(prev) ? prev : fallback;
           });
         }
       },
@@ -125,7 +148,7 @@ export default function GuestBookingPage(): JSX.Element {
     setAvailErr(null);
     setSelectedSlot("");
     const r = await publicFetch<AvailabilityResp>(
-      `/public/book/${encodeURIComponent(slug)}/availability?date=${encodeURIComponent(date)}&durationMinutes=${durationMinutes}`,
+      `/public/book/${encodeURIComponent(slug)}/availability?date=${encodeURIComponent(date)}&tripEstimateMinutes=${tripEstimateMinutes}`,
     );
     setAvailLoading(false);
     if (!r.ok) {
@@ -134,7 +157,7 @@ export default function GuestBookingPage(): JSX.Element {
       return;
     }
     setAvailability(r.data);
-  }, [slug, date, durationMinutes]);
+  }, [slug, date, tripEstimateMinutes]);
 
   useEffect(() => {
     void loadAvailability();
@@ -160,7 +183,7 @@ export default function GuestBookingPage(): JSX.Element {
       method: "POST",
       json: {
         startLocal: selectedSlot,
-        durationMinutes,
+        tripEstimateMinutes,
         customerName: customerName.trim(),
         phone: phone.trim(),
         pickup: pickup.trim(),
@@ -277,12 +300,12 @@ export default function GuestBookingPage(): JSX.Element {
         <p style={{ margin: 0, color: "var(--color-muted)", fontSize: "0.85rem" }}>{formatDayTitleJa(date)}</p>
 
         <label htmlFor="gb-dur" style={{ fontWeight: 600, marginTop: "0.5rem" }}>
-          ご利用時間（目安）
+          送り先までの目安（分）
         </label>
         <select
           id="gb-dur"
-          value={durationMinutes}
-          onChange={(e) => setDurationMinutes(Number(e.target.value))}
+          value={tripEstimateMinutes}
+          onChange={(e) => setTripEstimateMinutes(Number(e.target.value))}
         >
           {obInfo.durationOptions.map((m) => (
             <option key={m} value={m}>
@@ -290,6 +313,9 @@ export default function GuestBookingPage(): JSX.Element {
             </option>
           ))}
         </select>
+        <p style={{ margin: "0.25rem 0 0", color: "var(--color-muted)", fontSize: "0.82rem", lineHeight: 1.5 }}>
+          スケジュール上の実車ブロックは店舗設定の式で算出されます。空き表示はそのブロック長で計算しています。
+        </p>
       </div>
 
       <h3 style={{ margin: "1rem 0 0.5rem", fontSize: "1rem" }}>空き時間を選ぶ</h3>
@@ -300,7 +326,11 @@ export default function GuestBookingPage(): JSX.Element {
       ) : availability?.isClosed ? (
         <p className="settings-hint">この日は休業日のためご予約いただけません。別の日をお選びください。</p>
       ) : availableSlots.length === 0 ? (
-        <p className="settings-hint">この日のこの時間枠には空きがありません。日付やご利用時間を変えてお試しください。</p>
+        <p className="settings-hint">
+          {availability?.availabilityMode === "virtual_concurrent"
+            ? "この時間帯は予約枠が埋まっています。別のお時間や日付をお試しください。"
+            : "この時間帯に空きがありません。確定シフトが未登録の日は枠が出ないことがあります。日付や送り先までの目安を変えてお試しください。"}
+        </p>
       ) : (
         <div
           role="radiogroup"

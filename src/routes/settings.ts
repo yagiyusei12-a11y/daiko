@@ -17,6 +17,11 @@ import {
   mergeOnlineBookingIntoCustomJson,
   parseOnlineBookingPut,
 } from "../lib/online-booking-settings.js";
+import {
+  coerceReservationTimingFromCustomJson,
+  mergeReservationTimingIntoCustomJson,
+  parseReservationTimingPut,
+} from "../lib/reservation-timing-settings.js";
 import { prisma } from "../db.js";
 import { reverseGeocodeTownJaCached } from "../lib/reverse-geocode-cache.js";
 import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
@@ -687,17 +692,29 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { slug: true } });
     const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
     const settings = coerceOnlineBookingFromCustomJson(s?.customJson);
-    return { ...settings, tenantSlug: tenant.slug };
+    const reservationTiming = coerceReservationTimingFromCustomJson(s?.customJson);
+    return { ...settings, tenantSlug: tenant.slug, reservationTiming };
   });
 
   app.put<{ Body: Record<string, unknown> }>("/online-booking", async (req, reply) => {
     const { tenantId } = jwtUser(req);
-    const parsed = parseOnlineBookingPut((req.body || {}) as Record<string, unknown>);
+    const body = (req.body || {}) as Record<string, unknown>;
+    const parsed = parseOnlineBookingPut(body);
     if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
 
     const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
     const prevRoot = asObj(s?.customJson);
-    const nextCustom = mergeOnlineBookingIntoCustomJson(prevRoot, parsed.value);
+    let nextCustom = mergeOnlineBookingIntoCustomJson(prevRoot, parsed.value);
+
+    const rtNested =
+      body.reservationTiming !== undefined && typeof body.reservationTiming === "object" && body.reservationTiming !== null && !Array.isArray(body.reservationTiming)
+        ? (body.reservationTiming as Record<string, unknown>)
+        : null;
+    if (rtNested) {
+      const rtParsed = parseReservationTimingPut(rtNested);
+      if (!rtParsed.ok) return reply.code(400).send({ error: rtParsed.error });
+      nextCustom = mergeReservationTimingIntoCustomJson(nextCustom, rtParsed.value);
+    }
 
     await prisma.tenantSettings.upsert({
       where: { tenantId },

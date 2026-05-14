@@ -6,6 +6,7 @@ import {
   shiftFullyContainsBooking,
 } from "./dispatch-reservation.js";
 import { prisma } from "../db.js";
+import type { AvailabilityMode } from "./reservation-timing-settings.js";
 import { tokyoDayRangeUtc } from "./tokyo-datetime.js";
 
 export type LiffAvailabilitySlot = { startLocal: string; endLocal: string; availableCount: number };
@@ -45,8 +46,11 @@ export function utcDateToTokyoLocalDateTime(d: Date): string {
 export async function computeLiffAvailabilitySlots(params: {
   tenantId: string;
   dateYmd: string;
+  /** スケジュール上のブロック長（分）— 目安から算出済み */
   durationMinutes: number;
   businessIntervalsMin: [number, number][];
+  availabilityMode?: AvailabilityMode;
+  virtualConcurrentSlots?: number;
 }): Promise<LiffAvailabilitySlot[]> {
   const range = tokyoDayRangeUtc(params.dateYmd);
   if (!range) return [];
@@ -62,7 +66,11 @@ export async function computeLiffAvailabilitySlots(params: {
     select: { driverEmployeeId: true, startsAt: true, endsAt: true },
   });
 
-  const shifts = await loadDriverShiftsWithDuty(prisma, params.tenantId, params.dateYmd);
+  const mode: AvailabilityMode = params.availabilityMode ?? "confirmed_shifts";
+  const virtualCap = Math.max(1, Math.min(50, Math.floor(params.virtualConcurrentSlots ?? 2)));
+
+  const shifts =
+    mode === "confirmed_shifts" ? await loadDriverShiftsWithDuty(prisma, params.tenantId, params.dateYmd) : [];
 
   const slots: LiffAvailabilitySlot[] = [];
   const step = 15;
@@ -75,14 +83,21 @@ export async function computeLiffAvailabilitySlots(params: {
     const bookingEnd = new Date(bookingStart.getTime() + dur * 60 * 1000);
 
     let availableCount = 0;
-    for (const sh of shifts) {
-      if (!shiftFullyContainsBooking(sh.shiftStart, sh.shiftEnd, bookingStart, bookingEnd)) continue;
-      const busy = reservations.some(
-        (r) =>
-          r.driverEmployeeId === sh.employeeId &&
-          intervalsOverlap(bookingStart, bookingEnd, r.startsAt, r.endsAt),
-      );
-      if (!busy) availableCount++;
+    if (mode === "virtual_concurrent") {
+      const overlapCount = reservations.filter((r) =>
+        intervalsOverlap(bookingStart, bookingEnd, r.startsAt, r.endsAt),
+      ).length;
+      availableCount = Math.max(0, virtualCap - overlapCount);
+    } else {
+      for (const sh of shifts) {
+        if (!shiftFullyContainsBooking(sh.shiftStart, sh.shiftEnd, bookingStart, bookingEnd)) continue;
+        const busy = reservations.some(
+          (r) =>
+            r.driverEmployeeId === sh.employeeId &&
+            intervalsOverlap(bookingStart, bookingEnd, r.startsAt, r.endsAt),
+        );
+        if (!busy) availableCount++;
+      }
     }
 
     slots.push({

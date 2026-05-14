@@ -13,11 +13,18 @@ import { coerceBusinessBasicsFromCustomJson, resolveBusinessHoursForYmd } from "
 import {
   coerceDetail,
   createDispatchReservationPoolAssign,
+  createDispatchReservationVirtualConcurrent,
   DispatchReservationSlotTakenError,
   YMD_RE,
 } from "../lib/dispatch-reservation.js";
 import { businessSlotsToMinuteIntervals, computeLiffAvailabilitySlots } from "../lib/liff-availability.js";
 import { resolveLineUserForTenant } from "../lib/line-tenant-auth.js";
+import {
+  coerceReservationTimingFromCustomJson,
+  computeBlockedMinutes,
+  parseTripEstimateMinutesFromBody,
+  parseTripEstimateMinutesFromQuery,
+} from "../lib/reservation-timing-settings.js";
 import { parseTokyoLocalDateTimeToUtc } from "../lib/tokyo-datetime.js";
 
 function bearerIdToken(req: FastifyRequest): string | null {
@@ -29,7 +36,13 @@ function bearerIdToken(req: FastifyRequest): string | null {
 
 export async function registerLiffBookingRoutes(app: FastifyInstance): Promise<void> {
   app.get<{
-    Querystring: { tenantId?: string; company_id?: string; date?: string; durationMinutes?: string };
+    Querystring: {
+      tenantId?: string;
+      company_id?: string;
+      date?: string;
+      durationMinutes?: string;
+      tripEstimateMinutes?: string;
+    };
   }>("/availability", async (req, reply) => {
     const idToken = bearerIdToken(req);
     if (!idToken) {
@@ -38,18 +51,14 @@ export async function registerLiffBookingRoutes(app: FastifyInstance): Promise<v
 
     const tenantId = String(req.query.tenantId ?? req.query.company_id ?? "").trim();
     const date = String(req.query.date ?? "").trim();
-    const durationRaw = req.query.durationMinutes;
-    const durationMinutes =
-      durationRaw === undefined || durationRaw === "" ? 15 : Number(String(durationRaw).trim());
+    const tripRaw = req.query.tripEstimateMinutes;
+    const durRaw = req.query.durationMinutes;
 
     if (!tenantId) {
       return reply.code(400).send({ error: "tenantId（または company_id）を指定してください" });
     }
     if (!YMD_RE.test(date)) {
       return reply.code(400).send({ error: "date は yyyy-MM-dd で指定してください" });
-    }
-    if (!Number.isFinite(durationMinutes) || durationMinutes < 15 || durationMinutes > 480 || durationMinutes % 15 !== 0) {
-      return reply.code(400).send({ error: "durationMinutes は 15〜480 で 15 分刻みにしてください（省略時は 15）" });
     }
 
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
@@ -60,6 +69,16 @@ export async function registerLiffBookingRoutes(app: FastifyInstance): Promise<v
     }
 
     const settings = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+    const timing = coerceReservationTimingFromCustomJson(settings?.customJson);
+
+    const estParsed =
+      tripRaw !== undefined || (durRaw !== undefined && String(durRaw).trim() !== "")
+        ? parseTripEstimateMinutesFromQuery(tripRaw, durRaw)
+        : ({ ok: true as const, estimateMinutes: timing.defaultTripEstimateMinutes });
+    if (!estParsed.ok) return reply.code(400).send({ error: estParsed.error });
+
+    const blockedMinutes = computeBlockedMinutes(estParsed.estimateMinutes, timing);
+
     const basics = coerceBusinessBasicsFromCustomJson(settings?.customJson);
     const businessHours = resolveBusinessHoursForYmd(date, basics);
     const businessIntervalsMin = businessSlotsToMinuteIntervals(businessHours);
@@ -67,16 +86,20 @@ export async function registerLiffBookingRoutes(app: FastifyInstance): Promise<v
     const slots = await computeLiffAvailabilitySlots({
       tenantId,
       dateYmd: date,
-      durationMinutes,
+      durationMinutes: blockedMinutes,
       businessIntervalsMin,
+      availabilityMode: timing.availabilityMode,
+      virtualConcurrentSlots: timing.virtualConcurrentSlots,
     });
 
     return {
       tenantId,
       date,
       timeZone: "Asia/Tokyo",
-      durationMinutes,
+      tripEstimateMinutes: estParsed.estimateMinutes,
+      blockedMinutes,
       slots,
+      availabilityMode: timing.availabilityMode,
     };
   });
 
@@ -89,7 +112,6 @@ export async function registerLiffBookingRoutes(app: FastifyInstance): Promise<v
 
     const tenantId = String(b.tenantId ?? b.company_id ?? "").trim();
     const startLocal = String(b.startLocal ?? "").trim();
-    const durationMinutes = typeof b.durationMinutes === "number" ? b.durationMinutes : Number(b.durationMinutes);
 
     const detailRaw = {
       customerName: b.customerName,
@@ -109,9 +131,6 @@ export async function registerLiffBookingRoutes(app: FastifyInstance): Promise<v
       return reply.code(400).send({ error: "迎え先と送り先を入力してください" });
     }
     if (!startLocal) return reply.code(400).send({ error: "日時を入力してください" });
-    if (!Number.isFinite(durationMinutes) || durationMinutes < 15 || durationMinutes > 480 || durationMinutes % 15 !== 0) {
-      return reply.code(400).send({ error: "予定実車時間は 15〜480 分で 15 分刻みにしてください" });
-    }
 
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
     if (!tenant) return reply.code(404).send({ error: "テナントが見つかりません" });
@@ -120,11 +139,17 @@ export async function registerLiffBookingRoutes(app: FastifyInstance): Promise<v
       return reply.code(401).send({ error: "id_token が無効か、このテナント用の LINE チャネルと一致しません" });
     }
 
+    const settings = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+    const timing = coerceReservationTimingFromCustomJson(settings?.customJson);
+    const estParsed = parseTripEstimateMinutesFromBody(b as Record<string, unknown>);
+    if (!estParsed.ok) return reply.code(400).send({ error: estParsed.error });
+    const blockedMinutes = computeBlockedMinutes(estParsed.estimateMinutes, timing);
+
     const startsAt = parseTokyoLocalDateTimeToUtc(startLocal);
     if (!startsAt || Number.isNaN(startsAt.getTime())) {
       return reply.code(400).send({ error: "日時の形式が不正です" });
     }
-    const endsAt = new Date(startsAt.getTime() + durationMinutes * 60 * 1000);
+    const endsAt = new Date(startsAt.getTime() + blockedMinutes * 60 * 1000);
 
     const businessDateTokyo = startLocal.slice(0, 10);
     if (!YMD_RE.test(businessDateTokyo)) {
@@ -132,6 +157,17 @@ export async function registerLiffBookingRoutes(app: FastifyInstance): Promise<v
     }
 
     try {
+      if (timing.availabilityMode === "virtual_concurrent") {
+        const created = await createDispatchReservationVirtualConcurrent({
+          tenantId,
+          businessDateTokyo,
+          startsAt,
+          endsAt,
+          detail,
+          virtualConcurrentSlots: timing.virtualConcurrentSlots,
+        });
+        return { id: created.id, driverEmployeeId: created.driverEmployeeId };
+      }
       const created = await createDispatchReservationPoolAssign({
         tenantId,
         businessDateTokyo,

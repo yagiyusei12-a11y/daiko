@@ -5,12 +5,31 @@ import { Err } from "../ui";
 
 const ALL_DURATION_OPTIONS = [15, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300, 360, 480];
 
+type ReservationTimingForm = {
+  defaultTripEstimateMinutes: number;
+  blockedTimeMode: "multiply" | "add";
+  blockedTimeMultiply: number;
+  blockedTimeAddMinutes: number;
+  availabilityMode: "confirmed_shifts" | "virtual_concurrent";
+  virtualConcurrentSlots: number;
+};
+
+const RT_DEFAULT: ReservationTimingForm = {
+  defaultTripEstimateMinutes: 60,
+  blockedTimeMode: "multiply",
+  blockedTimeMultiply: 2,
+  blockedTimeAddMinutes: 10,
+  availabilityMode: "confirmed_shifts",
+  virtualConcurrentSlots: 2,
+};
+
 type OnlineBookingApi = {
   enabled: boolean;
   message: string;
   durationOptions: number[];
   daysAhead: number;
   tenantSlug: string;
+  reservationTiming: ReservationTimingForm;
 };
 
 function guestBookingUrl(slug: string): string {
@@ -37,6 +56,7 @@ export default function OnlineBookingSettingsPanel({
   const [message, setMessage] = useState("");
   const [durationOptions, setDurationOptions] = useState<number[]>([30, 45, 60, 75, 90, 120, 150, 180, 240]);
   const [daysAhead, setDaysAhead] = useState<number>(30);
+  const [rt, setRt] = useState<ReservationTimingForm>(RT_DEFAULT);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,6 +72,17 @@ export default function OnlineBookingSettingsPanel({
     setDurationOptions(r.data.durationOptions);
     setDaysAhead(r.data.daysAhead);
     setTenantSlug(r.data.tenantSlug);
+    const incoming = r.data.reservationTiming;
+    if (incoming && typeof incoming === "object") {
+      setRt({
+        ...RT_DEFAULT,
+        ...incoming,
+        blockedTimeMode: incoming.blockedTimeMode === "add" ? "add" : "multiply",
+        availabilityMode: incoming.availabilityMode === "virtual_concurrent" ? "virtual_concurrent" : "confirmed_shifts",
+      });
+    } else {
+      setRt(RT_DEFAULT);
+    }
   }, []);
 
   useEffect(() => {
@@ -60,7 +91,7 @@ export default function OnlineBookingSettingsPanel({
 
   async function save(): Promise<void> {
     if (durationOptions.length === 0) {
-      setLocalErr("所要時間の選択肢を1つ以上チェックしてください");
+      setLocalErr("目安時間の選択肢を1つ以上チェックしてください");
       return;
     }
     setBusy(true);
@@ -68,7 +99,20 @@ export default function OnlineBookingSettingsPanel({
     setErr(null);
     const r = await apiFetch("/settings/online-booking", {
       method: "PUT",
-      json: { enabled, message, durationOptions, daysAhead },
+      json: {
+        enabled,
+        message,
+        durationOptions,
+        daysAhead,
+        reservationTiming: {
+          defaultTripEstimateMinutes: rt.defaultTripEstimateMinutes,
+          blockedTimeMode: rt.blockedTimeMode,
+          blockedTimeMultiply: rt.blockedTimeMultiply,
+          blockedTimeAddMinutes: rt.blockedTimeAddMinutes,
+          availabilityMode: rt.availabilityMode,
+          virtualConcurrentSlots: rt.virtualConcurrentSlots,
+        },
+      },
     });
     setBusy(false);
     if (!r.ok) {
@@ -168,7 +212,7 @@ export default function OnlineBookingSettingsPanel({
       />
       <p className="settings-hint" style={{ marginTop: 0 }}>{message.length}/400文字</p>
 
-      <label>ゲストが選べる所要時間（15分刻み・複数選択可）</label>
+      <label>ゲストが選べる「送り先までの目安」（15分刻み・複数選択可）</label>
       <div
         style={{
           display: "grid",
@@ -189,7 +233,7 @@ export default function OnlineBookingSettingsPanel({
         ))}
       </div>
       {durationOptions.length === 0 ? (
-        <p className="err">所要時間の選択肢を1つ以上チェックしてください</p>
+        <p className="err">目安時間の選択肢を1つ以上チェックしてください</p>
       ) : null}
 
       <label style={{ marginTop: "0.5rem" }}>何日先まで予約可能か（0 = 制限なし・最大365日）</label>
@@ -213,9 +257,130 @@ export default function OnlineBookingSettingsPanel({
         例: 30 なら今日から30日後の分まで予約できます。0にすると日付に制限をかけません。
       </p>
 
+      <hr style={{ margin: "1.25rem 0", border: 0, borderTop: "1px solid var(--color-border)" }} />
+      <h3 style={{ margin: "0 0 0.5rem", fontSize: "1rem", fontWeight: 600 }}>
+        目安時間・実車ブロック・空き枠
+      </h3>
+      <p className="settings-hint" style={{ marginTop: 0, marginBottom: "0.75rem" }}>
+        以下はネット予約に加え、スタッフの「今日のスケジュール」から運行予定を登録するときも同じ式でブロック時間が決まります。
+      </p>
+
+      <label htmlFor="ob-rt-default">フォームの目安の初期値（分・15分刻み）</label>
+      <select
+        id="ob-rt-default"
+        value={rt.defaultTripEstimateMinutes}
+        onChange={(e) =>
+          setRt((prev) => ({ ...prev, defaultTripEstimateMinutes: Number(e.target.value) }))
+        }
+      >
+        {ALL_DURATION_OPTIONS.map((m) => (
+          <option key={m} value={m}>
+            {m} 分
+          </option>
+        ))}
+      </select>
+
+      <p style={{ margin: "0.85rem 0 0.35rem", fontWeight: 600, fontSize: "0.95rem" }}>スケジュール上の実車ブロック</p>
+      <div className="settings-checkbox-row" style={{ flexDirection: "column", alignItems: "stretch", gap: "0.35rem" }}>
+        <label className="settings-inline-check">
+          <input
+            type="radio"
+            name="ob-rt-block-mode"
+            checked={rt.blockedTimeMode === "multiply"}
+            onChange={() => setRt((p) => ({ ...p, blockedTimeMode: "multiply" }))}
+          />
+          掛け算（目安 × 係数を 15 分に切り上げ、15〜480 分に収める）
+        </label>
+        <label className="settings-inline-check">
+          <input
+            type="radio"
+            name="ob-rt-block-mode"
+            checked={rt.blockedTimeMode === "add"}
+            onChange={() => setRt((p) => ({ ...p, blockedTimeMode: "add" }))}
+          />
+          加算（目安 + 加算分を同様に丸める）
+        </label>
+      </div>
+      {rt.blockedTimeMode === "multiply" ? (
+        <div style={{ marginTop: "0.5rem" }}>
+          <label htmlFor="ob-rt-mul">係数（0より大きく10以下）</label>
+          <input
+            id="ob-rt-mul"
+            type="number"
+            min={0.01}
+            max={10}
+            step={0.1}
+            style={{ width: "8rem" }}
+            value={rt.blockedTimeMultiply}
+            onChange={(e) => setRt((p) => ({ ...p, blockedTimeMultiply: Number(e.target.value) || 1 }))}
+          />
+        </div>
+      ) : (
+        <div style={{ marginTop: "0.5rem" }}>
+          <label htmlFor="ob-rt-add">加算する分（0〜480・整数）</label>
+          <input
+            id="ob-rt-add"
+            type="number"
+            min={0}
+            max={480}
+            step={1}
+            style={{ width: "8rem" }}
+            value={rt.blockedTimeAddMinutes}
+            onChange={(e) => setRt((p) => ({ ...p, blockedTimeAddMinutes: Math.floor(Number(e.target.value) || 0) }))}
+          />
+        </div>
+      )}
+
+      <p style={{ margin: "0.85rem 0 0.35rem", fontWeight: 600, fontSize: "0.95rem" }}>空き枠の出し方</p>
+      <div className="settings-checkbox-row" style={{ flexDirection: "column", alignItems: "stretch", gap: "0.35rem" }}>
+        <label className="settings-inline-check">
+          <input
+            type="radio"
+            name="ob-rt-avail"
+            checked={rt.availabilityMode === "confirmed_shifts"}
+            onChange={() => setRt((p) => ({ ...p, availabilityMode: "confirmed_shifts" }))}
+          />
+          確定シフトに基づく（従来どおり）
+        </label>
+        <label className="settings-inline-check">
+          <input
+            type="radio"
+            name="ob-rt-avail"
+            checked={rt.availabilityMode === "virtual_concurrent"}
+            onChange={() => setRt((p) => ({ ...p, availabilityMode: "virtual_concurrent" }))}
+          />
+          シフトなし・同時予約の上限で枠を出す
+        </label>
+      </div>
+      {rt.availabilityMode === "virtual_concurrent" ? (
+        <div style={{ marginTop: "0.5rem" }}>
+          <label htmlFor="ob-rt-vslots">同時に走れる予約の上限（1〜50）</label>
+          <input
+            id="ob-rt-vslots"
+            type="number"
+            min={1}
+            max={50}
+            step={1}
+            style={{ width: "6rem" }}
+            value={rt.virtualConcurrentSlots}
+            onChange={(e) =>
+              setRt((p) => ({ ...p, virtualConcurrentSlots: Math.floor(Number(e.target.value) || 1) }))
+            }
+          />
+          <p className="settings-hint" style={{ marginTop: "0.35rem" }}>
+            仮想枠では予約は担当未割当（未予定列）で作成され、後から担当を割り当てる想定です。上限はトランザクションで担保します。
+          </p>
+        </div>
+      ) : (
+        <p className="settings-hint" style={{ marginTop: "0.35rem" }}>
+          客車の確定シフトが予約区間をすべて含む場合のみ空きとして数えます。シフト未登録の日は枠が出ません。
+        </p>
+      )}
+
       <button
         type="button"
         className="settings-primary"
+        style={{ marginTop: "1rem" }}
         disabled={busy || durationOptions.length === 0}
         onClick={() => void save()}
       >

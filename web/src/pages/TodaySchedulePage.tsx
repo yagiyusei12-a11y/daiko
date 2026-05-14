@@ -85,7 +85,19 @@ type SchedulePayload = {
   reservations: ReservationRow[];
 };
 
-const DURATION_OPTIONS = Array.from({ length: 32 }, (_, i) => (i + 1) * 15);
+type OnlineBookingForSchedule = {
+  durationOptions: number[];
+  reservationTiming: {
+    defaultTripEstimateMinutes: number;
+    blockedTimeMode: string;
+    blockedTimeMultiply: number;
+    blockedTimeAddMinutes: number;
+    availabilityMode: string;
+    virtualConcurrentSlots: number;
+  };
+};
+
+const FALLBACK_DURATION_OPTIONS = Array.from({ length: 32 }, (_, i) => (i + 1) * 15);
 
 export default function TodaySchedulePage(): JSX.Element {
   const { flashSaved } = useSavedToast();
@@ -107,7 +119,9 @@ export default function TodaySchedulePage(): JSX.Element {
   const [dropoff, setDropoff] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
   const [parking, setParking] = useState("");
-  const [durationMinutes, setDurationMinutes] = useState(60);
+  const [scheduleDurationOptions, setScheduleDurationOptions] = useState<number[]>(FALLBACK_DURATION_OPTIONS);
+  const [bookingDefaultEstimate, setBookingDefaultEstimate] = useState(60);
+  const [tripEstimateMinutes, setTripEstimateMinutes] = useState(60);
   const [driverEmployeeId, setDriverEmployeeId] = useState("");
   const [vehicleId, setVehicleId] = useState("");
 
@@ -134,6 +148,25 @@ export default function TodaySchedulePage(): JSX.Element {
       if (r.ok) setVehicles(r.data.vehicles ?? []);
     })();
   }, []);
+
+  useEffect(() => {
+    void (async () => {
+      const r = await apiFetch<OnlineBookingForSchedule>("/settings/online-booking");
+      if (!r.ok) return;
+      const opts = r.data.durationOptions?.length ? r.data.durationOptions : FALLBACK_DURATION_OPTIONS;
+      setScheduleDurationOptions(opts);
+      const def = r.data.reservationTiming?.defaultTripEstimateMinutes ?? 60;
+      const next = opts.includes(def) ? def : opts[0] ?? 60;
+      setBookingDefaultEstimate(next);
+      setTripEstimateMinutes(next);
+    })();
+  }, []);
+
+  useEffect(() => {
+    setTripEstimateMinutes((prev) =>
+      scheduleDurationOptions.includes(prev) ? prev : scheduleDurationOptions[0] ?? 60,
+    );
+  }, [scheduleDurationOptions]);
 
   const scheduleAxis = useMemo(() => {
     let mn = Number.POSITIVE_INFINITY;
@@ -172,7 +205,7 @@ export default function TodaySchedulePage(): JSX.Element {
     setDropoff("");
     setVehicleNumber("");
     setParking("");
-    setDurationMinutes(60);
+    setTripEstimateMinutes(bookingDefaultEstimate);
     setVehicleId("");
     setStartLocal(`${viewDate}T10:00`);
     const first = data?.drivers[0]?.employeeId ?? "";
@@ -189,7 +222,7 @@ export default function TodaySchedulePage(): JSX.Element {
       method: "POST",
       json: {
         startLocal,
-        durationMinutes,
+        tripEstimateMinutes,
         driverEmployeeId,
         vehicleId: vehicleId || null,
         detail: {
@@ -445,14 +478,21 @@ export default function TodaySchedulePage(): JSX.Element {
                 <input id="sr-vno" type="text" value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)} />
                 <label htmlFor="sr-park">駐車場</label>
                 <input id="sr-park" type="text" value={parking} onChange={(e) => setParking(e.target.value)} />
-                <label htmlFor="sr-dur">予定実車時間（15分刻み・最長8時間）</label>
-                <select id="sr-dur" value={durationMinutes} onChange={(e) => setDurationMinutes(Number(e.target.value))}>
-                  {DURATION_OPTIONS.map((m) => (
+                <label htmlFor="sr-dur">送り先までの目安（15分刻み・最長8時間）</label>
+                <select
+                  id="sr-dur"
+                  value={tripEstimateMinutes}
+                  onChange={(e) => setTripEstimateMinutes(Number(e.target.value))}
+                >
+                  {scheduleDurationOptions.map((m) => (
                     <option key={m} value={m}>
                       {m} 分
                     </option>
                   ))}
                 </select>
+                <p className="settings-hint" style={{ marginTop: 4 }}>
+                  スケジュール上の実車ブロックは「ネット予約」設定の式（掛け算／加算）で算出されます。
+                </p>
                 <label htmlFor="sr-driver">
                   客車担当者（この日のシフト）
                   {onlyUnassignedDriverColumn ? (

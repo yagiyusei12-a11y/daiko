@@ -14,8 +14,12 @@ import {
 } from "../lib/dispatch-reservation.js";
 import { SCHEDULE_UNASSIGNED_DRIVER_ID } from "../lib/schedule-constants.js";
 import { loadUserAccess, type UserAccessContext } from "../lib/permissions.js";
-import { parseTokyoLocalDateTimeToUtc, tokyoDayRangeUtc } from "../lib/tokyo-datetime.js";
+import {
+  coerceReservationTimingFromCustomJson,
+  resolveBlockedMinutesForDispatchBody,
+} from "../lib/reservation-timing-settings.js";
 import { prisma } from "../db.js";
+import { parseTokyoLocalDateTimeToUtc, tokyoDayRangeUtc } from "../lib/tokyo-datetime.js";
 
 async function loadDriverRows(
   tenantId: string,
@@ -115,7 +119,6 @@ export async function registerDispatchRoutes(app: FastifyInstance): Promise<void
     const b = req.body || {};
 
     const startLocal = String(b.startLocal ?? "").trim();
-    const durationMinutes = typeof b.durationMinutes === "number" ? b.durationMinutes : Number(b.durationMinutes);
     const driverRaw = String(b.driverEmployeeId ?? "").trim();
     const vehicleIdRaw = b.vehicleId !== undefined && b.vehicleId !== null ? String(b.vehicleId).trim() : "";
     const vehicleId = vehicleIdRaw || null;
@@ -131,9 +134,14 @@ export async function registerDispatchRoutes(app: FastifyInstance): Promise<void
     if (!startLocal) {
       return reply.code(400).send({ error: "日時を入力してください" });
     }
-    if (!Number.isFinite(durationMinutes) || durationMinutes < 15 || durationMinutes > 480 || durationMinutes % 15 !== 0) {
-      return reply.code(400).send({ error: "予定実車時間は 15〜480 分で 15 分刻みにしてください" });
+
+    const settingsRow = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+    const timing = coerceReservationTimingFromCustomJson(settingsRow?.customJson);
+    const resolved = resolveBlockedMinutesForDispatchBody(b as Record<string, unknown>, timing);
+    if (!resolved.ok) {
+      return reply.code(400).send({ error: resolved.error });
     }
+
     if (!driverRaw) {
       return reply.code(400).send({ error: "客車担当者を選んでください" });
     }
@@ -153,7 +161,7 @@ export async function registerDispatchRoutes(app: FastifyInstance): Promise<void
     if (!startsAt || Number.isNaN(startsAt.getTime())) {
       return reply.code(400).send({ error: "日時の形式が不正です" });
     }
-    const endsAt = new Date(startsAt.getTime() + durationMinutes * 60 * 1000);
+    const endsAt = new Date(startsAt.getTime() + resolved.blockedMinutes * 60 * 1000);
 
     const businessDate = startLocal.slice(0, 10);
     if (!YMD_RE.test(businessDate)) {
