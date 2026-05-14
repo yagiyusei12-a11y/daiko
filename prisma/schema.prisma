@@ -339,8 +339,15 @@ model EmployeeCompensationPeriod {
   validFrom      DateTime
   validTo        DateTime?
   compensationType CompensationType
+  /// 後方互換・集計デフォルト用（保存時は客車時給と同期）
   baseHourlyYen  Int               @default(0)
+  /// 客車（本務）の時給（円）
+  mainHourlyYen    Int             @default(0)
+  /// 随伴車の時給（円）
+  partnerHourlyYen Int             @default(0)
+  /// 客車側歩合（basis points: 1% = 100）
   commissionMainRateBps    Int     @default(0)
+  /// 随伴側歩合（basis points）
   commissionPartnerRateBps Int     @default(0)
   createdAt      DateTime          @default(now())
 

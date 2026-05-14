@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Prisma } from "@prisma/client";
+import { CompensationType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { authenticate, jwtUser } from "../auth/pre.js";
 import { JP_DRIVER_LICENSE_CLASSES_EMPLOYEE, JP_PLATE_REGION_NAMES } from "../lib/jp-constants.js";
@@ -51,6 +52,44 @@ function ymd(d: Date | null | undefined): string | null {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function ymdInTokyo(d = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+}
+
+function startOfTokyoDayFromYmd(ymd: string): Date {
+  return new Date(`${ymd}T00:00:00+09:00`);
+}
+
+function pctToBps(raw: unknown): number {
+  const n = Number(String(raw ?? "").replace(/,/g, "").trim());
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  if (n >= 100) return 10000;
+  return Math.round(n * 100);
+}
+
+function bpsToPctDisplay(bps: number): string {
+  const x = Math.round(bps) / 100;
+  if (Math.abs(x - Math.round(x)) < 1e-9) return String(Math.round(x));
+  return x.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function parseYenInt(raw: unknown): number {
+  const n = Number(String(raw ?? "").replace(/,/g, "").trim());
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(9_999_999, Math.trunc(n));
+}
+
+async function findCurrentCompensationPeriod(employeeId: string, anchor: Date) {
+  return prisma.employeeCompensationPeriod.findFirst({
+    where: {
+      employeeId,
+      validFrom: { lte: anchor },
+      OR: [{ validTo: null }, { validTo: { gte: anchor } }],
+    },
+    orderBy: { validFrom: "desc" },
+  });
 }
 
 function mergeVehicleDetail(existing: unknown, patch: JsonObj): JsonObj {
@@ -762,6 +801,131 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
       },
       update: { customJson: nextCustom as Prisma.InputJsonValue },
     });
+    return { ok: true };
+  });
+
+  app.get("/employee-compensation", async (req) => {
+    const { tenantId } = jwtUser(req);
+    const anchor = new Date();
+    const employees = await prisma.employee.findMany({
+      where: { tenantId },
+      orderBy: [{ status: "asc" }, { familyName: "asc" }, { givenName: "asc" }],
+      select: { id: true, familyName: true, givenName: true, status: true },
+    });
+    const rows: Array<{
+      employeeId: string;
+      familyName: string;
+      givenName: string;
+      status: string;
+      period: {
+        id: string;
+        compensationType: CompensationType;
+        mainHourlyYen: number;
+        partnerHourlyYen: number;
+        mainCommissionPct: string;
+        partnerCommissionPct: string;
+      } | null;
+    }> = [];
+    for (const e of employees) {
+      const p = await findCurrentCompensationPeriod(e.id, anchor);
+      rows.push({
+        employeeId: e.id,
+        familyName: e.familyName,
+        givenName: e.givenName,
+        status: e.status,
+        period: p
+          ? {
+              id: p.id,
+              compensationType: p.compensationType,
+              mainHourlyYen: p.mainHourlyYen,
+              partnerHourlyYen: p.partnerHourlyYen,
+              mainCommissionPct: bpsToPctDisplay(p.commissionMainRateBps),
+              partnerCommissionPct: bpsToPctDisplay(p.commissionPartnerRateBps),
+            }
+          : null,
+      });
+    }
+    return { rows };
+  });
+
+  app.put<{ Body: Record<string, unknown> }>("/employee-compensation", async (req, reply) => {
+    const { tenantId } = jwtUser(req);
+    const body = (req.body || {}) as Record<string, unknown>;
+    const rawRows = body.rows;
+    if (!Array.isArray(rawRows)) {
+      return reply.code(400).send({ error: "rows は配列で指定してください" });
+    }
+
+    const anchor = new Date();
+    const todayTokyoStart = startOfTokyoDayFromYmd(ymdInTokyo(anchor));
+
+    const allowed = new Set<string>(Object.values(CompensationType));
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        for (const raw of rawRows) {
+          if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+          const o = raw as Record<string, unknown>;
+          const employeeId = String(o.employeeId ?? "").trim();
+          if (!employeeId) continue;
+
+          const emp = await tx.employee.findFirst({ where: { id: employeeId, tenantId }, select: { id: true } });
+          if (!emp) {
+            throw new Error(`従業員が見つかりません: ${employeeId}`);
+          }
+
+          const ctStr = String(o.compensationType ?? "").trim();
+          if (!allowed.has(ctStr)) {
+            throw new Error(`賃金体系が不正です: ${ctStr || "(空)"}`);
+          }
+          const compensationType = ctStr as CompensationType;
+
+          const mainHourlyYen = parseYenInt(o.mainHourlyYen);
+          const partnerHourlyYen = parseYenInt(o.partnerHourlyYen);
+          const commissionMainRateBps = pctToBps(o.mainCommissionPct);
+          const commissionPartnerRateBps = pctToBps(o.partnerCommissionPct);
+          const baseHourlyYen = mainHourlyYen;
+
+          const existing = await tx.employeeCompensationPeriod.findFirst({
+            where: {
+              employeeId,
+              validFrom: { lte: anchor },
+              OR: [{ validTo: null }, { validTo: { gte: anchor } }],
+            },
+            orderBy: { validFrom: "desc" },
+          });
+
+          const data = {
+            compensationType,
+            mainHourlyYen,
+            partnerHourlyYen,
+            baseHourlyYen,
+            commissionMainRateBps,
+            commissionPartnerRateBps,
+          };
+
+          if (existing) {
+            await tx.employeeCompensationPeriod.update({
+              where: { id: existing.id },
+              data,
+            });
+          } else {
+            await tx.employeeCompensationPeriod.create({
+              data: {
+                employeeId,
+                validFrom: todayTokyoStart,
+                validTo: null,
+                ...data,
+              },
+            });
+          }
+        }
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "保存に失敗しました";
+      return reply.code(400).send({ error: msg });
+    }
+
     return { ok: true };
   });
 

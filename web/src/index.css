@@ -840,6 +840,69 @@ button.settings-danger:disabled {
   grid-template-columns: minmax(10rem, 14rem) 1fr;
 }
 
+.settings-three-col {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr) minmax(14rem, 28rem);
+}
+
+@media (max-width: 1100px) {
+  .settings-three-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settings-comp-col .settings-subtitle {
+  margin-top: 0;
+}
+
+.settings-comp-table-wrap {
+  overflow-x: auto;
+  margin: 0.5rem 0 0.75rem;
+  max-height: min(70vh, 36rem);
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.settings-comp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.settings-comp-table th,
+.settings-comp-table td {
+  border: 1px solid var(--color-border);
+  padding: 0.3rem 0.35rem;
+  vertical-align: middle;
+}
+
+.settings-comp-table th {
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-border));
+  text-align: left;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.settings-comp-num {
+  width: 100%;
+  max-width: 6.5rem;
+  min-width: 4rem;
+  box-sizing: border-box;
+}
+
+.settings-comp-select {
+  max-width: 8rem;
+  width: 100%;
+  font-size: 0.78rem;
+}
+
+.settings-comp-row--retired {
+  opacity: 0.65;
+}
+
 @media (max-width: 720px) {
   .settings-two-col {
     grid-template-columns: 1fr;

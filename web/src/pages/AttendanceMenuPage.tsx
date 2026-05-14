@@ -1515,7 +1515,7 @@ export default function AttendanceMenuPage(): JSX.Element {
 
           <div className="attend-tc-col attend-tc-col--wage">
             <h3 className="attend-shift-section-title">賃金</h3>
-            <p className="settings-hint">時給は従業員の報酬期間（時給）に基づき、出勤〜退勤から休憩を差し引いた時間で概算しています。</p>
+            <p className="settings-hint">客車時給（未設定時は従来の基本時給）と報酬期間に基づき、出勤〜退勤から休憩を差し引いた時間で概算しています。</p>
             {tcListLoading ? (
               <p className="settings-hint">読み込み中…</p>
             ) : tcListRows.length === 0 ? (

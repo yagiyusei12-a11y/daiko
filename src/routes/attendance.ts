@@ -59,13 +59,15 @@ const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** 0:00〜48:59（例: 翌4時 = 28:00） */
 const FLEX_HM = /^(\d{1,2}):(\d{2})$/;
 
-type CompPeriodPick = { validFrom: Date; validTo: Date | null; baseHourlyYen: number };
+type CompPeriodPick = { validFrom: Date; validTo: Date | null; baseHourlyYen: number; mainHourlyYen: number };
 
-function baseHourlyYenAt(periods: CompPeriodPick[], businessDate: string): number {
+function effectiveMainHourlyYenAt(periods: CompPeriodPick[], businessDate: string): number {
   const anchor = new Date(`${businessDate}T12:00:00+09:00`);
   const matching = periods.filter((p) => p.validFrom <= anchor && (p.validTo == null || p.validTo >= anchor));
   matching.sort((a, b) => b.validFrom.getTime() - a.validFrom.getTime());
-  return matching[0]?.baseHourlyYen ?? 0;
+  const cur = matching[0];
+  if (!cur) return 0;
+  return cur.mainHourlyYen > 0 ? cur.mainHourlyYen : cur.baseHourlyYen;
 }
 
 function hmTokyoFromDate(d: Date): string {
@@ -805,7 +807,7 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
         ? []
         : await prisma.employeeCompensationPeriod.findMany({
             where: { employeeId: { in: empIds } },
-            select: { employeeId: true, validFrom: true, validTo: true, baseHourlyYen: true },
+            select: { employeeId: true, validFrom: true, validTo: true, baseHourlyYen: true, mainHourlyYen: true },
           });
 
     const periodsByEmp = new Map<string, CompPeriodPick[]>();
@@ -815,6 +817,7 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
         validFrom: p.validFrom,
         validTo: p.validTo,
         baseHourlyYen: p.baseHourlyYen,
+        mainHourlyYen: p.mainHourlyYen,
       });
     }
 
@@ -834,7 +837,7 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
     for (const g of groupMap.values()) {
       const sum = summarizeDayPunches(g.items);
       const periods = periodsByEmp.get(g.employeeId) ?? [];
-      const baseHourlyYen = baseHourlyYenAt(periods, g.businessDate);
+      const baseHourlyYen = effectiveMainHourlyYenAt(periods, g.businessDate);
       const wageYen = computeWageYen(
         sum.clockIn?.punchedAt ?? null,
         sum.breakStart?.punchedAt ?? null,

@@ -89,6 +89,20 @@ type EmployeeRow = {
   safetyDrivingManager: boolean;
 };
 
+type EmployeeCompCompensationType = "HOURLY_ONLY" | "COMMISSION_ONLY" | "HOURLY_AND_COMMISSION";
+
+type EmployeeCompRowDraft = {
+  employeeId: string;
+  familyName: string;
+  givenName: string;
+  status: string;
+  compensationType: EmployeeCompCompensationType;
+  mainHourlyYen: string;
+  partnerHourlyYen: string;
+  mainCommissionPct: string;
+  partnerCommissionPct: string;
+};
+
 type VehicleRow = {
   id: string;
   label: string;
@@ -155,6 +169,8 @@ export default function SettingsMenuPage(): JSX.Element {
   const [company, setCompany] = useState<CompanyDto | null>(null);
 
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
+  const [compRows, setCompRows] = useState<EmployeeCompRowDraft[]>([]);
+  const [compBusy, setCompBusy] = useState(false);
   const [empSel, setEmpSel] = useState<string | "new" | null>(null);
   const [empForm, setEmpForm] = useState({
     linkedUserId: null as string | null,
@@ -231,6 +247,48 @@ export default function SettingsMenuPage(): JSX.Element {
     else setErr(r.error);
   }, []);
 
+  const loadEmployeeCompensation = useCallback(async () => {
+    const r = await apiFetch<{
+      rows: Array<{
+        employeeId: string;
+        familyName: string;
+        givenName: string;
+        status: string;
+        period: {
+          id: string;
+          compensationType: string;
+          mainHourlyYen: number;
+          partnerHourlyYen: number;
+          mainCommissionPct: string;
+          partnerCommissionPct: string;
+        } | null;
+      }>;
+    }>("/settings/employee-compensation");
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    const allowed: EmployeeCompCompensationType[] = ["HOURLY_ONLY", "COMMISSION_ONLY", "HOURLY_AND_COMMISSION"];
+    setCompRows(
+      (r.data.rows ?? []).map((row) => {
+        const ct = row.period?.compensationType;
+        const compensationType: EmployeeCompCompensationType =
+          ct && allowed.includes(ct as EmployeeCompCompensationType) ? (ct as EmployeeCompCompensationType) : "HOURLY_ONLY";
+        return {
+          employeeId: row.employeeId,
+          familyName: row.familyName,
+          givenName: row.givenName,
+          status: row.status,
+          compensationType,
+          mainHourlyYen: row.period != null ? String(row.period.mainHourlyYen) : "",
+          partnerHourlyYen: row.period != null ? String(row.period.partnerHourlyYen) : "",
+          mainCommissionPct: row.period?.mainCommissionPct ?? "",
+          partnerCommissionPct: row.period?.partnerCommissionPct ?? "",
+        };
+      }),
+    );
+  }, []);
+
   const loadVehicles = useCallback(async () => {
     const r = await apiFetch<{ vehicles: VehicleRow[] }>("/settings/vehicles");
     if (r.ok) setVehicles(r.data.vehicles);
@@ -261,8 +319,9 @@ export default function SettingsMenuPage(): JSX.Element {
     void loadMeta();
     void loadCompany();
     void loadEmployees();
+    void loadEmployeeCompensation();
     void loadVehicles();
-  }, [loadMeta, loadCompany, loadEmployees, loadVehicles]);
+  }, [loadMeta, loadCompany, loadEmployees, loadEmployeeCompensation, loadVehicles]);
 
   useEffect(() => {
     if (!company) return;
@@ -456,6 +515,7 @@ export default function SettingsMenuPage(): JSX.Element {
       else {
         flashSaved();
         await loadEmployees();
+        await loadEmployeeCompensation();
         fillEmpForm(null);
       }
       return;
@@ -467,6 +527,7 @@ export default function SettingsMenuPage(): JSX.Element {
       else {
         flashSaved();
         await loadEmployees();
+        await loadEmployeeCompensation();
       }
     }
   }
@@ -484,6 +545,32 @@ export default function SettingsMenuPage(): JSX.Element {
       setEmpSel(null);
       fillEmpForm(null);
       await loadEmployees();
+      await loadEmployeeCompensation();
+    }
+  }
+
+  async function saveEmployeeCompensation(): Promise<void> {
+    setCompBusy(true);
+    setErr(null);
+    setMsg(null);
+    const r = await apiFetch("/settings/employee-compensation", {
+      method: "PUT",
+      json: {
+        rows: compRows.map((c) => ({
+          employeeId: c.employeeId,
+          compensationType: c.compensationType,
+          mainHourlyYen: c.mainHourlyYen,
+          partnerHourlyYen: c.partnerHourlyYen,
+          mainCommissionPct: c.mainCommissionPct,
+          partnerCommissionPct: c.partnerCommissionPct,
+        })),
+      },
+    });
+    setCompBusy(false);
+    if (!r.ok) setErr(r.error);
+    else {
+      flashSaved();
+      await loadEmployeeCompensation();
     }
   }
 
@@ -684,7 +771,7 @@ export default function SettingsMenuPage(): JSX.Element {
   );
 
   const employeesPanel = (
-    <div className="settings-two-col">
+    <div className="settings-three-col">
       <div>
         <div className="settings-toolbar">
           <button type="button" onClick={() => fillEmpForm(null)}>
@@ -870,6 +957,129 @@ export default function SettingsMenuPage(): JSX.Element {
             </div>
           </>
         )}
+      </div>
+      <div className="settings-comp-col">
+        <h3 className="settings-subtitle">賃金</h3>
+        <p className="settings-hint" style={{ marginTop: 0 }}>
+          現在有効な報酬です。「賃金を保存」で一覧の全員分をまとめて保存します（未登録の従業員は今日付の報酬期間が作成されます）。歩合率は百分率（5.5% は 5.5 と入力）。
+        </p>
+        <div className="settings-comp-table-wrap">
+          <table className="settings-comp-table">
+            <thead>
+              <tr>
+                <th>氏名</th>
+                <th>賃金体系</th>
+                <th>客車時給（円）</th>
+                <th>随伴車時給（円）</th>
+                <th>客車歩合（%）</th>
+                <th>随伴車歩合（%）</th>
+              </tr>
+            </thead>
+            <tbody>
+              {compRows.map((row) => (
+                <tr key={row.employeeId} className={row.status === "RETIRED" ? "settings-comp-row--retired" : undefined}>
+                  <td>
+                    {row.familyName} {row.givenName}
+                  </td>
+                  <td>
+                    <select
+                      className="settings-comp-select"
+                      value={row.compensationType}
+                      aria-label={`${row.familyName} 賃金体系`}
+                      onChange={(e) =>
+                        setCompRows((xs) =>
+                          xs.map((x) =>
+                            x.employeeId === row.employeeId
+                              ? { ...x, compensationType: e.target.value as EmployeeCompCompensationType }
+                              : x,
+                          ),
+                        )
+                      }
+                    >
+                      <option value="HOURLY_ONLY">時給</option>
+                      <option value="COMMISSION_ONLY">歩合</option>
+                      <option value="HOURLY_AND_COMMISSION">時給+歩合</option>
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      className="settings-comp-num"
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      aria-label={`${row.familyName} 客車時給`}
+                      value={row.mainHourlyYen}
+                      onChange={(e) =>
+                        setCompRows((xs) =>
+                          xs.map((x) => (x.employeeId === row.employeeId ? { ...x, mainHourlyYen: e.target.value } : x)),
+                        )
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="settings-comp-num"
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      aria-label={`${row.familyName} 随伴車時給`}
+                      value={row.partnerHourlyYen}
+                      onChange={(e) =>
+                        setCompRows((xs) =>
+                          xs.map((x) => (x.employeeId === row.employeeId ? { ...x, partnerHourlyYen: e.target.value } : x)),
+                        )
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="settings-comp-num"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.01}
+                      inputMode="decimal"
+                      aria-label={`${row.familyName} 客車歩合`}
+                      value={row.mainCommissionPct}
+                      onChange={(e) =>
+                        setCompRows((xs) =>
+                          xs.map((x) => (x.employeeId === row.employeeId ? { ...x, mainCommissionPct: e.target.value } : x)),
+                        )
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="settings-comp-num"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.01}
+                      inputMode="decimal"
+                      aria-label={`${row.familyName} 随伴車歩合`}
+                      value={row.partnerCommissionPct}
+                      onChange={(e) =>
+                        setCompRows((xs) =>
+                          xs.map((x) =>
+                            x.employeeId === row.employeeId ? { ...x, partnerCommissionPct: e.target.value } : x,
+                          ),
+                        )
+                      }
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <button
+          type="button"
+          className="settings-primary"
+          disabled={compBusy || busy || compRows.length === 0}
+          onClick={() => void saveEmployeeCompensation()}
+        >
+          賃金を保存
+        </button>
       </div>
     </div>
   );
