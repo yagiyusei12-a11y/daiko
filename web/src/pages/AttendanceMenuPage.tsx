@@ -54,6 +54,24 @@ function formatWorkDuration(minutes: number | null): string {
   return m > 0 ? `${h}時間${m}分` : `${h}時間`;
 }
 
+/** 給料の「×」表示用（端数分を含む場合は時間の小数表記） */
+function formatBasisForRateLine(minutes: number): string {
+  const intMin = Math.round(minutes);
+  if (Math.abs(minutes - intMin) < 1e-3) {
+    const h = Math.floor(intMin / 60);
+    const m = intMin % 60;
+    return m > 0 ? `${h}h${m}m` : `${h}h`;
+  }
+  return `${(minutes / 60).toFixed(2)}時間`;
+}
+
+type SalaryPrefsClient = {
+  version: 1;
+  minuteStep: number;
+  timeRounding: "floor" | "ceil" | "round";
+  yenRounding: "floor" | "ceil" | "round";
+};
+
 type TcMonthSummaryRow = {
   employeeId: string;
   familyName: string;
@@ -66,6 +84,7 @@ type TcMonthSummaryRow = {
   baseHourlyYen: number;
   roleLabel: string | null;
   wageYen: number | null;
+  wageBasisMinutes?: number | null;
 };
 
 type TcEditField = { punchId: string; label: string; local: string; originalIso: string };
@@ -718,6 +737,7 @@ export default function AttendanceMenuPage(): JSX.Element {
   const [salaryYm, setSalaryYm] = useState(currentYearMonth);
   const [salaryRows, setSalaryRows] = useState<TcMonthSummaryRow[]>([]);
   const [salaryLoading, setSalaryLoading] = useState(false);
+  const [salaryPrefs, setSalaryPrefs] = useState<SalaryPrefsClient | null>(null);
 
   const roster = useMemo(
     () => employees.filter((e) => e.status === "ACTIVE" && !e.retiredAt),
@@ -778,16 +798,18 @@ export default function AttendanceMenuPage(): JSX.Element {
 
   const loadSalaryData = useCallback(async () => {
     setSalaryLoading(true);
-    const r = await apiFetch<{ rows: TcMonthSummaryRow[] }>(
+    const r = await apiFetch<{ rows: TcMonthSummaryRow[]; salaryPrefs?: SalaryPrefsClient }>(
       `/attendance/timecard/month-summary?yearMonth=${encodeURIComponent(salaryYm)}`,
     );
     setSalaryLoading(false);
     if (!r.ok) {
       setErr(r.error);
       setSalaryRows([]);
+      setSalaryPrefs(null);
       return;
     }
     setSalaryRows(r.data.rows ?? []);
+    setSalaryPrefs(r.data.salaryPrefs ?? null);
   }, [salaryYm]);
 
   useEffect(() => {
@@ -1623,6 +1645,22 @@ export default function AttendanceMenuPage(): JSX.Element {
     [salaryFilteredRows],
   );
 
+  const salaryPrefsHint = useMemo(() => {
+    if (!salaryPrefs) return null;
+    const yenLab =
+      salaryPrefs.yenRounding === "floor" ? "切り捨て" : salaryPrefs.yenRounding === "ceil" ? "切り上げ" : "四捨五入";
+    if (salaryPrefs.minuteStep <= 1) {
+      return `給料の円は「${yenLab}」で計算しています。`;
+    }
+    const timeLab =
+      salaryPrefs.timeRounding === "floor"
+        ? "切り捨て"
+        : salaryPrefs.timeRounding === "ceil"
+          ? "切り上げ"
+          : "四捨五入";
+    return `給料は勤務時間を${salaryPrefs.minuteStep}分刻み（${timeLab}）にそろえたうえで時給を掛け、円は「${yenLab}」しています。`;
+  }, [salaryPrefs]);
+
   const salaryPanel = (
     <div className="settings-form attend-shift-root">
       <label>氏名</label>
@@ -1693,6 +1731,11 @@ export default function AttendanceMenuPage(): JSX.Element {
         </p>
       ) : (
         <div className="settings-comp-table-wrap" style={{ marginTop: "1rem" }}>
+          {salaryPrefsHint ? (
+            <p className="settings-hint" style={{ marginTop: 0, marginBottom: "0.75rem" }}>
+              {salaryPrefsHint}
+            </p>
+          ) : null}
           <table className="settings-comp-table salary-table">
             <thead>
               <tr>
@@ -1705,6 +1748,10 @@ export default function AttendanceMenuPage(): JSX.Element {
             <tbody>
               {salaryFilteredRows.map((row) => {
                 const workMin = computeWorkMinutes(row);
+                const basisMin =
+                  row.wageYen != null && row.wageBasisMinutes != null && Number.isFinite(row.wageBasisMinutes)
+                    ? row.wageBasisMinutes
+                    : workMin;
                 return (
                   <tr key={row.businessDate}>
                     <td>{row.businessDate}</td>
@@ -1720,8 +1767,8 @@ export default function AttendanceMenuPage(): JSX.Element {
                       ) : null}
                       <span className="salary-breakdown-rate">
                         {row.roleLabel ? `${row.roleLabel}・` : ""}時給{row.baseHourlyYen.toLocaleString("ja-JP")}円
-                        {workMin != null
-                          ? ` × ${Math.floor(workMin / 60)}h${workMin % 60 > 0 ? `${workMin % 60}m` : ""}`
+                        {basisMin != null
+                          ? ` × ${formatBasisForRateLine(basisMin)}`
                           : ""}
                       </span>
                     </td>

@@ -6,6 +6,12 @@ import { loadUserAccess } from "../lib/permissions.js";
 import { prisma } from "../db.js";
 import { coerceBusinessBasicsFromCustomJson, type BusinessBasicsV2 } from "../lib/business-basics.js";
 import { validateNextTimecardPunch } from "../lib/timecard-punch-order.js";
+import {
+  coerceSalaryPrefs,
+  computeWageFromWorkMs,
+  wageBasisMinutesFromWorkMs,
+  type SalaryPrefsV1,
+} from "../lib/salary-prefs.js";
 
 async function buildAlcoholCheckJsonForClockIn(
   tenantId: string,
@@ -131,13 +137,18 @@ function hmFlexFromDate(d: Date, businessDate: string, rollHour: number): string
   return `${String(tokyoHour).padStart(2, "0")}:${tokyoMin}`;
 }
 
-function computeWageYen(
+function jsonObj(v: unknown): Record<string, unknown> {
+  return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+}
+
+function computeWageAndBasis(
   clockIn: Date | null,
   breakStart: Date | null,
   breakEnd: Date | null,
   clockOut: Date | null,
   hourlyYen: number,
-): number | null {
+  prefs: SalaryPrefsV1,
+): { wageYen: number; wageBasisMinutes: number } | null {
   if (!hourlyYen || hourlyYen < 0) return null;
   if (!clockIn || !clockOut || clockOut.getTime() <= clockIn.getTime()) return null;
   let breakMs = 0;
@@ -147,8 +158,9 @@ function computeWageYen(
     breakMs = Math.max(0, breakMs);
   }
   const workMs = Math.max(0, clockOut.getTime() - clockIn.getTime() - breakMs);
-  const hours = workMs / 3600000;
-  return Math.round(hours * hourlyYen);
+  const wageYen = computeWageFromWorkMs(workMs, hourlyYen, prefs);
+  if (wageYen == null) return null;
+  return { wageYen, wageBasisMinutes: wageBasisMinutesFromWorkMs(workMs, prefs) };
 }
 
 type PunchForSummary = { id: string; kind: TimeCardPunchKind; punchedAt: Date };
@@ -820,8 +832,12 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
     }
 
     const datePrefix = `${yearMonth}-`;
-    const tenantSettings = await prisma.tenantSettings.findUnique({ where: { tenantId }, select: { businessDayRollHour: true } });
+    const tenantSettings = await prisma.tenantSettings.findUnique({
+      where: { tenantId },
+      select: { businessDayRollHour: true, customJson: true },
+    });
     const rollHour = tenantSettings?.businessDayRollHour ?? 4;
+    const salaryPrefs = coerceSalaryPrefs(jsonObj(tenantSettings?.customJson).salaryPrefs);
 
     const punches = await prisma.timeCardPunch.findMany({
       where: {
@@ -925,6 +941,8 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
       baseHourlyYen: number;
       roleLabel: string | null;
       wageYen: number | null;
+      /** 給料計算に使った労働時間（分）。刻み設定時は丸め後 */
+      wageBasisMinutes: number | null;
     }> = [];
 
     for (const g of groupMap.values()) {
@@ -933,12 +951,13 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
       const duties = shiftDutiesMap.get(`${g.employeeId}\t${g.businessDate}`) ?? [];
       const role = roleFromDuties(duties);
       const { hourlyYen, roleLabel } = effectiveHourlyYenAt(periods, g.businessDate, role);
-      const wageYen = computeWageYen(
+      const wagePack = computeWageAndBasis(
         sum.clockIn?.punchedAt ?? null,
         sum.breakStart?.punchedAt ?? null,
         sum.breakEnd?.punchedAt ?? null,
         sum.clockOut?.punchedAt ?? null,
         hourlyYen,
+        salaryPrefs,
       );
 
       const slot = (x: PunchForSummary | null) =>
@@ -961,7 +980,8 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
         clockOut: slot(sum.clockOut),
         baseHourlyYen: hourlyYen,
         roleLabel,
-        wageYen,
+        wageYen: wagePack?.wageYen ?? null,
+        wageBasisMinutes: wagePack?.wageBasisMinutes ?? null,
       });
     }
 
@@ -972,7 +992,7 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
       return n;
     });
 
-    return { yearMonth, rows };
+    return { yearMonth, rows, salaryPrefs };
   });
 
   app.get<{ Querystring: { yearMonth?: string } }>("/timecard/alcohol-checks", async (req, reply) => {

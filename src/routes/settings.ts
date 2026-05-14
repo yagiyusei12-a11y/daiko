@@ -13,6 +13,7 @@ import {
 } from "../lib/business-basics.js";
 import { coerceTillFromCustomJson, mergeTillIntoCustomJson, parseTillPut } from "../lib/till-settings.js";
 import { coercePricingPrefs, mergePricingPrefsUpdate } from "../lib/pricing-prefs.js";
+import { coerceSalaryPrefs, mergeSalaryPrefsPut } from "../lib/salary-prefs.js";
 import {
   coerceOnlineBookingFromCustomJson,
   mergeOnlineBookingIntoCustomJson,
@@ -791,6 +792,38 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
       update: { customJson: nextCustom as Prisma.InputJsonValue },
     });
     return { ok: true };
+  });
+
+  app.get("/salary-prefs", async (req) => {
+    const { tenantId } = jwtUser(req);
+    const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+    const cj = asObj(s?.customJson);
+    const salaryPrefs = coerceSalaryPrefs(cj.salaryPrefs);
+    return { salaryPrefs };
+  });
+
+  app.put<{ Body: Record<string, unknown> }>("/salary-prefs", async (req) => {
+    const { tenantId } = jwtUser(req);
+    const b = req.body || {};
+
+    const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+    const prevRoot = asObj(s?.customJson);
+    const prevPrefs = coerceSalaryPrefs(prevRoot.salaryPrefs);
+    const nextPrefs = mergeSalaryPrefsPut(prevPrefs, b);
+
+    const nextCustom = { ...prevRoot, salaryPrefs: nextPrefs as unknown as Record<string, unknown> };
+
+    await prisma.tenantSettings.upsert({
+      where: { tenantId },
+      create: {
+        tenantId,
+        businessDayRollHour: 4,
+        featureFlags: {},
+        customJson: nextCustom as Prisma.InputJsonValue,
+      },
+      update: { customJson: nextCustom as Prisma.InputJsonValue },
+    });
+    return { ok: true, salaryPrefs: nextPrefs };
   });
 
   app.get("/online-booking", async (req) => {

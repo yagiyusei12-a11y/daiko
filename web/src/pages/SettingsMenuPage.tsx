@@ -173,6 +173,12 @@ export default function SettingsMenuPage(): JSX.Element {
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
   const [compRows, setCompRows] = useState<EmployeeCompRowDraft[]>([]);
   const [compBusy, setCompBusy] = useState(false);
+  const [salaryPrefsDraft, setSalaryPrefsDraft] = useState<{
+    minuteStep: number;
+    timeRounding: "floor" | "ceil" | "round";
+    yenRounding: "floor" | "ceil" | "round";
+  }>({ minuteStep: 1, timeRounding: "floor", yenRounding: "round" });
+  const [salaryPrefsBusy, setSalaryPrefsBusy] = useState(false);
   const [empSel, setEmpSel] = useState<string | "new" | null>(null);
 
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -299,6 +305,22 @@ export default function SettingsMenuPage(): JSX.Element {
       }),
     );
   }, []);
+
+  useEffect(() => {
+    if (tab !== "employees-compensation") return;
+    void (async () => {
+      const r = await apiFetch<{
+        salaryPrefs: { minuteStep?: number; timeRounding?: string; yenRounding?: string };
+      }>("/settings/salary-prefs");
+      if (!r.ok) return;
+      const sp = r.data.salaryPrefs ?? {};
+      setSalaryPrefsDraft({
+        minuteStep: typeof sp.minuteStep === "number" && [1, 5, 10, 15, 30, 60].includes(sp.minuteStep) ? sp.minuteStep : 1,
+        timeRounding: sp.timeRounding === "ceil" || sp.timeRounding === "round" ? sp.timeRounding : "floor",
+        yenRounding: sp.yenRounding === "floor" || sp.yenRounding === "ceil" ? sp.yenRounding : "round",
+      });
+    })();
+  }, [tab]);
 
   const loadVehicles = useCallback(async () => {
     const r = await apiFetch<{ vehicles: VehicleRow[] }>("/settings/vehicles");
@@ -584,6 +606,26 @@ export default function SettingsMenuPage(): JSX.Element {
       flashSaved();
       await loadEmployeeCompensation();
     }
+  }
+
+  async function saveSalaryPrefs(): Promise<void> {
+    setSalaryPrefsBusy(true);
+    setErr(null);
+    setMsg(null);
+    const r = await apiFetch("/settings/salary-prefs", {
+      method: "PUT",
+      json: {
+        salaryPrefs: {
+          version: 1,
+          minuteStep: salaryPrefsDraft.minuteStep,
+          timeRounding: salaryPrefsDraft.timeRounding,
+          yenRounding: salaryPrefsDraft.yenRounding,
+        },
+      },
+    });
+    setSalaryPrefsBusy(false);
+    if (!r.ok) setErr(r.error);
+    else flashSaved();
   }
 
   async function saveVehicle(): Promise<void> {
@@ -1087,6 +1129,66 @@ export default function SettingsMenuPage(): JSX.Element {
       <p className="settings-hint" style={{ marginTop: 0 }}>
         現在有効な報酬です。「賃金を保存」で一覧の全員分をまとめて保存します（未登録の従業員は今日付の報酬期間が作成されます）。歩合率は百分率（5.5% は 5.5 と入力）。
       </p>
+      <div className="settings-form" style={{ marginBottom: "1.25rem" }}>
+        <p className="settings-hint" style={{ marginTop: 0 }}>
+          勤怠の「給料」タブの計算に使います。分刻みは 1 より大きいときだけ勤務時間をその単位に丸めます。
+        </p>
+        <label>給料の時間の分刻み</label>
+        <select
+          value={salaryPrefsDraft.minuteStep}
+          onChange={(e) =>
+            setSalaryPrefsDraft((p) => ({ ...p, minuteStep: Number(e.target.value) || 1 }))
+          }
+          disabled={salaryPrefsBusy}
+        >
+          <option value={1}>1分（打刻どおりの分数で計算）</option>
+          <option value={5}>5分</option>
+          <option value={10}>10分</option>
+          <option value={15}>15分</option>
+          <option value={30}>30分</option>
+          <option value={60}>60分</option>
+        </select>
+        <label style={{ marginTop: "0.75rem" }}>分刻みへの丸め方</label>
+        <select
+          value={salaryPrefsDraft.timeRounding}
+          onChange={(e) =>
+            setSalaryPrefsDraft((p) => ({
+              ...p,
+              timeRounding: e.target.value as "floor" | "ceil" | "round",
+            }))
+          }
+          disabled={salaryPrefsBusy || salaryPrefsDraft.minuteStep <= 1}
+        >
+          <option value="floor">切り捨て</option>
+          <option value="ceil">切り上げ</option>
+          <option value="round">四捨五入</option>
+        </select>
+        <label style={{ marginTop: "0.75rem" }}>給料の円の端数</label>
+        <select
+          value={salaryPrefsDraft.yenRounding}
+          onChange={(e) =>
+            setSalaryPrefsDraft((p) => ({
+              ...p,
+              yenRounding: e.target.value as "floor" | "ceil" | "round",
+            }))
+          }
+          disabled={salaryPrefsBusy}
+        >
+          <option value="floor">切り捨て</option>
+          <option value="ceil">切り上げ</option>
+          <option value="round">四捨五入</option>
+        </select>
+        <div className="settings-actions" style={{ marginTop: "0.75rem" }}>
+          <button
+            type="button"
+            className="settings-secondary"
+            disabled={salaryPrefsBusy}
+            onClick={() => void saveSalaryPrefs()}
+          >
+            給料の端数設定を保存
+          </button>
+        </div>
+      </div>
       <div className="settings-comp-table-wrap">
         <table className="settings-comp-table">
           <thead>
