@@ -5,6 +5,7 @@ import { authenticate, jwtUser } from "../auth/pre.js";
 import { loadUserAccess } from "../lib/permissions.js";
 import { prisma } from "../db.js";
 import { coerceBusinessBasicsFromCustomJson, type BusinessBasicsV2 } from "../lib/business-basics.js";
+import { validateNextTimecardPunch } from "../lib/timecard-punch-order.js";
 
 async function buildAlcoholCheckJsonForClockIn(
   tenantId: string,
@@ -708,6 +709,14 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
       select: { id: true },
     });
     if (!emp) return reply.code(404).send({ error: "従業員が見つかりません" });
+
+    const existingForOrder = await prisma.timeCardPunch.findMany({
+      where: { tenantId, employeeId, businessDate },
+      orderBy: { punchedAt: "asc" },
+      select: { kind: true, punchedAt: true },
+    });
+    const orderErr = validateNextTimecardPunch(existingForOrder, kindStr);
+    if (orderErr) return reply.code(400).send({ error: orderErr });
 
     let alcoholCheckJson: Prisma.InputJsonValue | undefined;
     if (kindStr === "CLOCK_IN" || kindStr === "CLOCK_OUT") {

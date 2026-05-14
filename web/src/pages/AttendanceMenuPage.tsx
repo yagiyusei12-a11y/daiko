@@ -4,6 +4,7 @@ import { useAuth, isFullNavMe, isStaffShiftOnlyMe } from "../auth";
 import { useSavedToast } from "../saved-toast";
 import { Card, Err, Tabs, type TabDef } from "../ui";
 import { filterSubTabsForMe } from "../lib/staff-menu-client";
+import { timecardButtonAvailability } from "../lib/timecard-punch-order";
 
 type EmployeeRow = {
   id: string;
@@ -1058,6 +1059,12 @@ export default function AttendanceMenuPage(): JSX.Element {
     if (tab === "timecard" && tcEmployeeId) void loadTcPunches();
   }, [tab, tcEmployeeId, tcDate, loadTcPunches]);
 
+  const tcPunchesSorted = useMemo(
+    () => [...tcPunches].sort((a, b) => new Date(a.punchedAt).getTime() - new Date(b.punchedAt).getTime()),
+    [tcPunches],
+  );
+  const tcPunchBtn = useMemo(() => timecardButtonAvailability(tcPunchesSorted), [tcPunchesSorted]);
+
   useEffect(() => {
     const d = tcBreathList.find((x) => x.id === alcBreathId);
     if (d?.verificationMethods?.length) {
@@ -1443,11 +1450,17 @@ export default function AttendanceMenuPage(): JSX.Element {
             <label htmlFor="tc-date">日付（事業日）</label>
             <input id="tc-date" type="date" value={tcDate} onChange={(e) => setTcDate(e.target.value)} />
 
+            {tcEmployeeId ? (
+              <p className="settings-hint" style={{ marginTop: 0 }}>
+                打刻は「出勤 →（休憩入 → 休憩終）→ 退勤」の順のみです。休憩を挟まない場合は出勤のあとすぐ退勤できます。同日の出勤は1回までです。
+              </p>
+            ) : null}
+
             <div className="settings-toolbar attend-tc-buttons">
               <button
                 type="button"
                 className="settings-primary"
-                disabled={!tcEmployeeId || tcLoading}
+                disabled={!tcEmployeeId || tcLoading || !tcPunchBtn.clockIn}
                 onClick={() => void openAlcoholDialog("CLOCK_IN")}
               >
                 出勤
@@ -1455,7 +1468,7 @@ export default function AttendanceMenuPage(): JSX.Element {
               <button
                 type="button"
                 className="settings-primary"
-                disabled={!tcEmployeeId || tcLoading}
+                disabled={!tcEmployeeId || tcLoading || !tcPunchBtn.clockOut}
                 onClick={() => void openAlcoholDialog("CLOCK_OUT")}
               >
                 退勤
@@ -1463,7 +1476,7 @@ export default function AttendanceMenuPage(): JSX.Element {
               <button
                 type="button"
                 className="settings-secondary"
-                disabled={!tcEmployeeId || tcLoading}
+                disabled={!tcEmployeeId || tcLoading || !tcPunchBtn.breakStart}
                 onClick={() => void postTimecardPunch("BREAK_START")}
               >
                 休憩入
@@ -1471,7 +1484,7 @@ export default function AttendanceMenuPage(): JSX.Element {
               <button
                 type="button"
                 className="settings-secondary"
-                disabled={!tcEmployeeId || tcLoading}
+                disabled={!tcEmployeeId || tcLoading || !tcPunchBtn.breakEnd}
                 onClick={() => void postTimecardPunch("BREAK_END")}
               >
                 休憩終
@@ -1487,7 +1500,7 @@ export default function AttendanceMenuPage(): JSX.Element {
               <p className="settings-hint">この日の打刻はまだありません。</p>
             ) : (
               <ul className="settings-sf-list">
-                {tcPunches.map((p) => (
+                {tcPunchesSorted.map((p) => (
                   <li key={p.id} className="settings-sf-row attend-shift-list-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
                     <div style={{ display: "flex", alignItems: "center", width: "100%", gap: "0.35rem" }}>
                       <span className="settings-sf-name">
