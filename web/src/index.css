@@ -486,6 +486,26 @@ button.app-sidebar-logout:focus-visible {
   margin-top: 1rem;
 }
 
+.auth-footer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+
+.auth-footer-row a {
+  color: var(--color-accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.auth-footer-row a:hover {
+  text-decoration: underline;
+}
+
 .card {
   position: relative;
   background: var(--color-surface);

@@ -13,12 +13,14 @@ import DashboardPage from "./pages/DashboardPage";
 import SettingsMenuPage from "./pages/SettingsMenuPage";
 import GuestBookingPage from "./pages/GuestBookingPage";
 import EmployeeInvitePage from "./pages/EmployeeInvitePage";
+import SampleShowcasePage from "./pages/SampleShowcasePage";
 
 export default function App(): JSX.Element {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/sample" element={<SampleShowcasePage />} />
       <Route path="/book/:slug" element={<GuestBookingPage />} />
       <Route path="/invite/:token" element={<EmployeeInvitePage />} />
       <Route element={<Shell />}>

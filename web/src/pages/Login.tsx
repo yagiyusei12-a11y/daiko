@@ -33,9 +33,10 @@ export default function Login(): JSX.Element {
           <Err msg={err} />
           <button type="submit">ログイン</button>
         </form>
-        <p className="auth-footer">
+        <div className="auth-footer-row">
           <Link to="/register">新規テナント登録</Link>
-        </p>
+          <Link to="/sample">サンプルページ</Link>
+        </div>
       </Card>
     </div>
   );
