@@ -4,8 +4,6 @@
 name: Deploy main to VPS
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
