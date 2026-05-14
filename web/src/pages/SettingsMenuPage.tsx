@@ -173,6 +173,13 @@ export default function SettingsMenuPage(): JSX.Element {
   const [compRows, setCompRows] = useState<EmployeeCompRowDraft[]>([]);
   const [compBusy, setCompBusy] = useState(false);
   const [empSel, setEmpSel] = useState<string | "new" | null>(null);
+
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteHiredOn, setInviteHiredOn] = useState("");
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteErr, setInviteErr] = useState<string | null>(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
   const [empForm, setEmpForm] = useState({
     linkedUserId: null as string | null,
     loginEmail: "",
@@ -774,12 +781,115 @@ export default function SettingsMenuPage(): JSX.Element {
     <p className="settings-hint">読み込み中…</p>
   );
 
+  async function generateInviteUrl(): Promise<void> {
+    if (!inviteHiredOn) return;
+    setInviteBusy(true);
+    setInviteErr(null);
+    setInviteToken(null);
+    setInviteCopied(false);
+    const r = await apiFetch<{ token: string }>("/settings/employee-invite", {
+      method: "POST",
+      json: { hiredOn: inviteHiredOn },
+    });
+    setInviteBusy(false);
+    if (!r.ok) {
+      setInviteErr(r.error);
+      return;
+    }
+    setInviteToken(r.data.token);
+  }
+
+  function inviteUrl(): string {
+    if (!inviteToken) return "";
+    return `${window.location.origin}/app/invite/${encodeURIComponent(inviteToken)}`;
+  }
+
+  async function copyInviteUrl(): Promise<void> {
+    await navigator.clipboard.writeText(inviteUrl());
+    setInviteCopied(true);
+    setTimeout(() => setInviteCopied(false), 2000);
+  }
+
   const employeesRosterPanel = (
+    <>
+    {inviteOpen ? (
+      <div
+        className="pricing-modal-backdrop"
+        role="presentation"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) { setInviteOpen(false); setInviteToken(null); setInviteErr(null); }
+        }}
+      >
+        <div
+          className="pricing-modal attend-shift-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="invite-dialog-title"
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{ maxWidth: "30rem" }}
+        >
+          <h2 id="invite-dialog-title" className="pricing-modal-title">従業員が入力するURL</h2>
+          <div className="settings-form" style={{ padding: "0 0.25rem" }}>
+            <label>採用年月日</label>
+            <input
+              type="date"
+              value={inviteHiredOn}
+              onChange={(e) => { setInviteHiredOn(e.target.value); setInviteToken(null); }}
+              autoFocus
+            />
+            {inviteErr ? <p style={{ color: "var(--color-danger)", fontSize: "0.85rem" }}>{inviteErr}</p> : null}
+            {!inviteToken ? (
+              <div className="settings-actions">
+                <button
+                  type="button"
+                  className="settings-primary"
+                  disabled={!inviteHiredOn || inviteBusy}
+                  onClick={() => void generateInviteUrl()}
+                >
+                  {inviteBusy ? "生成中…" : "登録URLを生成"}
+                </button>
+                <button type="button" onClick={() => setInviteOpen(false)}>閉じる</button>
+              </div>
+            ) : (
+              <>
+                <label style={{ marginTop: "0.75rem" }}>登録URL（30日間有効・1回使い切り）</label>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <input
+                    readOnly
+                    value={inviteUrl()}
+                    style={{ flex: 1, fontSize: "0.78rem", background: "var(--color-border)" }}
+                    onFocus={(e) => e.target.select()}
+                  />
+                  <button
+                    type="button"
+                    className="settings-secondary"
+                    onClick={() => void copyInviteUrl()}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {inviteCopied ? "コピー済" : "コピー"}
+                  </button>
+                </div>
+                <div className="settings-actions" style={{ marginTop: "1rem" }}>
+                  <button type="button" onClick={() => { setInviteOpen(false); setInviteToken(null); }}>閉じる</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    ) : null}
     <div className="settings-two-col">
       <div>
         <div className="settings-toolbar">
           <button type="button" onClick={() => fillEmpForm(null)}>
             新規
+          </button>
+          <button
+            type="button"
+            className="settings-secondary"
+            onClick={() => { setInviteOpen(true); setInviteToken(null); setInviteErr(null); setInviteCopied(false); }}
+          >
+            従業員が入力
           </button>
         </div>
         <ul className="settings-list">
@@ -963,6 +1073,7 @@ export default function SettingsMenuPage(): JSX.Element {
         )}
       </div>
     </div>
+    </>
   );
 
   const employeesCompPanel = (

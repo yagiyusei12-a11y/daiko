@@ -12,6 +12,7 @@ import InstructionRecordsPage from "./pages/InstructionRecordsPage";
 import DashboardPage from "./pages/DashboardPage";
 import SettingsMenuPage from "./pages/SettingsMenuPage";
 import GuestBookingPage from "./pages/GuestBookingPage";
+import EmployeeInvitePage from "./pages/EmployeeInvitePage";
 
 export default function App(): JSX.Element {
   return (
@@ -19,6 +20,7 @@ export default function App(): JSX.Element {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/book/:slug" element={<GuestBookingPage />} />
+      <Route path="/invite/:token" element={<EmployeeInvitePage />} />
       <Route element={<Shell />}>
         <Route index element={<TodaySchedulePage />} />
         <Route path="complaints" element={<ComplaintsPage />} />

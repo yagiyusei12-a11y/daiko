@@ -88,6 +88,7 @@ model Tenant {
   vehicleOdometerLogs VehicleOdometerLog[]
   lineChannels        TenantLineChannel[]
   instructionRecords  InstructionRecord[]
+  employeeInviteTokens EmployeeInviteToken[]
 }
 
 /// デモ用サンプル投入のバッチ（payload に作成した主キー一覧を保持し、削除時に利用）
@@ -860,4 +861,18 @@ model LegalChangeNotice {
   updatedAt      DateTime @updatedAt
 
   @@index([tenantId, createdAt])
+}
+
+/// 従業員自己登録用ワンタイムURL
+model EmployeeInviteToken {
+  id        String    @id @default(cuid())
+  tenantId  String
+  hiredOn   String
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }

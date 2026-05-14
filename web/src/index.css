@@ -886,6 +886,46 @@ button.settings-danger:disabled {
   z-index: 1;
 }
 
+/* 従業員自己登録ページ */
+.invite-page {
+  min-height: 100vh;
+  background: var(--color-bg);
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem 4rem;
+}
+.invite-card {
+  width: 100%;
+  max-width: 36rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 2rem 1.75rem;
+}
+.invite-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+.invite-error {
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+.invite-required {
+  color: var(--color-danger);
+  margin-left: 0.2em;
+}
+.invite-submit-btn {
+  min-width: 8rem;
+  font-size: 1rem;
+  padding: 0.6rem 1.5rem;
+}
+
 .salary-table .salary-amount {
   text-align: right;
   font-variant-numeric: tabular-nums;

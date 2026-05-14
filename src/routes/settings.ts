@@ -933,6 +933,20 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     return { ok: true };
   });
 
+  app.post<{ Body: Record<string, unknown> }>("/employee-invite", async (req, reply) => {
+    const { tenantId } = jwtUser(req);
+    const b = req.body || {};
+    const hiredOn = String(b.hiredOn ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(hiredOn)) {
+      return reply.code(400).send({ error: "hiredOn は yyyy-MM-dd 形式で指定してください" });
+    }
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const token = await prisma.employeeInviteToken.create({
+      data: { tenantId, hiredOn, expiresAt },
+    });
+    return { token: token.id };
+  });
+
   app.get("/meta", async () => {
     const licenseClasses = JP_DRIVER_LICENSE_CLASSES_EMPLOYEE;
     const licenseConditionOptionsByKind: Record<string, string[]> = {};
