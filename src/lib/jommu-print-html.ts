@@ -1,54 +1,13 @@
 /**
- * 乗務記録簿: templates/jommu-print の HTML（IDR 由来レイアウト）を埋めて PDF 用 HTML を返す。
+ * 乗務記録簿: templates/jommu-print（背景 SVG + セマンティックな HTML）から PDF 用ドキュメントを組み立てる。
  */
 
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { JommuKirokuboModel, JommuTripRow } from "./jommu-types.js";
+import type { JommuKirokuboModel } from "./jommu-types.js";
 
 const TEMPLATE_DIR = path.join(process.cwd(), "templates", "jommu-print");
-
-const TRIP_TRIPLES: [string, string, string][] = [
-  ["t4", "t5", "t6"],
-  ["t8", "t9", "ta"],
-  ["tc", "td", "te"],
-  ["tg", "th", "ti"],
-  ["tk", "tl", "tm"],
-  ["to", "tp", "tq"],
-  ["ts", "tt", "tu"],
-  ["tw", "tx", "ty"],
-  ["t10", "t11", "t12"],
-  ["t14", "t15", "t16"],
-];
-
-const FARE_SPAN_IDS = ["t23", "t25", "t27", "t29", "t2b", "t2d", "t2f", "t2h", "t2j", "t2l"];
-
-/** 乗務記録テーブル各行の baseline（#t3 などと同じ段） */
-const TRIP_ROW_BOTTOM = [639, 602, 566, 529, 492, 456, 419, 382, 346, 309];
-
-/** ヘッダー #t1r … と揃えた列左端（px） */
-const COL = {
-  client: 86,
-  charter: 203,
-  origin: 367,
-  depart: 469,
-  via: 573,
-  dest: 698,
-  arrive: 808,
-  companion: 1054,
-} as const;
-
-const MAX_CELL: Record<keyof typeof COL, number> = {
-  client: 14,
-  charter: 12,
-  origin: 18,
-  depart: 6,
-  via: 14,
-  dest: 16,
-  arrive: 6,
-  companion: 12,
-};
 
 let cachedBaseHtml: string | null = null;
 let cachedFontFaceBlock: string | null = null;
@@ -60,29 +19,6 @@ function escapeHtml(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-function trunc(s: string, max: number): string {
-  const t = s.replace(/\s+/g, " ").trim();
-  if (t.length <= max) return t;
-  return `${t.slice(0, max - 1)}…`;
-}
-
-function jmuCell(text: string, left: number, bottom: number, max: number, cls: string): string {
-  const body = escapeHtml(trunc(text, max));
-  return `<span class="t ${cls} jmu-el" style="left:${left}px;bottom:${bottom}px;">${body} </span>`;
-}
-
-function replaceSpanInner(html: string, id: string, innerEscaped: string): string {
-  const safeId = id.replace(/[^a-z0-9]/gi, (ch) => `\\${ch}`);
-  const re = new RegExp(`(<span\\s+id="${safeId}"[^>]*>)([\\s\\S]*?)(</span>)`);
-  return html.replace(re, `$1${innerEscaped}$3`);
-}
-
-function clockPlaceholderOrValue(hm: string | null | undefined): string {
-  const v = hm?.trim();
-  if (!v) return escapeHtml("： ");
-  return `${escapeHtml(v)} `;
 }
 
 function displayClockIn(m: JommuKirokuboModel): string | null {
@@ -97,67 +33,147 @@ function displayClockOut(m: JommuKirokuboModel): string | null {
   return last || null;
 }
 
-function buildHeaderOverlays(m: JommuKirokuboModel): string {
+function td(text: string, ...classes: string[]): string {
+  const cls = classes.filter(Boolean).join(" ");
+  const attr = cls ? ` class="${cls}"` : "";
+  const body = text ? escapeHtml(text) : "";
+  return `<td${attr}>${body}</td>`;
+}
+
+function tripRow(model: JommuKirokuboModel, index: number): string {
+  const trip = model.trips[index];
+  const companion =
+    trip && model.accompanyingCrewName.trim() ? model.accompanyingCrewName.trim() : "";
+  if (!trip) {
+    return `<tr>
+      <td class="idx jmu-c">${index + 1}</td>
+      ${td("")}
+      ${td("")}
+      ${td("")}
+      ${td("", "jmu-c")}
+      ${td("")}
+      ${td("")}
+      ${td("", "jmu-c")}
+      ${td("", "jmu-c")}
+      ${td("", "jmu-r")}
+      ${td("", "jmu-r")}
+      ${td("")}
+      ${td("")}
+    </tr>`;
+  }
+  return `<tr>
+    <td class="idx jmu-c">${index + 1}</td>
+    ${td(trip.clientName)}
+    ${td(trip.charterVehicleNo)}
+    ${td(trip.origin)}
+    ${td(trip.departedHm, "jmu-c")}
+    ${td(trip.viaText)}
+    ${td(trip.destination)}
+    ${td(trip.arrivedHm, "jmu-c")}
+    ${td(trip.distanceKm ? `${trip.distanceKm}km` : "", "jmu-c")}
+    ${td(trip.fareYen ? `${trip.fareYen}円` : "", "jmu-r")}
+    ${td(trip.charterVehicleNo)}
+    ${td(companion)}
+  </tr>`;
+}
+
+function buildJommuMainHtml(m: JommuKirokuboModel): string {
   const y = m.yParts.y;
   const mo = m.yParts.m.replace(/^0+/, "") || m.yParts.m;
   const d = m.yParts.d.replace(/^0+/, "") || m.yParts.d;
+  const cin = displayClockIn(m);
+  const cout = displayClockOut(m);
+  const cinDisp = cin ? escapeHtml(cin) : "";
+  const coutDisp = cout ? escapeHtml(cout) : "";
 
-  const parts: string[] = [];
-  /** 乗務員氏名（2 段目左セル。やや下げてセル中央付近） */
-  parts.push(jmuCell(m.crewName, 46, 726, 16, "s0"));
-  /** 業務年月日の数字（1 段目の 3 区分に分割。ラベル「年」「月」「日」の左側欄） */
-  parts.push(jmuCell(y, 372, 781, 6, "s2"));
-  parts.push(jmuCell(mo, 548, 781, 4, "s2"));
-  parts.push(jmuCell(d, 668, 781, 4, "s2"));
-  /** 事業者名（1 段目右セル） */
-  parts.push(jmuCell(m.operatorName, 818, 781, 28, "s0"));
-  /** 随伴車（表示名）／登録番号／安全運転管理者 */
-  parts.push(jmuCell(m.escortVehicleLabel, 458, 739, 18, "s5"));
-  parts.push(jmuCell(m.escortVehiclePlate, 458, 719, 20, "s5"));
-  parts.push(jmuCell(m.safetyManagerName, 928, 719, 18, "s5"));
+  const rows: string[] = [];
+  for (let i = 0; i < 10; i++) rows.push(tripRow(m, i));
 
-  return parts.join("");
-}
+  const o1 = m.odoStartKm?.trim() ?? "";
+  const o2 = m.odoEndKm?.trim() ?? "";
+  const o3 = m.totalOdoKm?.trim() ?? "";
+  const o4 = m.actualDistanceKmSum.trim();
+  const u = (s: string) => (s ? `${escapeHtml(s)}㎞` : "—");
 
-function tripCell(t: JommuTripRow, key: keyof typeof COL): string {
-  switch (key) {
-    case "client":
-      return t.clientName;
-    case "charter":
-      return t.charterVehicleNo;
-    case "origin":
-      return t.origin;
-    case "depart":
-      return t.departedHm;
-    case "via":
-      return t.viaText;
-    case "dest":
-      return t.destination;
-    case "arrive":
-      return t.arrivedHm;
-    case "companion":
-      return "";
-    default:
-      return "";
-  }
-}
-
-function buildTripGridOverlays(m: JommuKirokuboModel): string {
-  const keys = Object.keys(COL) as (keyof typeof COL)[];
-  const parts: string[] = [];
-  for (let i = 0; i < TRIP_ROW_BOTTOM.length; i++) {
-    const bottom = TRIP_ROW_BOTTOM[i]!;
-    const trip = m.trips[i];
-    for (const k of keys) {
-      if (k === "companion") {
-        parts.push(jmuCell(m.accompanyingCrewName, COL[k], bottom, MAX_CELL[k], "s5"));
-        continue;
-      }
-      const raw = trip ? tripCell(trip, k) : "";
-      parts.push(jmuCell(raw, COL[k], bottom, MAX_CELL[k], "s0"));
-    }
-  }
-  return parts.join("");
+  return `
+<div class="jmu-title">乗 務 記 録 簿</div>
+<div class="jmu-kigen">＜保存期間：最後に記載した日から２年間＞</div>
+<div class="jmu-meta">
+  <div style="display:flex;flex-wrap:wrap;gap:10px 28px;align-items:baseline;">
+    <div style="display:flex;gap:8px;align-items:baseline;">
+      <label>乗務員氏名</label>
+      <span>${escapeHtml(m.crewName)}</span>
+    </div>
+    <div style="display:flex;gap:4px;align-items:baseline;">
+      <label>業務年月日</label>
+      <span>${escapeHtml(y)}</span><span>年</span>
+      <span>${escapeHtml(mo)}</span><span>月</span>
+      <span>${escapeHtml(d)}</span><span>日</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:baseline;min-width:12em;">
+      <label>事業者名</label>
+      <span>${escapeHtml(m.operatorName)}</span>
+    </div>
+  </div>
+  <div class="jmu-meta-row2">
+    <label>随伴車</label>
+    <div class="v">${escapeHtml(m.escortVehicleLabel)}</div>
+    <label>登録番号</label>
+    <div class="v">${escapeHtml(m.escortVehiclePlate)}</div>
+    <label>安全運転管理者名</label>
+    <div class="v">${escapeHtml(m.safetyManagerName)}</div>
+  </div>
+  <div class="jmu-clock-row">
+    <span><strong>始業時刻</strong>　${cinDisp}</span>
+    <span><strong>終業時刻</strong>　${coutDisp}</span>
+  </div>
+</div>
+<div class="jmu-tbl-wrap">
+  <table class="jmu-tbl">
+    <colgroup>
+      <col style="width:36px" />
+      <col style="width:118px" />
+      <col style="width:162px" />
+      <col style="width:102px" />
+      <col style="width:96px" />
+      <col style="width:124px" />
+      <col style="width:110px" />
+      <col style="width:76px" />
+      <col style="width:80px" />
+      <col style="width:88px" />
+      <col style="width:86px" />
+      <col style="width:128px" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th></th>
+        <th>依頼者</th>
+        <th>客車の<br/>車両番号</th>
+        <th>依頼場所</th>
+        <th>開始時刻</th>
+        <th>経由地</th>
+        <th>到着場所</th>
+        <th>到着時刻</th>
+        <th>走行距離</th>
+        <th>料金</th>
+        <th>運転した<br/>車両</th>
+        <th>同伴<br/>乗務員名</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows.join("\n")}
+    </tbody>
+  </table>
+</div>
+<div class="jmu-foot">
+  <span class="lab"><strong>メーター距離等</strong></span>
+  <span class="lab">始業時</span><span class="val">${u(o1)}</span>
+  <span class="lab">終業時</span><span class="val">${u(o2)}</span>
+  <span class="lab">走行距離合計</span><span class="val">${u(o3)}</span>
+  <span class="lab">実車走行距離</span><span class="val">${u(o4)}</span>
+  <span class="lab">売上合計</span><span class="val">${escapeHtml(m.salesTotalYen)}円</span>
+</div>
+`.trim();
 }
 
 async function loadBaseHtml(): Promise<string> {
@@ -202,52 +218,8 @@ async function loadBgDataUrl(): Promise<string> {
   return cachedBgDataUrl;
 }
 
-function applyModel(html: string, m: JommuKirokuboModel): string {
-  let out = html;
-  out = out.replace("__JOMMU_EXTRA__", buildHeaderOverlays(m) + buildTripGridOverlays(m));
-
-  out = replaceSpanInner(out, "t1", clockPlaceholderOrValue(displayClockIn(m)));
-  out = replaceSpanInner(out, "t2", clockPlaceholderOrValue(displayClockOut(m)));
-
-  for (let i = 0; i < TRIP_TRIPLES.length; i++) {
-    const [a, b, km] = TRIP_TRIPLES[i]!;
-    const trip = m.trips[i];
-    out = replaceSpanInner(out, a, escapeHtml("： "));
-    out = replaceSpanInner(out, b, escapeHtml("： "));
-    if (!trip) {
-      out = replaceSpanInner(out, km, escapeHtml("km "));
-      continue;
-    }
-    const dist = trip.distanceKm.trim();
-    out = replaceSpanInner(out, km, dist ? `${escapeHtml(dist)}km ` : escapeHtml("km "));
-  }
-
-  for (let i = 0; i < FARE_SPAN_IDS.length; i++) {
-    const id = FARE_SPAN_IDS[i]!;
-    const trip = m.trips[i];
-    const fare = trip?.fareYen.trim();
-    out = replaceSpanInner(out, id, fare ? `${escapeHtml(fare)}円 ` : escapeHtml("円 "));
-  }
-
-  const o1 = m.odoStartKm?.trim() ?? "";
-  const o2 = m.odoEndKm?.trim() ?? "";
-  const o3 = m.totalOdoKm?.trim() ?? "";
-  const o4 = m.actualDistanceKmSum.trim();
-  out = replaceSpanInner(out, "t17", o1 ? `${escapeHtml(o1)}㎞ ` : escapeHtml("㎞ "));
-  out = replaceSpanInner(out, "t18", o2 ? `${escapeHtml(o2)}㎞ ` : escapeHtml("㎞ "));
-  out = replaceSpanInner(out, "t19", o3 ? `${escapeHtml(o3)}㎞ ` : escapeHtml("㎞ "));
-  out = replaceSpanInner(out, "t1a", o4 ? `${escapeHtml(o4)}㎞ ` : escapeHtml("㎞ "));
-
-  out = replaceSpanInner(out, "t1b", escapeHtml(" "));
-  out = replaceSpanInner(out, "t2t", `${escapeHtml(m.salesTotalYen)}円 `);
-
-  return out;
-}
-
 function injectPrintPageSize(html: string): string {
-  const inj =
-    "<style>@page{size:1286px 909px;margin:0;}" +
-    ".jmu-el{z-index:3;transform-origin:bottom left;}</style>";
+  const inj = "<style>@page{size:1286px 909px;margin:0;}</style>";
   if (html.includes("</head>")) return html.replace("</head>", `${inj}</head>`);
   return `${inj}${html}`;
 }
@@ -259,8 +231,8 @@ export async function buildJommuKirokuboSheetHtml(model: JommuKirokuboModel): Pr
   const [base, fontFace, bg] = await Promise.all([loadBaseHtml(), loadFontFaceBlock(), loadBgDataUrl()]);
   let html = base
     .replace("__JOMMU_FONT_FACE__", fontFace)
-    .replace("__JOMMU_BG__", bg);
-  html = applyModel(html, model);
+    .replace("__JOMMU_BG__", bg)
+    .replace("__JOMMU_MAIN__", buildJommuMainHtml(model));
   if (html.includes("__JOMMU")) {
     throw new Error("jommu: テンプレの埋め込みが不完全です（プレースホルダが残りました）");
   }
