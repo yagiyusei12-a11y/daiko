@@ -108,13 +108,14 @@ html,body{font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN",Meiryo,sans-ser
 .hk-val{background:#fff;min-height:8mm}
 .hk-tall{min-height:18mm;vertical-align:top}
 
-/* 変更事項（新／旧）の入れ子テーブル */
+/* 変更事項（新／旧を横並びに） */
 .hk-change{padding:0!important}
 .hk-change-tbl{width:100%;border-collapse:collapse;table-layout:fixed}
 .hk-change-tbl td{border:1px solid #000;padding:6px 8px;vertical-align:top;font-size:10pt;line-height:1.55}
-.hk-change-row-lbl{background:#fff;text-align:center;width:38%}
-.hk-change-side-lbl{text-align:center;width:8%;background:#fff;font-weight:600}
-.hk-change-side-val{width:46%;background:#fff;min-height:20mm;white-space:pre-wrap}
+.hk-change-row-lbl{background:#fff;text-align:center;width:38%;vertical-align:middle}
+.hk-change-side-head{text-align:center;width:31%;background:#fff;font-weight:600;padding:4px 6px}
+.hk-change-side-val{width:31%;background:#fff;min-height:30mm;white-space:pre-wrap;text-align:center}
+.hk-change-side-val .hk-change-field{font-weight:600;margin-bottom:3mm}
 
 .hk-foot{margin-top:4mm;font-size:8.5pt;line-height:1.6}
 .hk-foot p{margin:0 0 1mm}
@@ -135,74 +136,45 @@ html,body{font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN",Meiryo,sans-ser
 function buildChangeBlock(input: HenkoKisaiInput): string {
   const k = input.kind;
 
+  let fieldLabel = "";
+  let newCell = "";
+  let oldCell = "";
+
   if (k === "mutual_aid_renewal") {
-    const newRange =
+    fieldLabel = "共済契約期間";
+    newCell =
       input.newCoverageFrom || input.newCoverageTo
-        ? `${ymdToWareki(input.newCoverageFrom ?? "")}　〜<br/>${ymdToWareki(input.newCoverageTo ?? "")}`
+        ? `${esc(ymdToWareki(input.newCoverageFrom ?? ""))}　〜<br/>${esc(ymdToWareki(input.newCoverageTo ?? ""))}`
         : "";
-    const oldRange =
+    oldCell =
       input.oldCoverageFrom || input.oldCoverageTo
-        ? `${ymdToWareki(input.oldCoverageFrom ?? "")}　〜<br/>${ymdToWareki(input.oldCoverageTo ?? "")}`
+        ? `${esc(ymdToWareki(input.oldCoverageFrom ?? ""))}　〜<br/>${esc(ymdToWareki(input.oldCoverageTo ?? ""))}`
         : "";
-    return `
-      <table class="hk-change-tbl">
-        <tr>
-          <td class="hk-change-row-lbl" rowspan="2">変更事項</td>
-          <td class="hk-change-side-lbl">新</td>
-          <td class="hk-change-side-val">
-            <div>共済契約期間</div>
-            <div style="margin-top:4mm">${newRange}</div>
-          </td>
-        </tr>
-        <tr>
-          <td class="hk-change-side-lbl">旧</td>
-          <td class="hk-change-side-val">
-            <div>共済契約期間</div>
-            <div style="margin-top:4mm">${oldRange}</div>
-          </td>
-        </tr>
-      </table>`;
+  } else if (k === "escort_swap" || k === "escort_add") {
+    fieldLabel = "随伴用自動車";
+    newCell = lines(input.newEscortPlates);
+    oldCell = lines(input.oldEscortPlates);
+  } else {
+    fieldLabel = "主たる営業所の名称";
+    newCell = esc(input.newTradeName ?? "");
+    oldCell = esc(input.oldTradeName ?? "");
   }
 
-  if (k === "escort_swap" || k === "escort_add") {
-    const newPlates = lines(input.newEscortPlates);
-    const oldPlates = lines(input.oldEscortPlates);
-    return `
-      <table class="hk-change-tbl">
-        <tr>
-          <td class="hk-change-row-lbl" rowspan="2">変更事項</td>
-          <td class="hk-change-side-lbl">新</td>
-          <td class="hk-change-side-val">
-            <div>随伴用自動車</div>
-            <div style="margin-top:4mm">${newPlates}</div>
-          </td>
-        </tr>
-        <tr>
-          <td class="hk-change-side-lbl">旧</td>
-          <td class="hk-change-side-val">
-            <div>随伴用自動車</div>
-            <div style="margin-top:4mm">${oldPlates}</div>
-          </td>
-        </tr>
-      </table>`;
-  }
-
-  // trade_name_change
   return `
     <table class="hk-change-tbl">
       <tr>
         <td class="hk-change-row-lbl" rowspan="2">変更事項</td>
-        <td class="hk-change-side-lbl">新</td>
-        <td class="hk-change-side-val">
-          <div>主たる営業所の名称</div>
-          <div style="margin-top:4mm">${esc(input.newTradeName ?? "")}</div>
-        </td>
+        <td class="hk-change-side-head">新</td>
+        <td class="hk-change-side-head">旧</td>
       </tr>
       <tr>
-        <td class="hk-change-side-lbl">旧</td>
         <td class="hk-change-side-val">
-          <div>主たる営業所の名称</div>
-          <div style="margin-top:4mm">${esc(input.oldTradeName ?? "")}</div>
+          <div class="hk-change-field">${esc(fieldLabel)}</div>
+          <div>${newCell}</div>
+        </td>
+        <td class="hk-change-side-val">
+          <div class="hk-change-field">${esc(fieldLabel)}</div>
+          <div>${oldCell}</div>
         </td>
       </tr>
     </table>`;
