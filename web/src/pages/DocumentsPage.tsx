@@ -5,6 +5,7 @@ import { downloadBrowserBlob } from "../lib/download-blob";
 import { DAIKO_LAW14_DEFAULT_PLEDGE_BODY } from "../lib/daikoLaw14DefaultPledge";
 import { DAIKO_STANDARD_YAKKAN_DEFAULT_BODY } from "../lib/daikoYakkanDefaultBody";
 import ComplaintLedgerPrintBlock from "../components/ComplaintLedgerPrintBlock";
+import InstructionRecordListPrintBlock from "../components/InstructionRecordListPrintBlock";
 import { Card, Tabs, type TabDef } from "../ui";
 
 function PanelHint({ children }: { children: React.ReactNode }): JSX.Element {
