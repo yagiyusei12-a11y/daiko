@@ -77,12 +77,14 @@ textarea {
   font: inherit;
 }
 
+/* ===================== SHELL BASE ===================== */
 .app-shell {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
 }
 
+/* ===================== MOBILE/TABLET HEADER ===================== */
 .app-header {
   position: sticky;
   top: 0;
@@ -154,6 +156,7 @@ textarea {
   outline-offset: 2px;
 }
 
+/* (unused on mobile but kept for compatibility) */
 .app-nav-tabs {
   display: flex;
   flex-wrap: nowrap;
@@ -206,18 +209,146 @@ textarea {
   outline-offset: 2px;
 }
 
+/* ===================== DESKTOP SIDEBAR LAYOUT ===================== */
+.app-shell--sidebar {
+  flex-direction: row;
+  align-items: stretch;
+}
+
+.app-sidebar {
+  width: 160px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-nav-bg);
+  color: var(--color-nav-text);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.14);
+  z-index: 40;
+}
+
+.app-sidebar-brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: -0.02em;
+  color: #fff;
+  padding: 1.1rem 1rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-sidebar-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.6rem 0.5rem;
+}
+
+.app-sidebar-nav a {
+  display: flex;
+  align-items: center;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.83rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.72);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  transition: var(--transition-fast);
+  border: 1px solid transparent;
+}
+
+.app-sidebar-nav a:hover {
+  color: #fff;
+  background: var(--color-nav-hover);
+}
+
+.app-sidebar-nav a.active {
+  color: #fff;
+  font-weight: 600;
+  background: var(--color-nav-active-bg);
+  border-color: rgba(96, 165, 250, 0.35);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.15);
+}
+
+.app-sidebar-nav a:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.app-sidebar-footer {
+  padding: 0.7rem 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.app-sidebar-employee {
+  font-size: 0.75rem;
+  color: rgba(248, 250, 252, 0.72);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-sidebar-logout {
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+  font-weight: 600;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  text-align: center;
+}
+
+.app-sidebar-logout:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #fff;
+}
+
+.app-sidebar-logout:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.app-content-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===================== MAIN CONTENT ===================== */
 .app-main {
   flex: 1;
-  padding: 1.25rem 0.85rem 2.5rem;
-  max-width: min(72rem, 100%);
-  margin: 0 auto;
+  padding: 1.25rem 1.25rem 2.5rem;
   width: 100%;
+}
+
+.app-shell--sidebar .app-main {
+  max-width: none;
+  margin: 0;
 }
 
 .app-main--bottom-nav {
   padding-bottom: 5.25rem;
 }
 
+/* ===================== MOBILE BOTTOM NAV ===================== */
 .app-bottom-nav {
   display: none;
 }

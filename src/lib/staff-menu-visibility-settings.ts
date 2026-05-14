@@ -14,12 +14,12 @@ function asObj(v: unknown): JsonObj {
 
 export const STAFF_HEADER_NAV_IDS = [
   "dashboard",
+  "attendance",
+  "schedule",
   "daily-reports",
   "complaints",
-  "schedule",
-  "attendance",
-  "documents",
   "instruction-records",
+  "documents",
   "settings",
 ] as const;
 

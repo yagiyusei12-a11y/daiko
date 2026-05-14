@@ -49,7 +49,7 @@ export default function Shell(): JSX.Element {
   }
   if (!me) return <Navigate to="/login" replace />;
 
-  const nav = (
+  const navLinks = (
     <>
       {navMeta.map((item) => (
         <NavLink key={item.id} to={item.to} className={() => navClassForMeta(pathname, item)}>
@@ -59,32 +59,49 @@ export default function Shell(): JSX.Element {
     </>
   );
 
+  if (touchNav) {
+    return (
+      <div className="app-shell" data-device={device}>
+        <header className="app-header">
+          <div className="app-header-bar">
+            <span className="app-header-brand">{me.tradeName?.trim() || me.tenant.name}</span>
+            <span className="app-header-meta">{me.employeeDisplayName}</span>
+            <button type="button" className="app-header-logout" onClick={logout}>
+              ログアウト
+            </button>
+          </div>
+        </header>
+        <main className="app-main app-main--bottom-nav">
+          <SavedToastProvider>
+            <Outlet />
+          </SavedToastProvider>
+        </main>
+        <nav className="app-bottom-nav" aria-label="メインメニュー">
+          {navLinks}
+        </nav>
+      </div>
+    );
+  }
+
   return (
-    <div className="app-shell" data-device={device}>
-      <header className="app-header">
-        <div className="app-header-bar">
-          <span className="app-header-brand">{me.tradeName?.trim() || me.tenant.name}</span>
-          <span className="app-header-meta">{me.employeeDisplayName}</span>
-          <button type="button" className="app-header-logout" onClick={logout}>
+    <div className="app-shell app-shell--sidebar" data-device={device}>
+      <nav className="app-sidebar" aria-label="メインメニュー">
+        <div className="app-sidebar-brand">{me.tradeName?.trim() || me.tenant.name}</div>
+        <div className="app-sidebar-nav">{navLinks}</div>
+        <div className="app-sidebar-footer">
+          <span className="app-sidebar-employee">{me.employeeDisplayName}</span>
+          <button type="button" className="app-sidebar-logout" onClick={logout}>
             ログアウト
           </button>
         </div>
-        {!touchNav ? (
-          <nav className="app-nav-tabs app-nav-tabs--header" aria-label="メインメニュー">
-            {nav}
-          </nav>
-        ) : null}
-      </header>
-      <main className={`app-main${touchNav ? " app-main--bottom-nav" : ""}`}>
-        <SavedToastProvider>
-          <Outlet />
-        </SavedToastProvider>
-      </main>
-      {touchNav ? (
-        <nav className="app-bottom-nav" aria-label="メインメニュー">
-          {nav}
-        </nav>
-      ) : null}
+      </nav>
+      <div className="app-content-area">
+        <main className="app-main">
+          <SavedToastProvider>
+            <Outlet />
+          </SavedToastProvider>
+        </main>
+      </div>
     </div>
   );
 }

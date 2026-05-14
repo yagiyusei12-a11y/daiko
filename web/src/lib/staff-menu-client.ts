@@ -4,12 +4,12 @@ import { isFullNavMe } from "../auth";
 /** ヘッダー（`Shell`）と同じ並び・パス。`id` はサーバの `staff-menu-visibility-settings.ts` と一致させる */
 export const STAFF_HEADER_NAV_META = [
   { id: "dashboard", to: "/dashboard", label: "ダッシュボード", match: "prefix" as const },
+  { id: "attendance", to: "/attendance", label: "勤怠", match: "prefix" as const },
+  { id: "schedule", to: "/schedule", label: "スケジュール", match: "schedule" as const },
   { id: "daily-reports", to: "/daily-reports", label: "日報", match: "prefix" as const },
   { id: "complaints", to: "/complaints", label: "苦情", match: "prefix" as const },
-  { id: "schedule", to: "/schedule", label: "スケジュール", match: "schedule" as const },
-  { id: "attendance", to: "/attendance", label: "勤怠", match: "prefix" as const },
-  { id: "documents", to: "/documents", label: "書類", match: "prefix" as const },
   { id: "instruction-records", to: "/instruction-records", label: "指導", match: "prefix" as const },
+  { id: "documents", to: "/documents", label: "書類", match: "prefix" as const },
   { id: "settings", to: "/settings", label: "設定", match: "prefix" as const },
 ] as const;
 
