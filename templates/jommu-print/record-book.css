@@ -1,342 +1,134 @@
-/* ========== Base ========== */
-    *,
-    *::before,
-    *::after {
-      box-sizing: border-box;
-    }
+/* ============================================================
+   乗務記録簿 PDF テンプレート  A4 横
+   色: ラベル #FBE5D6 (サーモン) / 右側ヘッダ #D9D9D9 (グレー)
+   ============================================================ */
 
-    :root {
-      --color-text: #111;
-      --color-muted: #444;
-      --color-border: #1a1a1a;
-      --color-bg: #fafafa;
-      --color-surface: #fff;
-      --color-accent: #2563eb;
-      --radius: 6px;
-      --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-      --font-sans: NotoSansCJKjp-Regular_64, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
-      --font-mono: DejaVuSerif_69, ui-monospace, "Cascadia Code", "Consolas", monospace;
-    }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    body {
-      margin: 0;
-      font-family: var(--font-sans);
-      font-size: 15px;
-      line-height: 1.5;
-      color: var(--color-text);
-      background: var(--color-bg);
-    }
+html, body {
+  font-family: NotoSansCJKjp-Regular_64, "Noto Sans JP",
+               "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif;
+  font-size: 10pt;
+  color: #000;
+  background: #fff;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
 
-    /* ========== Page shell ========== */
-    .sheet {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 1rem 1rem 2rem;
-      background: var(--color-surface);
-      min-height: 100vh;
-    }
+@page { size: A4 landscape; margin: 6mm 8mm; }
 
-    @media (min-width: 900px) {
-      .sheet {
-        padding: 1.5rem 2rem 2.5rem;
-        border-radius: var(--radius);
-        margin: 1rem auto;
-        box-shadow: var(--shadow);
-      }
-    }
+/* ── ページ全体 ── */
+.doc { width: 100%; }
 
-    /* ========== Title row ========== */
-    .sheet-header {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 0.75rem 1.5rem;
-      margin-bottom: 1.25rem;
-      padding-bottom: 1rem;
-      border-bottom: 2px solid var(--color-border);
-    }
+/* ── タイトル行 ── */
+.title-row {
+  position: relative;
+  text-align: center;
+  margin-bottom: 4pt;
+  min-height: 1.6em;
+}
+.doc-title {
+  font-size: 16pt;
+  font-weight: 400;
+  letter-spacing: 0.4em;
+  line-height: 1.4;
+}
+.doc-note {
+  position: absolute;
+  right: 0;
+  top: 0;
+  font-size: 7.5pt;
+  white-space: nowrap;
+  line-height: 1.4;
+}
 
-    .sheet-title {
-      margin: 0;
-      font-size: clamp(1.35rem, 4vw, 1.85rem);
-      font-weight: 600;
-      letter-spacing: 0.35em;
-      line-height: 1.3;
-    }
+/* ── ヘッダー情報（2 ボックス横並び） ── */
+.hdr-wrap {
+  display: flex;
+  width: 100%;
+  align-items: stretch;
+  margin-bottom: 3pt;
+}
+/* 左ボックス 57.5% / ギャップ 7.5% / 右ボックス 35% */
+.hdr-l { flex: 0 0 57.5%; }
+.hdr-gap { flex: 0 0 7.5%; }
+.hdr-r { flex: 0 0 35%; }
 
-    .sheet-note {
-      margin: 0;
-      max-width: 22em;
-      font-size: 0.8rem;
-      color: var(--color-muted);
-      line-height: 1.45;
-      text-align: right;
-    }
+table.hdr-tbl {
+  width: 100%;
+  height: 100%;
+  border-collapse: collapse;
+  font-size: 9pt;
+}
+table.hdr-tbl td {
+  border: 1px solid #000;
+  padding: 3px 5px;
+  vertical-align: middle;
+  line-height: 1.25;
+}
+.lbl   { background: #FBE5D6; text-align: center; white-space: nowrap; }
+.lbl-g { background: #D9D9D9; text-align: center; white-space: nowrap; }
+.val   { background: #fff; }
+.unit  { background: #fff; text-align: center; padding: 3px 2px; white-space: nowrap; }
+.hc    { text-align: center; }
 
-    @media (max-width: 640px) {
-      .sheet-note {
-        text-align: left;
-        max-width: none;
-        width: 100%;
-      }
-    }
+/* ── セクションラベル ── */
+.sec-lbl { font-size: 9pt; margin: 2pt 0 1pt; line-height: 1; }
 
-    /* ========== Form controls ========== */
-    .field-label {
-      display: block;
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: var(--color-muted);
-      margin-bottom: 0.25rem;
-    }
+/* ── 乗務記録テーブル ── */
+table.rec {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 7.5pt;
+  border: 1.5px solid #000;
+  margin-bottom: 2pt;
+}
+table.rec th,
+table.rec td {
+  border: 0.75px solid #888;
+  padding: 0 2px;
+  vertical-align: middle;
+  overflow: hidden;
+}
+table.rec thead th {
+  background: #FBE5D6;
+  text-align: center;
+  font-weight: 400;
+  line-height: 1.2;
+  padding: 2px 1px 4px;
+}
+table.rec tbody .no {
+  text-align: center;
+  font-weight: 400;
+  background: #fff;
+}
+table.rec tbody td { height: 15pt; background: #fff; }
+.tc { text-align: center; }
+.tr { text-align: right; }
 
-    .field-input {
-      width: 100%;
-      padding: 0.45rem 0.55rem;
-      font: inherit;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      background: #fff;
-    }
+/* ── メーター距離等 ── */
+.meter-lbl { font-size: 9pt; margin: 2pt 0 1pt; line-height: 1; }
+table.mtr {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9pt;
+  border: 1.5px solid #000;
+}
+table.mtr td {
+  border: 1px solid #888;
+  padding: 3px 5px;
+  vertical-align: middle;
+  height: 16pt;
+}
+.mtr-lbl { background: #FBE5D6; text-align: center; white-space: nowrap; }
+.mtr-val { background: #fff; text-align: right; }
 
-    .field-input:focus {
-      outline: 2px solid var(--color-accent);
-      outline-offset: 1px;
-      border-color: var(--color-accent);
-    }
-
-    /* ========== Meta sections ========== */
-    .meta-block {
-      margin-bottom: 1.25rem;
-    }
-
-    .meta-grid {
-      display: grid;
-      gap: 0.75rem 1rem;
-    }
-
-    @media (min-width: 720px) {
-      .meta-grid--3 {
-        grid-template-columns: 1fr 1fr 1.2fr;
-      }
-
-      .meta-grid--2 {
-        grid-template-columns: 1fr 1fr;
-      }
-    }
-
-    .meta-row-inline {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: flex-end;
-      gap: 0.75rem 1.25rem;
-    }
-
-    .meta-date {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: flex-end;
-      gap: 0.35rem 0.5rem;
-    }
-
-    .meta-date .field-input {
-      width: auto;
-      min-width: 4.5rem;
-    }
-
-    .meta-date .unit {
-      font-size: 0.9rem;
-      padding-bottom: 0.45rem;
-    }
-
-    .meta-times {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      align-items: flex-end;
-    }
-
-    .meta-times .field {
-      flex: 1 1 140px;
-      min-width: 0;
-    }
-
-    /* ========== Table ========== */
-    .table-scroll {
-      width: 100%;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      margin: 0.5rem 0 1.5rem;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius);
-      background: var(--color-surface);
-    }
-
-    .record-table {
-      width: 100%;
-      min-width: 720px;
-      border-collapse: collapse;
-      font-size: 0.8125rem;
-    }
-
-    .record-table caption {
-      caption-side: top;
-      text-align: left;
-      font-weight: 700;
-      font-size: 0.95rem;
-      padding: 0.65rem 0.75rem;
-      background: #f0f4f8;
-      border-bottom: 1px solid var(--color-border);
-    }
-
-    .record-table th,
-    .record-table td {
-      border: 1px solid #bbb;
-      padding: 0.2rem;
-      vertical-align: middle;
-    }
-
-    .record-table thead th {
-      background: #e8ecf1;
-      font-weight: 600;
-      text-align: center;
-      line-height: 1.25;
-      padding: 0.45rem 0.25rem;
-      white-space: nowrap;
-    }
-
-    .record-table tbody th {
-      background: #f5f5f5;
-      font-weight: 600;
-      text-align: center;
-      width: 2.25rem;
-    }
-
-    .record-table td input {
-      width: 100%;
-      min-width: 0;
-      margin: 0;
-      padding: 0.35rem 0.3rem;
-      font: inherit;
-      font-size: inherit;
-      border: none;
-      background: transparent;
-    }
-
-    .record-table td input:focus {
-      outline: 2px solid var(--color-accent);
-      outline-offset: -2px;
-      background: #f8fbff;
-    }
-
-    .record-table .col-narrow {
-      width: 4.5rem;
-    }
-
-    .record-table .col-time {
-      width: 4.25rem;
-    }
-
-    .record-table .col-km,
-    .record-table .col-yen {
-      width: 4.75rem;
-    }
-
-    .record-table .col-yen input,
-    .record-table .col-km input {
-      text-align: right;
-      font-family: var(--font-mono);
-    }
-
-    /* ========== Footer meter ========== */
-    .meter-section {
-      margin-top: 0.5rem;
-      padding: 1rem;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius);
-      background: #f7f7f7;
-    }
-
-    .meter-section h2 {
-      margin: 0 0 0.75rem;
-      font-size: 0.95rem;
-      font-weight: 700;
-    }
-
-    .meter-grid {
-      display: grid;
-      gap: 0.65rem 1rem;
-    }
-
-    @media (min-width: 640px) {
-      .meter-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-
-    @media (min-width: 960px) {
-      .meter-grid {
-        grid-template-columns: repeat(3, 1fr);
-      }
-    }
-
-    @media (min-width: 1200px) {
-      .meter-grid {
-        grid-template-columns: repeat(5, 1fr);
-      }
-    }
-
-    .meter-field .field-input {
-      font-family: var(--font-mono);
-    }
-
-    .nowrap {
-      white-space: nowrap;
-    }
-
-    /* ========== Print ========== */
-    @media print {
-      body {
-        background: #fff;
-      }
-
-      .sheet {
-        max-width: none;
-        margin: 0;
-        padding: 8mm 10mm;
-        box-shadow: none;
-        border-radius: 0;
-      }
-
-      @page {
-        size: A4 landscape;
-        margin: 10mm;
-      }
-
-      .field-input,
-      .record-table td input {
-        border: none !important;
-        box-shadow: none !important;
-        background: transparent !important;
-      }
-
-      .record-table {
-        min-width: 0;
-        font-size: 9pt;
-      }
-
-      .table-scroll {
-        overflow: visible;
-        border: none;
-      }
-
-      .record-table th,
-      .record-table td {
-        border-color: #000;
-      }
-
-      .sheet-note {
-        font-size: 8pt;
-      }
-    }
+/* ── フォーム番号 ── */
+.form-no {
+  text-align: right;
+  font-size: 7.5pt;
+  margin-top: 2pt;
+  font-family: DejaVuSerif_69, serif;
+  color: #333;
+}

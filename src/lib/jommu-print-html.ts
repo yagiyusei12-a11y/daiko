@@ -1,5 +1,11 @@
 /**
- * 乗務記録簿: templates/jommu-print/record-book（セマンティック HTML + CSS）を埋めて PDF 用ドキュメントを組み立てる。
+ * 乗務記録簿: record-book.css + フォント base64 を組み合わせて
+ * Puppeteer に渡す完全 HTML（A4 横）を組み立てる。
+ *
+ * レイアウトは元帳票画像に合わせた table-based 設計:
+ *  - ヘッダー情報: 左ボックス(57.5%) + ギャップ(7.5%) + 右ボックス(35%)
+ *  - 乗務記録: 12 列 table (No/依頼者/客車/依頼場所/開始/経由/到着場所/到着時刻/距離/料金/車両/同伴)
+ *  - メーター距離等: 10 セル table
  */
 
 import { existsSync } from "node:fs";
@@ -9,250 +15,280 @@ import type { JommuKirokuboModel } from "./jommu-types.js";
 
 const TEMPLATE_DIR = path.join(process.cwd(), "templates", "jommu-print");
 
-let cachedShellHtml: string | null = null;
-let cachedRecordCss: string | null = null;
+let cachedCss: string | null = null;
 let cachedFontFaceBlock: string | null = null;
 
-function escapeAttr(s: string): string {
+/** HTML テキストエスケープ */
+function e(s: string): string {
   return s
     .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
     .replace(/</g, "&lt;")
-    .replace(/\r|\n/g, " ");
+    .replace(/>/g, "&gt;");
 }
 
-function roInput(value: string): string {
-  return `<input type="text" class="field-input" readonly value="${escapeAttr(value)}" />`;
+function displayClockIn(m: JommuKirokuboModel): string {
+  if (m.clockInHm?.trim()) return m.clockInHm.trim();
+  return m.trips[0]?.departedHm?.trim() ?? "";
 }
 
-function displayClockIn(m: JommuKirokuboModel): string | null {
-  if (m.clockInHm?.trim()) return m.clockInHm;
-  const first = m.trips[0]?.departedHm?.trim();
-  return first || null;
+function displayClockOut(m: JommuKirokuboModel): string {
+  if (m.clockOutHm?.trim()) return m.clockOutHm.trim();
+  const last = m.trips[m.trips.length - 1];
+  return last?.arrivedHm?.trim() ?? "";
 }
 
-function displayClockOut(m: JommuKirokuboModel): string | null {
-  if (m.clockOutHm?.trim()) return m.clockOutHm;
-  const last = m.trips.length ? m.trips[m.trips.length - 1]?.arrivedHm?.trim() : "";
-  return last || null;
+/** 空なら単位だけ（小さいグレー）、値があれば値＋単位 */
+function kmCell(v: string): string {
+  const t = v.trim();
+  return t ? `${e(t)}㎞` : `<span style="color:#999;font-size:6.5pt">㎞</span>`;
+}
+function yenCell(v: string): string {
+  const t = v.trim();
+  return t ? `${e(t)}円` : `<span style="color:#999;font-size:6.5pt">円</span>`;
+}
+function meterKm(v: string): string {
+  const t = (v ?? "").trim();
+  return t ? `${e(t)}㎞` : "㎞";
 }
 
-function tripRow(m: JommuKirokuboModel, index: number): string {
-  const n = index + 1;
-  const trip = m.trips[index];
-  const companion =
-    trip && m.accompanyingCrewName.trim() ? m.accompanyingCrewName.trim() : "";
-  const empty = () =>
-    `<tr><th scope="row">${n}</th>${Array.from({ length: 11 }, () => `<td>${roInput("")}</td>`).join("")}</tr>`;
-  if (!trip) return empty();
+function buildRecordRow(m: JommuKirokuboModel, i: number): string {
+  const n = i + 1;
+  const trip = m.trips[i];
+  const companion = e(m.accompanyingCrewName.trim());
 
-  const driven = trip.charterVehicleNo.trim();
-  const km = trip.distanceKm.trim() ? `${trip.distanceKm}km` : "";
-  const yen = trip.fareYen.trim() ? `${trip.fareYen}円` : "";
+  if (!trip) {
+    return `<tr>
+      <th class="no">${n}</th>
+      <td></td><td></td><td></td>
+      <td class="tc">：</td>
+      <td></td><td></td>
+      <td class="tc">：</td>
+      <td class="tr">${kmCell("")}</td>
+      <td class="tr">${yenCell("")}</td>
+      <td class="tc">代行</td>
+      <td>${companion}</td>
+    </tr>`;
+  }
 
   return `<tr>
-    <th scope="row">${n}</th>
-    <td>${roInput(trip.clientName)}</td>
-    <td>${roInput(trip.charterVehicleNo)}</td>
-    <td>${roInput(trip.origin)}</td>
-    <td class="col-time">${roInput(trip.departedHm)}</td>
-    <td>${roInput(trip.viaText)}</td>
-    <td>${roInput(trip.destination)}</td>
-    <td class="col-time">${roInput(trip.arrivedHm)}</td>
-    <td class="col-km">${roInput(km)}</td>
-    <td class="col-yen">${roInput(yen)}</td>
-    <td>${roInput(driven)}</td>
-    <td>${roInput(companion)}</td>
+    <th class="no">${n}</th>
+    <td>${e(trip.clientName)}</td>
+    <td>${e(trip.charterVehicleNo)}</td>
+    <td>${e(trip.origin)}</td>
+    <td class="tc">${e(trip.departedHm) || "："}</td>
+    <td>${e(trip.viaText)}</td>
+    <td>${e(trip.destination)}</td>
+    <td class="tc">${e(trip.arrivedHm) || "："}</td>
+    <td class="tr">${kmCell(trip.distanceKm)}</td>
+    <td class="tr">${yenCell(trip.fareYen)}</td>
+    <td class="tc">代行</td>
+    <td>${companion}</td>
   </tr>`;
 }
 
-function meterVal(s: string): string {
-  const t = s.trim();
-  return t ? `${t}㎞` : "";
-}
-
 function buildMainHtml(m: JommuKirokuboModel): string {
-  const y = m.yParts.y;
+  const y  = m.yParts.y;
   const mo = m.yParts.m.replace(/^0+/, "") || m.yParts.m;
-  const d = m.yParts.d.replace(/^0+/, "") || m.yParts.d;
-  const cin = displayClockIn(m) ?? "";
-  const cout = displayClockOut(m) ?? "";
+  const d  = m.yParts.d.replace(/^0+/, "") || m.yParts.d;
+  const cin  = e(displayClockIn(m));
+  const cout = e(displayClockOut(m));
+  const plate = e(m.escortVehiclePlate || m.escortVehicleLabel);
 
-  const rows: string[] = [];
-  for (let i = 0; i < 10; i++) rows.push(tripRow(m, i));
+  const rows = Array.from({ length: 10 }, (_, i) => buildRecordRow(m, i)).join("\n");
 
-  const o1 = m.odoStartKm?.trim() ?? "";
-  const o2 = m.odoEndKm?.trim() ?? "";
-  const o3 = m.totalOdoKm?.trim() ?? "";
-  const o4 = m.actualDistanceKmSum.trim();
+  const o1    = m.odoStartKm?.trim() ?? "";
+  const o2    = m.odoEndKm?.trim() ?? "";
+  const o3    = m.totalOdoKm?.trim() ?? "";
+  const o4    = m.actualDistanceKmSum.trim();
+  const sales = m.salesTotalYen.trim();
 
-  return `
-    <header class="sheet-header">
-      <h1 class="sheet-title">乗 務 記 録 簿</h1>
-      <p class="sheet-note">＜保存期間：最後に記載した日から２年間＞</p>
-    </header>
+  return `<div class="doc">
 
-    <section class="meta-block" aria-label="ヘッダー情報">
-      <div class="meta-grid meta-grid--3">
-        <div class="field">
-          <label class="field-label" for="crew-name">乗務員氏名</label>
-          <input class="field-input" id="crew-name" name="crewName" type="text" readonly value="${escapeAttr(m.crewName)}" />
-        </div>
-        <div class="field">
-          <span class="field-label">業務年月日</span>
-          <div class="meta-date" role="group" aria-label="業務年月日">
-            <input class="field-input" name="businessYear" type="text" readonly value="${escapeAttr(y)}" aria-label="年" />
-            <span class="unit">年</span>
-            <input class="field-input" name="businessMonth" type="text" readonly value="${escapeAttr(mo)}" aria-label="月" />
-            <span class="unit">月</span>
-            <input class="field-input" name="businessDay" type="text" readonly value="${escapeAttr(d)}" aria-label="日" />
-            <span class="unit">日</span>
-          </div>
-        </div>
-        <div class="field">
-          <label class="field-label" for="operator-name">事業者名</label>
-          <input class="field-input" id="operator-name" name="operatorName" type="text" readonly value="${escapeAttr(m.operatorName)}" />
-        </div>
-      </div>
+  <!-- タイトル -->
+  <div class="title-row">
+    <span class="doc-title">乗 務 記 録 簿</span>
+    <span class="doc-note">＜保存期間：最後に記載した日から２年間＞</span>
+  </div>
 
-      <div class="meta-times meta-block">
-        <div class="field">
-          <label class="field-label" for="clock-in">始業時刻</label>
-          <input class="field-input" id="clock-in" name="clockIn" type="text" readonly value="${escapeAttr(cin)}" />
-        </div>
-        <div class="field">
-          <label class="field-label" for="clock-out">終業時刻</label>
-          <input class="field-input" id="clock-out" name="clockOut" type="text" readonly value="${escapeAttr(cout)}" />
-        </div>
-      </div>
+  <!-- ヘッダー情報 -->
+  <div class="hdr-wrap">
+    <!-- 左ボックス（乗務員・日時・始終業・随伴車） -->
+    <div class="hdr-l">
+      <table class="hdr-tbl">
+        <colgroup>
+          <col style="width:13%">   <!-- 乗務員氏名ラベル -->
+          <col style="width:11%">   <!-- 始業時刻値 / 名前値col1 -->
+          <col style="width:13%">   <!-- 終業時刻ラベル -->
+          <col style="width:11%">   <!-- 終業時刻値 / 名前値col3 -->
+          <col style="width:13%">   <!-- 随伴車ラベル / 業務年月日ラベル -->
+          <col style="width:11.8%"> <!-- 年 / 随伴車値col1 -->
+          <col style="width:4%">    <!-- 年単位 -->
+          <col style="width:7.4%">  <!-- 月 -->
+          <col style="width:4%">    <!-- 月単位 -->
+          <col style="width:7.4%">  <!-- 日 -->
+          <col style="width:4%">    <!-- 日単位 -->
+        </colgroup>
+        <tbody>
+          <tr>
+            <td class="lbl">乗務員氏名</td>
+            <td class="val" colspan="3">${e(m.crewName)}</td>
+            <td class="lbl">業務年月日</td>
+            <td class="val hc">${e(y)}</td>
+            <td class="unit">年</td>
+            <td class="val hc">${e(mo)}</td>
+            <td class="unit">月</td>
+            <td class="val hc">${e(d)}</td>
+            <td class="unit">日</td>
+          </tr>
+          <tr>
+            <td class="lbl">始業時刻</td>
+            <td class="val hc">${cin}</td>
+            <td class="lbl">終業時刻</td>
+            <td class="val hc">${cout}</td>
+            <td class="lbl" style="line-height:1.2">随伴車<br>登録番号</td>
+            <td class="val" colspan="6">${plate}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-      <div class="meta-grid meta-grid--2">
-        <div class="field">
-          <label class="field-label" for="escort-vehicle">随伴車</label>
-          <input class="field-input" id="escort-vehicle" name="escortVehicle" type="text" readonly value="${escapeAttr(m.escortVehicleLabel)}" />
-        </div>
-        <div class="field">
-          <label class="field-label" for="vehicle-reg">登録番号</label>
-          <input class="field-input" id="vehicle-reg" name="vehicleRegistration" type="text" readonly value="${escapeAttr(m.escortVehiclePlate)}" />
-        </div>
-        <div class="field" style="grid-column: 1 / -1">
-          <label class="field-label" for="safety-manager">安全運転　管理者名</label>
-          <input class="field-input" id="safety-manager" name="safetyManagerName" type="text" readonly value="${escapeAttr(m.safetyManagerName)}" />
-        </div>
-      </div>
-    </section>
+    <div class="hdr-gap"></div>
 
-    <section class="meta-block" aria-label="乗務記録">
-      <div class="table-scroll">
-        <table class="record-table">
-          <caption>乗務記録</caption>
-          <thead>
-            <tr>
-              <th scope="col">No</th>
-              <th scope="col">依頼者</th>
-              <th scope="col">客車の車両番号</th>
-              <th scope="col">依頼場所</th>
-              <th scope="col">開始時刻</th>
-              <th scope="col">経由地</th>
-              <th scope="col">到着場所</th>
-              <th scope="col">到着時刻</th>
-              <th scope="col">走行距離<span class="nowrap">（km）</span></th>
-              <th scope="col">料金<span class="nowrap">（円）</span></th>
-              <th scope="col">運転した車両<span class="nowrap">（代行など）</span></th>
-              <th scope="col">同伴乗務員名</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows.join("\n")}
-          </tbody>
-        </table>
-      </div>
-    </section>
+    <!-- 右ボックス（事業者名・安全運転管理者名） -->
+    <div class="hdr-r">
+      <table class="hdr-tbl">
+        <colgroup>
+          <col style="width:21.4%">
+          <col style="width:78.6%">
+        </colgroup>
+        <tbody>
+          <tr>
+            <td class="lbl-g">事業者名</td>
+            <td class="val">${e(m.operatorName)}</td>
+          </tr>
+          <tr>
+            <td class="lbl-g" style="line-height:1.2">安全運転<br>管理者名</td>
+            <td class="val">${e(m.safetyManagerName)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 
-    <section class="meter-section" aria-labelledby="meter-heading">
-      <h2 id="meter-heading">メーター距離等</h2>
-      <div class="meter-grid">
-        <div class="meter-field field">
-          <label class="field-label" for="odo-start">始業時（㎞）</label>
-          <input class="field-input" id="odo-start" name="odoStartKm" type="text" readonly value="${escapeAttr(meterVal(o1))}" />
-        </div>
-        <div class="meter-field field">
-          <label class="field-label" for="odo-end">終業時（㎞）</label>
-          <input class="field-input" id="odo-end" name="odoEndKm" type="text" readonly value="${escapeAttr(meterVal(o2))}" />
-        </div>
-        <div class="meter-field field">
-          <label class="field-label" for="odo-total">走行距離合計（㎞）</label>
-          <input class="field-input" id="odo-total" name="odoTotalKm" type="text" readonly value="${escapeAttr(meterVal(o3))}" />
-        </div>
-        <div class="meter-field field">
-          <label class="field-label" for="actual-km">実車走行距離（㎞）</label>
-          <input class="field-input" id="actual-km" name="actualDistanceKm" type="text" readonly value="${escapeAttr(meterVal(o4))}" />
-        </div>
-        <div class="meter-field field">
-          <label class="field-label" for="sales-total">売上合計（円）</label>
-          <input class="field-input" id="sales-total" name="salesTotalYen" type="text" readonly value="${escapeAttr(m.salesTotalYen ? `${m.salesTotalYen}円` : "")}" />
-        </div>
-      </div>
-    </section>
-  `.trim();
-}
+  <!-- 乗務記録テーブル -->
+  <div class="sec-lbl">乗務記録</div>
+  <table class="rec">
+    <colgroup>
+      <col style="width:2.5%">   <!-- No -->
+      <col style="width:10%">    <!-- 依頼者 -->
+      <col style="width:12.5%">  <!-- 客車の車両番号 -->
+      <col style="width:11.2%">  <!-- 依頼場所 -->
+      <col style="width:6.2%">   <!-- 開始時刻 -->
+      <col style="width:10%">    <!-- 経由地 -->
+      <col style="width:12.5%">  <!-- 到着場所 -->
+      <col style="width:6.2%">   <!-- 到着時刻 -->
+      <col style="width:7.5%">   <!-- 走行距離 -->
+      <col style="width:7.5%">   <!-- 料金 -->
+      <col style="width:7.5%">   <!-- 運転した車両 -->
+      <col style="width:6.4%">   <!-- 同伴乗務員名 -->
+    </colgroup>
+    <thead>
+      <tr>
+        <th></th>
+        <th>依頼者</th>
+        <th>客車の<br>車両番号</th>
+        <th>依頼場所</th>
+        <th>開始時刻</th>
+        <th>経由地</th>
+        <th>到着場所</th>
+        <th>到着時刻</th>
+        <th>走行距離</th>
+        <th>料金</th>
+        <th>運転した<br>車両</th>
+        <th>同伴<br>乗務員名</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+    </tbody>
+  </table>
 
-async function loadShellHtml(): Promise<string> {
-  if (cachedShellHtml) return cachedShellHtml;
-  const p = path.join(TEMPLATE_DIR, "record-book.html");
-  if (!existsSync(p)) {
-    throw new Error(`乗務記録簿テンプレが見つかりません: ${p}（cwd=${process.cwd()}）`);
-  }
-  cachedShellHtml = await fs.readFile(p, "utf8");
-  return cachedShellHtml;
+  <!-- メーター距離等 -->
+  <div class="meter-lbl">メーター距離等</div>
+  <table class="mtr">
+    <colgroup>
+      <col style="width:8.75%">  <!-- 始業時ラベル -->
+      <col style="width:10%">    <!-- 始業時値 -->
+      <col style="width:8.75%">  <!-- 終業時ラベル -->
+      <col style="width:10%">    <!-- 終業時値 -->
+      <col style="width:8.75%">  <!-- 走行距離合計ラベル -->
+      <col style="width:10%">    <!-- 走行距離合計値 -->
+      <col style="width:8.75%">  <!-- 実車走行距離ラベル -->
+      <col style="width:10%">    <!-- 実車走行距離値 -->
+      <col style="width:10%">    <!-- 売上合計ラベル -->
+      <col style="width:15%">    <!-- 売上合計値 -->
+    </colgroup>
+    <tbody>
+      <tr>
+        <td class="mtr-lbl">始業時</td>
+        <td class="mtr-val">${meterKm(o1)}</td>
+        <td class="mtr-lbl">終業時</td>
+        <td class="mtr-val">${meterKm(o2)}</td>
+        <td class="mtr-lbl">走行距離合計</td>
+        <td class="mtr-val">${meterKm(o3)}</td>
+        <td class="mtr-lbl">実車走行距離</td>
+        <td class="mtr-val">${meterKm(o4)}</td>
+        <td class="mtr-lbl">売上合計</td>
+        <td class="mtr-val">${sales ? e(sales) + "円" : "円"}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="form-no">0000-0000</div>
+</div>`;
 }
 
 async function loadRecordBookCss(): Promise<string> {
-  if (cachedRecordCss) return cachedRecordCss;
+  if (cachedCss) return cachedCss;
   const p = path.join(TEMPLATE_DIR, "record-book.css");
-  if (!existsSync(p)) {
-    throw new Error(`乗務記録簿 CSS が見つかりません: ${p}`);
-  }
-  cachedRecordCss = await fs.readFile(p, "utf8");
-  return cachedRecordCss;
+  if (!existsSync(p)) throw new Error(`乗務記録簿 CSS が見つかりません: ${p}`);
+  cachedCss = await fs.readFile(p, "utf8");
+  return cachedCss;
 }
 
 async function loadFontFaceBlock(): Promise<string> {
   if (cachedFontFaceBlock) return cachedFontFaceBlock;
   const fonts: { file: string; family: string }[] = [
-    { file: "DejaVuSerif_69.woff", family: "DejaVuSerif_69" },
+    { file: "DejaVuSerif_69.woff",          family: "DejaVuSerif_69" },
     { file: "NotoSansCJKjp-Regular_64.woff", family: "NotoSansCJKjp-Regular_64" },
     { file: "NotoSansCJKjp-Regular_64_1.woff", family: "NotoSansCJKjp-Regular_64_1" },
   ];
   const parts: string[] = [];
   for (const { file, family } of fonts) {
     const fp = path.join(TEMPLATE_DIR, "fonts", file);
-    if (!existsSync(fp)) {
-      throw new Error("jommu: 乗務記録簿テンプレのフォントが欠けています。再デプロイを試してください。");
-    }
+    if (!existsSync(fp)) throw new Error("jommu: 乗務記録簿テンプレのフォントが欠けています。再デプロイを試してください。");
     const buf = await fs.readFile(fp);
-    const url = `data:font/woff;base64,${buf.toString("base64")}`;
-    parts.push(`@font-face{font-family:${family};src:url("${url}") format("woff");}`);
+    parts.push(`@font-face{font-family:${family};src:url("data:font/woff;base64,${buf.toString("base64")}") format("woff");}`);
   }
   cachedFontFaceBlock = parts.join("\n");
   return cachedFontFaceBlock;
 }
 
 /**
- * Puppeteer でそのまま setContent できる完全 HTML（A4 横印刷は record-book.css の @page に従う）。
+ * Puppeteer の setContent に渡せる完全 HTML。
+ * @page は CSS 内で A4 landscape を指定済み（preferCSSPageSize: true で有効）。
  */
 export async function buildJommuKirokuboSheetHtml(model: JommuKirokuboModel): Promise<string> {
-  const [shell, fontFace, css] = await Promise.all([
-    loadShellHtml(),
-    loadFontFaceBlock(),
-    loadRecordBookCss(),
-  ]);
-  const html = shell
-    .replace("__JOMMU_FONT_FACE__", fontFace)
-    .replace("__JOMMU_STYLES__", css)
-    .replace("__JOMMU_MAIN__", buildMainHtml(model));
-  if (html.includes("__JOMMU")) {
-    throw new Error("jommu: テンプレの埋め込みが不完全です（プレースホルダが残りました）");
-  }
-  return html;
+  const [fontFace, css] = await Promise.all([loadFontFaceBlock(), loadRecordBookCss()]);
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<style>${fontFace}</style>
+<style>${css}</style>
+</head>
+<body>
+${buildMainHtml(model)}
+</body>
+</html>`;
 }
