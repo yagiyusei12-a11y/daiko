@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
+import { useAuth } from "../auth";
+import {
+  STAFF_HEADER_NAV_META,
+  STAFF_SUB_TAB_LABELS,
+  buildStaffMenuVisibilityPut,
+  staffVisDraftFromApi,
+  type StaffVisDraft,
+} from "../lib/staff-menu-client";
 import { useSavedToast } from "../saved-toast";
 import { Err } from "../ui";
 
@@ -42,6 +50,10 @@ type BasicsApi = {
   regularHolidays?: RegularHolidayEntry[];
   temporaryClosureDates?: string[];
   breathalyzers?: BreathalyzerEntry[];
+  staffMenuVisibility?: {
+    allowedHeaderNavIds: string[] | null;
+    allowedSubTabIdsByNav: Partial<Record<string, string[]>>;
+  } | null;
 };
 
 function newId(prefix: string): string {
@@ -210,6 +222,7 @@ type Props = {
 };
 
 export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JSX.Element {
+  const { refreshMe } = useAuth();
   const { flashSaved } = useSavedToast();
   const [localErr, setLocalErr] = useState<string | null>(null);
   const [draft, setDraft] = useState<BusinessBasicsV2 | null>(null);
@@ -231,6 +244,7 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
   const [tempYm, setTempYm] = useState(currentYearMonth);
   const [tempSelected, setTempSelected] = useState<Set<string>>(() => new Set());
   const [bzMethodDraft, setBzMethodDraft] = useState<Record<string, string>>({});
+  const [staffVis, setStaffVis] = useState<StaffVisDraft>(() => staffVisDraftFromApi(null));
 
   const load = useCallback(async () => {
     setLocalErr(null);
@@ -240,6 +254,7 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
       return;
     }
     setDraft(fromApiBasics(r.data));
+    setStaffVis(staffVisDraftFromApi(r.data.staffMenuVisibility ?? null));
   }, [setErr]);
 
   useEffect(() => {
@@ -254,6 +269,22 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
         return;
       }
     }
+    const navOnCount = STAFF_HEADER_NAV_META.filter((m) => staffVis.nav[m.id]).length;
+    if (navOnCount === 0) {
+      setLocalErr("管理者以外向けに表示するヘッダーを1つ以上選んでください。");
+      return;
+    }
+    for (const [navId, defs] of Object.entries(STAFF_SUB_TAB_LABELS)) {
+      if (!staffVis.nav[navId]) continue;
+      const row = staffVis.tabs[navId];
+      const nOn = defs.filter((d) => row[d.id]).length;
+      if (nOn === 0) {
+        const label = STAFF_HEADER_NAV_META.find((x) => x.id === navId)?.label ?? navId;
+        setLocalErr(`「${label}」内のタブを1つ以上選んでください。`);
+        return;
+      }
+    }
+    const smPut = buildStaffMenuVisibilityPut(staffVis);
     setBusy(true);
     setErr(null);
     setLocalErr(null);
@@ -267,6 +298,10 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
         regularHolidays: draft.regularHolidays,
         temporaryClosureDates: draft.temporaryClosureDates,
         breathalyzers: draft.breathalyzers,
+        staffMenuVisibility: {
+          allowedHeaderNavIds: smPut.allowedHeaderNavIds,
+          allowedSubTabIdsByNav: smPut.allowedSubTabIdsByNav,
+        },
       },
     });
     setBusy(false);
@@ -274,6 +309,7 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
     else {
       flashSaved();
       void load();
+      void refreshMe();
     }
   }
 
@@ -424,6 +460,7 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
 
   return (
     <div className="settings-form settings-basic-root">
+      <Err msg={localErr} />
       <p className="settings-hint">
         営業時間は翌未明まで「26:00」のように入力できます。基本は全曜日共通です。曜日別・特定日で上書きすると、その優先順位で勤怠スケジュールの軸に使われます（特定日 → 曜日 → 基本）。
       </p>
@@ -693,6 +730,86 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
       <button type="button" className="settings-secondary" onClick={() => openTempDialog()}>
         臨時休業日を編集（カレンダー）
       </button>
+      </div>
+
+      <div className="settings-section-panel">
+        <h3 className="settings-subtitle">管理者以外のメニュー</h3>
+        <p className="settings-hint" style={{ marginTop: 0 }}>
+          権限に <code>*</code> または <code>nav.full</code> があるユーザー（全メニュー）は常にすべて表示されます。それ以外のユーザーには、下でチェックしたヘッダーとタブだけが表示されます。
+        </p>
+        <p className="settings-hint">すべてのヘッダーをオンにすると制限なし（従来どおり）です。</p>
+
+        <p style={{ margin: "0.75rem 0 0.35rem", fontWeight: 600, fontSize: "0.95rem" }}>ヘッダー</p>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(11rem, 1fr))",
+            gap: "0.35rem",
+          }}
+        >
+          {STAFF_HEADER_NAV_META.map((m) => (
+            <label key={m.id} className="settings-inline-check settings-check--block">
+              <input
+                type="checkbox"
+                checked={Boolean(staffVis.nav[m.id])}
+                onChange={(e) =>
+                  setStaffVis((prev) => ({
+                    ...prev,
+                    nav: { ...prev.nav, [m.id]: e.target.checked },
+                  }))
+                }
+              />{" "}
+              {m.label}
+            </label>
+          ))}
+        </div>
+
+        <p style={{ margin: "1rem 0 0.35rem", fontWeight: 600, fontSize: "0.95rem" }}>画面内タブ（ヘッダーがオンのときのみ有効）</p>
+        {STAFF_HEADER_NAV_META.map((m) => {
+          const subs = STAFF_SUB_TAB_LABELS[m.id];
+          if (!subs) return null;
+          const parentOn = Boolean(staffVis.nav[m.id]);
+          return (
+            <fieldset
+              key={m.id}
+              style={{
+                marginTop: "0.65rem",
+                border: "1px solid var(--color-border)",
+                borderRadius: "var(--radius-sm)",
+                padding: "0.5rem 0.75rem",
+              }}
+              disabled={!parentOn}
+            >
+              <legend style={{ fontSize: "0.9rem", padding: "0 0.25rem" }}>{m.label}</legend>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(10rem, 1fr))",
+                  gap: "0.3rem",
+                }}
+              >
+                {subs.map((t) => (
+                  <label key={t.id} className="settings-inline-check settings-check--block">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(staffVis.tabs[m.id]?.[t.id])}
+                      onChange={(e) =>
+                        setStaffVis((prev) => ({
+                          ...prev,
+                          tabs: {
+                            ...prev.tabs,
+                            [m.id]: { ...(prev.tabs[m.id] ?? {}), [t.id]: e.target.checked },
+                          },
+                        }))
+                      }
+                    />{" "}
+                    {t.label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          );
+        })}
       </div>
 
       <div className="settings-actions" style={{ marginTop: "1.25rem" }}>

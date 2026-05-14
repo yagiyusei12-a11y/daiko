@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import bcrypt from "bcryptjs";
 import { authenticate } from "../auth/pre.js";
 import { userEffectivePermissionList } from "../lib/permissions.js";
+import { coerceStaffMenuVisibilityFromCustomJson } from "../lib/staff-menu-visibility-settings.js";
 import { prisma } from "../db.js";
 import { hashToken, randomRefreshToken } from "../lib/tokens.js";
 
@@ -142,7 +143,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
             id: true,
             name: true,
             slug: true,
-            settings: { select: { legalTradeName: true } },
+            settings: { select: { legalTradeName: true, customJson: true } },
           },
         },
         roles: { include: { role: true } },
@@ -155,6 +156,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const employeeDisplayName = user.employee
       ? `${user.employee.familyName} ${user.employee.givenName}`.trim()
       : (user.displayName?.trim() || user.email);
+    const sm = coerceStaffMenuVisibilityFromCustomJson(user.tenant.settings?.customJson);
     return {
       user: {
         id: user.id,
@@ -166,6 +168,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         tenant: { id: user.tenant.id, name: user.tenant.name, slug: user.tenant.slug },
         roles: user.roles.map((r) => r.role.name),
         permissions,
+        staffMenuVisibility: {
+          allowedHeaderNavIds: sm.allowedHeaderNavIds,
+          allowedSubTabIdsByNav: sm.allowedSubTabIdsByNav,
+        },
       },
     };
   });

@@ -1,33 +1,34 @@
-import { NavLink, Outlet, Navigate, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { NavLink, Outlet, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useMemo } from "react";
 import { useAuth } from "../auth";
 import { useDeviceKind } from "../hooks/useDeviceKind";
 import { SavedToastProvider } from "../saved-toast";
-
-const navItems: { to: string; label: string; match: "schedule" | "prefix" }[] = [
-  { to: "/dashboard", label: "ダッシュボード", match: "prefix" },
-  { to: "/daily-reports", label: "日報", match: "prefix" },
-  { to: "/complaints", label: "苦情", match: "prefix" },
-  { to: "/schedule", label: "スケジュール", match: "schedule" },
-  { to: "/attendance", label: "勤怠", match: "prefix" },
-  { to: "/documents", label: "書類", match: "prefix" },
-  { to: "/instruction-records", label: "指導", match: "prefix" },
-  { to: "/settings", label: "設定", match: "prefix" },
-];
-
-function navClass(pathname: string, item: (typeof navItems)[0]): string {
-  if (item.match === "schedule") {
-    return pathname === "/" || pathname.startsWith("/schedule") ? "active" : "";
-  }
-  return pathname === item.to || pathname.startsWith(`${item.to}/`) ? "active" : "";
-}
+import {
+  filterHeaderNavMetaForMe,
+  firstAllowedNavTo,
+  isHeaderNavIdAllowed,
+  navClassForMeta,
+  pathnameToHeaderNavId,
+  STAFF_HEADER_NAV_META,
+} from "../lib/staff-menu-client";
 
 export default function Shell(): JSX.Element {
   const { me, loading, logout } = useAuth();
   const device = useDeviceKind();
   const location = useLocation();
   const pathname = location.pathname;
+  const navigate = useNavigate();
   const touchNav = device === "phone" || device === "tablet";
+
+  const navMeta = useMemo(() => (me ? filterHeaderNavMetaForMe(me) : [...STAFF_HEADER_NAV_META]), [me]);
+
+  useEffect(() => {
+    if (!me) return;
+    const cur = pathnameToHeaderNavId(pathname);
+    if (!isHeaderNavIdAllowed(me, cur)) {
+      navigate(firstAllowedNavTo(me), { replace: true });
+    }
+  }, [me, pathname, navigate]);
 
   useEffect(() => {
     if (!me) {
@@ -50,12 +51,8 @@ export default function Shell(): JSX.Element {
 
   const nav = (
     <>
-      {navItems.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          className={() => navClass(pathname, item)}
-        >
+      {navMeta.map((item) => (
+        <NavLink key={item.id} to={item.to} className={() => navClassForMeta(pathname, item)}>
           {item.label}
         </NavLink>
       ))}

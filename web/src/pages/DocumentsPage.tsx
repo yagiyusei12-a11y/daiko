@@ -7,6 +7,8 @@ import { DAIKO_STANDARD_YAKKAN_DEFAULT_BODY } from "../lib/daikoYakkanDefaultBod
 import ComplaintLedgerPrintBlock from "../components/ComplaintLedgerPrintBlock";
 import InstructionRecordListPrintBlock from "../components/InstructionRecordListPrintBlock";
 import { Card, Tabs, type TabDef } from "../ui";
+import { useAuth } from "../auth";
+import { filterSubTabsForMe } from "../lib/staff-menu-client";
 
 function PanelHint({ children }: { children: React.ReactNode }): JSX.Element {
   return <p className="settings-hint" style={{ marginTop: 0 }}>{children}</p>;
@@ -1173,6 +1175,7 @@ function HenkoKisaiPrintBlock(): JSX.Element {
 }
 
 export default function DocumentsPage(): JSX.Element {
+  const { me } = useAuth();
   const [tab, setTab] = useState("nippo");
 
   const tabItems: TabDef[] = [
@@ -1226,12 +1229,21 @@ export default function DocumentsPage(): JSX.Element {
     },
   ];
 
+  const visTabs = me ? filterSubTabsForMe("documents", tabItems, me) : tabItems;
+  const visTabKey = visTabs.map((t) => t.id).join(",");
+
+  useEffect(() => {
+    if (!visTabs.some((t) => t.id === tab)) {
+      setTab(visTabs[0]?.id ?? "nippo");
+    }
+  }, [tab, visTabKey]);
+
   return (
     <Card title="書類を作る">
       <p className="settings-hint" style={{ marginTop: 0 }}>
         帳票・様式は種類ごとのタブに分けています。出力機能は順次追加します。
       </p>
-      <Tabs items={tabItems} activeId={tab} onActiveChange={setTab} aria-label="書類の種類" />
+      <Tabs items={visTabs} activeId={tab} onActiveChange={setTab} aria-label="書類の種類" />
     </Card>
   );
 }

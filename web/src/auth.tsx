@@ -9,6 +9,12 @@ import {
 } from "react";
 import { apiFetch, clearTokens, getAccessToken, setTokens } from "./api";
 
+/** `/me` が返す `staffMenuVisibility`（テナント設定のコピー） */
+export type StaffMenuVisibilityClient = {
+  allowedHeaderNavIds: string[] | null;
+  allowedSubTabIdsByNav: Partial<Record<string, string[]>>;
+};
+
 export type MeUser = {
   id: string;
   email: string;
@@ -19,6 +25,7 @@ export type MeUser = {
   tenant: { id: string; name: string; slug: string };
   roles: string[];
   permissions: string[];
+  staffMenuVisibility?: StaffMenuVisibilityClient;
 };
 
 type AuthCtx = {

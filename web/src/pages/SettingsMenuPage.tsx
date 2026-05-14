@@ -8,6 +8,7 @@ import PricingSettingsPanel from "./PricingSettingsPanel";
 import BasicSettingsPanel from "./BasicSettingsPanel";
 import TillSettingsPanel from "./TillSettingsPanel";
 import OnlineBookingSettingsPanel from "./OnlineBookingSettingsPanel";
+import { filterSubTabsForMe } from "../lib/staff-menu-client";
 
 const JP_PREFECTURES = [
   "北海道",
@@ -986,6 +987,15 @@ export default function SettingsMenuPage(): JSX.Element {
     { id: "online-booking", label: "ネット予約", children: onlineBookingPanel },
   ];
 
+  const visTabs = me ? filterSubTabsForMe("settings", tabItems, me) : tabItems;
+  const visTabKey = visTabs.map((t) => t.id).join(",");
+
+  useEffect(() => {
+    if (!visTabs.some((t) => t.id === tab)) {
+      setTab(visTabs[0]?.id ?? "company");
+    }
+  }, [tab, visTabKey]);
+
   return (
     <Card title="設定">
       <Err msg={err} />
@@ -994,7 +1004,7 @@ export default function SettingsMenuPage(): JSX.Element {
           {msg}
         </p>
       ) : null}
-      <Tabs items={tabItems} activeId={tab} onActiveChange={setTab} aria-label="設定の種類" />
+      <Tabs items={visTabs} activeId={tab} onActiveChange={setTab} aria-label="設定の種類" />
       {odoHistoryOpen && vehSel && vehSel !== "new" ? (
         <div
           className="pricing-modal-backdrop"

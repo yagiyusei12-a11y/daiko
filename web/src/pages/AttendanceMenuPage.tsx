@@ -3,6 +3,7 @@ import { apiFetch } from "../api";
 import { useAuth, isStaffShiftOnlyMe } from "../auth";
 import { useSavedToast } from "../saved-toast";
 import { Card, Err, Tabs, type TabDef } from "../ui";
+import { filterSubTabsForMe } from "../lib/staff-menu-client";
 
 type EmployeeRow = {
   id: string;
@@ -1317,11 +1318,20 @@ export default function AttendanceMenuPage(): JSX.Element {
     { id: "timecard", label: "タイムカード", children: timeCardPanel },
   ];
 
+  const visTabs = me ? filterSubTabsForMe("attendance", tabItems, me) : tabItems;
+  const visTabKey = visTabs.map((t) => t.id).join(",");
+
+  useEffect(() => {
+    if (!visTabs.some((t) => t.id === tab)) {
+      setTab(visTabs[0]?.id ?? "shift");
+    }
+  }, [tab, visTabKey]);
+
   return (
     <>
       <Card title="勤怠">
         <Err msg={err} />
-        <Tabs items={tabItems} activeId={tab} onActiveChange={setTab} aria-label="勤怠の種類" />
+        <Tabs items={visTabs} activeId={tab} onActiveChange={setTab} aria-label="勤怠の種類" />
       </Card>
 
       {adjustDialogDate ? (

@@ -22,6 +22,11 @@ import {
   mergeReservationTimingIntoCustomJson,
   parseReservationTimingPut,
 } from "../lib/reservation-timing-settings.js";
+import {
+  coerceStaffMenuVisibilityFromCustomJson,
+  mergeStaffMenuVisibilityIntoCustomJson,
+  parseStaffMenuVisibilityPut,
+} from "../lib/staff-menu-visibility-settings.js";
 import { prisma } from "../db.js";
 import { reverseGeocodeTownJaCached } from "../lib/reverse-geocode-cache.js";
 import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
@@ -236,7 +241,9 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
   app.get("/basics", async (req) => {
     const { tenantId } = jwtUser(req);
     const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
-    return coerceBusinessBasicsFromCustomJson(s?.customJson);
+    const basics = coerceBusinessBasicsFromCustomJson(s?.customJson);
+    const staffMenuVisibility = coerceStaffMenuVisibilityFromCustomJson(s?.customJson);
+    return { ...basics, staffMenuVisibility };
   });
 
   app.put<{ Body: Record<string, unknown> }>("/basics", async (req, reply) => {
@@ -246,7 +253,17 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
 
     const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
     const prevRoot = asObj(s?.customJson);
-    const nextCustom = mergeBusinessBasicsIntoCustomJson(prevRoot, parsed.value);
+    let nextCustom = mergeBusinessBasicsIntoCustomJson(prevRoot, parsed.value);
+
+    const smRaw = (req.body || {}) as Record<string, unknown>;
+    if (smRaw.staffMenuVisibility !== undefined) {
+      if (smRaw.staffMenuVisibility === null || typeof smRaw.staffMenuVisibility !== "object" || Array.isArray(smRaw.staffMenuVisibility)) {
+        return reply.code(400).send({ error: "staffMenuVisibility はオブジェクトで指定してください" });
+      }
+      const smParsed = parseStaffMenuVisibilityPut(smRaw.staffMenuVisibility as Record<string, unknown>);
+      if (!smParsed.ok) return reply.code(400).send({ error: smParsed.error });
+      nextCustom = mergeStaffMenuVisibilityIntoCustomJson(nextCustom, smParsed.value);
+    }
 
     await prisma.tenantSettings.upsert({
       where: { tenantId },
