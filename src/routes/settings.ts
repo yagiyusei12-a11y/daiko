@@ -365,24 +365,40 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const rows = await prisma.employee.findMany({
       where: { tenantId, ...(passengerOnly ? { status: "ACTIVE" as const } : {}) },
       orderBy: { createdAt: "desc" },
-      include: { linkedUsers: { select: { id: true, email: true } } },
+      include: {
+        linkedUsers: {
+          select: {
+            id: true,
+            email: true,
+            roles: { select: { role: { select: { permissions: true } } } },
+          },
+        },
+      },
     });
     const filtered = passengerOnly ? rows.filter((e) => hasSecondClassDriverLicense(e.registerExtension)) : rows;
     return {
-      employees: filtered.map((e) => ({
-        id: e.id,
-        familyName: e.familyName,
-        givenName: e.givenName,
-        furigana: e.furigana,
-        address: e.address,
-        status: e.status,
-        retiredAt: e.retiredAt ? e.retiredAt.toISOString() : null,
-        registerExtension: e.registerExtension,
-        loginEmail: e.linkedUsers[0]?.email ?? null,
-        userId: e.linkedUsers[0]?.id ?? null,
-        adminMaster: e.adminMaster,
-        safetyDrivingManager: e.safetyDrivingManager,
-      })),
+      employees: filtered.map((e) => {
+        const user = e.linkedUsers[0] ?? null;
+        const isOwner = user?.roles.some((ur) => {
+          const p = ur.role.permissions as unknown;
+          return Array.isArray(p) && p.some((x) => x === "*");
+        }) ?? false;
+        return {
+          id: e.id,
+          familyName: e.familyName,
+          givenName: e.givenName,
+          furigana: e.furigana,
+          address: e.address,
+          status: e.status,
+          retiredAt: e.retiredAt ? e.retiredAt.toISOString() : null,
+          registerExtension: e.registerExtension,
+          loginEmail: user?.email ?? null,
+          userId: user?.id ?? null,
+          adminMaster: e.adminMaster,
+          safetyDrivingManager: e.safetyDrivingManager,
+          isOwner,
+        };
+      }),
     };
   });
 

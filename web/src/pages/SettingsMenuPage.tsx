@@ -87,6 +87,7 @@ type EmployeeRow = {
   userId: string | null;
   adminMaster: boolean;
   safetyDrivingManager: boolean;
+  isOwner: boolean;
 };
 
 type EmployeeCompCompensationType = "HOURLY_ONLY" | "COMMISSION_ONLY" | "HOURLY_AND_COMMISSION";
@@ -900,7 +901,12 @@ export default function SettingsMenuPage(): JSX.Element {
                 className={`settings-list-btn${empSel === e.id ? " active" : ""}`}
                 onClick={() => fillEmpForm(e)}
               >
-                {e.familyName} {e.givenName}
+                <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                  {e.familyName} {e.givenName}
+                  {e.isOwner && (
+                    <span className="emp-owner-badge" title="システムオーナー権限">★</span>
+                  )}
+                </span>
                 <span className="settings-list-meta">{e.loginEmail ?? "ログインなし"}</span>
               </button>
             </li>
