@@ -243,7 +243,9 @@ model Employee {
   payrollLines           PayrollLine[]
   dailyReportsAsMain    DailyReport[] @relation("DailyReportMain")
   dailyReportsAsPartner DailyReport[] @relation("DailyReportPartner")
-  complaintRowsAsDriver    ComplaintLedger[]
+  complaintRowsAsDriver       ComplaintLedger[] @relation("ComplaintLedgerDriver")
+  complaintRowsAsReceivedBy   ComplaintLedger[] @relation("ComplaintLedgerReceivedBy")
+  complaintRowsAsHandler      ComplaintLedger[] @relation("ComplaintLedgerHandler")
   guidanceAttendances      GuidanceAttendee[]
   linkedUsers              User[]
   shiftApplications        ShiftApplication[]
@@ -760,11 +762,14 @@ model ComplaintLedger {
   tenantId              String
   tenant                Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   receivedAt            DateTime
+  /// 互換用（従業員未紐付けの旧データ）
   receivedBy            String?
+  receivedByEmployeeId  String?
+  receivedByEmployee    Employee? @relation("ComplaintLedgerReceivedBy", fields: [receivedByEmployeeId], references: [id], onDelete: SetNull)
   occurredOn            DateTime?
   placeOrSection        String?
   driverEmployeeId      String?
-  driverEmployee        Employee? @relation(fields: [driverEmployeeId], references: [id], onDelete: SetNull)
+  driverEmployee        Employee? @relation("ComplaintLedgerDriver", fields: [driverEmployeeId], references: [id], onDelete: SetNull)
   complainantName       String?
   complainantAddress    String?
   complainantContact    String?
@@ -774,13 +779,18 @@ model ComplaintLedger {
   causeAnalysis         String?
   rebuttal              String?
   correctiveAction      String?
+  /// 互換用
   handlerName           String?
+  handlerEmployeeId     String?
+  handlerEmployee       Employee? @relation("ComplaintLedgerHandler", fields: [handlerEmployeeId], references: [id], onDelete: SetNull)
   completedOn           DateTime?
   representativeChecked Boolean   @default(false)
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
   @@index([tenantId, receivedAt])
+  @@index([tenantId, receivedByEmployeeId])
+  @@index([tenantId, handlerEmployeeId])
 }
 
 model GuidanceSession {

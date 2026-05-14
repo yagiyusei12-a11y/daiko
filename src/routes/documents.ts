@@ -1,6 +1,10 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { authenticate, jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
+import {
+  buildComplaintLedgerPrintHtml,
+  type ComplaintLedgerPrintItem,
+} from "../lib/complaint-ledger-print-html.js";
 import { buildEmployeeRosterPrintHtml } from "../lib/employee-roster-print-html.js";
 import { hasSecondClassDriverLicense } from "../lib/employee-license.js";
 import type { JommuKirokuboModel } from "../lib/jommu-types.js";
@@ -17,6 +21,7 @@ const MAX_JOMMU_RANGE_DAYS = 400;
 const MAX_JOMMU_REPORTS = 200;
 const MAX_CREW_IDS = 80;
 const MAX_ROSTER_EMPLOYEES = 100;
+const MAX_COMPLAINT_LEDGER_PRINT = 100;
 const MAX_SEIYAKU_SHEETS = 60;
 const MAX_SEIYAKU_LINE = 800;
 const MAX_SEIYAKU_BODY = 30_000;
@@ -28,6 +33,69 @@ const MAX_YAKKAN_BODY = 500_000;
 
 function wantsPdfOutput(b: Record<string, unknown>): boolean {
   return String(b.outputFormat ?? "").trim().toLowerCase() === "pdf";
+}
+
+type EmpNm = { familyName: string; givenName: string };
+
+function complaintEmpName(e: EmpNm | null | undefined): string {
+  if (!e) return "";
+  return `${e.familyName}　${e.givenName}`;
+}
+
+function complaintReceivedAtDisplay(d: Date): string {
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+}
+
+function complaintCompletedOnDisplay(d: Date | null): string {
+  if (!d) return "―";
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(d);
+}
+
+function mapComplaintToPrintItem(row: {
+  receivedAt: Date;
+  receivedBy: string | null;
+  receivedByEmployee: EmpNm | null;
+  driverEmployee: EmpNm | null;
+  placeOrSection: string | null;
+  complainantName: string | null;
+  complainantAddress: string | null;
+  complainantContact: string | null;
+  detail: string | null;
+  causeAnalysis: string | null;
+  rebuttal: string | null;
+  correctiveAction: string | null;
+  handlerName: string | null;
+  handlerEmployee: EmpNm | null;
+  completedOn: Date | null;
+}): ComplaintLedgerPrintItem {
+  return {
+    receivedAtDisplay: complaintReceivedAtDisplay(row.receivedAt),
+    receivedBy: complaintEmpName(row.receivedByEmployee) || (row.receivedBy?.trim() ?? "―"),
+    driverName: complaintEmpName(row.driverEmployee) || "―",
+    placeOrSection: row.placeOrSection?.trim() || "―",
+    complainantName: row.complainantName?.trim() || "―",
+    complainantAddress: row.complainantAddress?.trim() || "―",
+    complainantContact: row.complainantContact?.trim() || "―",
+    detail: row.detail?.trim() || "―",
+    causeAnalysis: row.causeAnalysis?.trim() || "―",
+    rebuttal: row.rebuttal?.trim() || "―",
+    correctiveAction: row.correctiveAction?.trim() || "―",
+    handlerName: complaintEmpName(row.handlerEmployee) || (row.handlerName?.trim() ?? "―"),
+    completedOnDisplay: complaintCompletedOnDisplay(row.completedOn),
+  };
 }
 
 async function sendHtmlOrPdf(
@@ -99,6 +167,40 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
       operatorName: operatorName || null,
     });
     return sendHtmlOrPdf(reply, req, b, html, "employee-roster");
+  });
+
+  app.post("/documents/complaint-ledger-print", async (req, reply) => {
+    const { tenantId } = jwtUser(req);
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const rawIds = b.complaintIds;
+    if (!Array.isArray(rawIds)) {
+      return reply.code(400).send({ error: "complaintIds は文字列の配列で指定してください" });
+    }
+    const complaintIds = [...new Set(rawIds.map((x) => String(x).trim()).filter(Boolean))];
+    if (complaintIds.length === 0) {
+      return reply.code(400).send({ error: "complaintIds を 1 件以上指定してください" });
+    }
+    if (complaintIds.length > MAX_COMPLAINT_LEDGER_PRINT) {
+      return reply.code(400).send({ error: `一度に PDF 化できるのは ${MAX_COMPLAINT_LEDGER_PRINT} 件までです` });
+    }
+
+    const empPick = { select: { familyName: true, givenName: true } } as const;
+    const rows = await prisma.complaintLedger.findMany({
+      where: { tenantId, id: { in: complaintIds } },
+      include: {
+        driverEmployee: empPick,
+        receivedByEmployee: empPick,
+        handlerEmployee: empPick,
+      },
+    });
+    if (rows.length !== complaintIds.length) {
+      return reply.code(400).send({ error: "無効な苦情 id が含まれています" });
+    }
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const ordered = complaintIds.map((id) => byId.get(id)).filter((r): r is (typeof rows)[0] => r != null);
+    const items = ordered.map((r) => mapComplaintToPrintItem(r));
+    const html = buildComplaintLedgerPrintHtml(items);
+    return sendHtmlOrPdf(reply, req, b, html, "complaint-ledger");
   });
 
   app.post("/documents/daiko-law14-seiyaku-print", async (req, reply) => {

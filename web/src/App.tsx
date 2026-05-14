@@ -6,7 +6,7 @@ import TodaySchedulePage from "./pages/TodaySchedulePage";
 import DailyReportDetailPage from "./pages/DailyReportDetailPage";
 import DailyReportsMenuPage from "./pages/DailyReportsMenuPage";
 import AttendanceMenuPage from "./pages/AttendanceMenuPage";
-import DocumentsPage from "./pages/DocumentsPage";
+import ComplaintsPage from "./pages/ComplaintsPage";
 import InstructionRecordsPage from "./pages/InstructionRecordsPage";
 import DashboardPage from "./pages/DashboardPage";
 import SettingsMenuPage from "./pages/SettingsMenuPage";
@@ -18,6 +18,7 @@ export default function App(): JSX.Element {
       <Route path="/register" element={<Register />} />
       <Route element={<Shell />}>
         <Route index element={<TodaySchedulePage />} />
+        <Route path="complaints" element={<ComplaintsPage />} />
         <Route path="schedule" element={<TodaySchedulePage />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="daily-reports" element={<DailyReportsMenuPage />} />

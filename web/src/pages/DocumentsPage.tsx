@@ -4,7 +4,7 @@ import { apiFetch, apiFetchBlob } from "../api";
 import { downloadBrowserBlob } from "../lib/download-blob";
 import { DAIKO_LAW14_DEFAULT_PLEDGE_BODY } from "../lib/daikoLaw14DefaultPledge";
 import { DAIKO_STANDARD_YAKKAN_DEFAULT_BODY } from "../lib/daikoYakkanDefaultBody";
-import InstructionRecordListPrintBlock from "../components/InstructionRecordListPrintBlock";
+import ComplaintLedgerPrintBlock from "../components/ComplaintLedgerPrintBlock";
 import { Card, Tabs, type TabDef } from "../ui";
 
 function PanelHint({ children }: { children: React.ReactNode }): JSX.Element {
@@ -858,7 +858,7 @@ export default function DocumentsPage(): JSX.Element {
       label: "苦情処理簿",
       children: (
         <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
-          <PanelHint>苦情処理の登録一覧様式の出力は、今後このタブから行える予定です。</PanelHint>
+          <ComplaintLedgerPrintBlock />
         </div>
       ),
     },
