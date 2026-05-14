@@ -5,7 +5,8 @@ import { prisma } from "../db.js";
 import { coercePricingPrefs, mergeLegSurchargesJson, tripSurchargeDefaults } from "../lib/pricing-prefs.js";
 import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
 import { hasSecondClassDriverLicense } from "../lib/employee-license.js";
-import { isLibreOfficeConfigured, renderJommuKirokuboPdf } from "../lib/jommu-excel-pdf.js";
+import { isChromiumConfiguredForPdf } from "../lib/html-to-pdf.js";
+import { renderJommuKirokuboPdf } from "../lib/jommu-excel-pdf.js";
 import { userFacingJommuPdfError } from "../lib/jommu-pdf-user-error.js";
 import { loadJommuKirokuboModelForDailyReport } from "../lib/jommu-daily-report-model.js";
 
@@ -319,10 +320,10 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     const id = String(req.params.id || "");
     const model = await loadJommuKirokuboModelForDailyReport(tenantId, id);
     if (!model) return reply.code(404).send({ error: "not found" });
-    if (!isLibreOfficeConfigured()) {
+    if (!isChromiumConfiguredForPdf()) {
       return reply.code(503).send({
         error:
-          "乗務記録簿の PDF にはサーバーに LibreOffice（soffice）が必要です。管理者に LIBREOFFICE_SOFFICE の設定またはインストールを依頼してください。",
+          "乗務記録簿の PDF にはサーバーに Chromium または Chrome が必要です。管理者に CHROMIUM_EXECUTABLE の設定を依頼してください。",
       });
     }
     try {

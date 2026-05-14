@@ -4,13 +4,13 @@ import { prisma } from "../db.js";
 import { buildEmployeeRosterPrintHtml } from "../lib/employee-roster-print-html.js";
 import { hasSecondClassDriverLicense } from "../lib/employee-license.js";
 import type { JommuKirokuboModel } from "../lib/jommu-types.js";
-import { isLibreOfficeConfigured, renderJommuKirokuboPdfBundle } from "../lib/jommu-excel-pdf.js";
+import { isChromiumConfiguredForPdf, renderHtmlToPdf } from "../lib/html-to-pdf.js";
+import { renderJommuKirokuboPdfBundle } from "../lib/jommu-excel-pdf.js";
 import { userFacingJommuPdfError } from "../lib/jommu-pdf-user-error.js";
 import { loadJommuKirokuboModelForDailyReport } from "../lib/jommu-daily-report-model.js";
 import { buildDaikoLaw14SeiyakuPrintHtml } from "../lib/daiko-law14-seiyaku-print-html.js";
 import { buildDaikoNinteiCertificatePrintHtml } from "../lib/daiko-nintei-certificate-print-html.js";
 import { buildDaikoYakkanPrintHtml } from "../lib/daiko-yakkan-print-html.js";
-import { isChromiumConfiguredForPdf, renderHtmlToPdf } from "../lib/html-to-pdf.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_JOMMU_RANGE_DAYS = 400;
@@ -310,13 +310,13 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
     if (!wantsPdfOutput(b)) {
       return reply.code(400).send({
         error:
-          "乗務記録簿は Excel テンプレートから PDF のみ出力します。リクエスト body の outputFormat に pdf を指定してください。",
+          "乗務記録簿は PDF のみ出力します。リクエスト body の outputFormat に pdf を指定してください。",
       });
     }
-    if (!isLibreOfficeConfigured()) {
+    if (!isChromiumConfiguredForPdf()) {
       return reply.code(503).send({
         error:
-          "乗務記録簿の PDF にはサーバーに LibreOffice（soffice）のインストールと、必要に応じた環境変数 LIBREOFFICE_SOFFICE の設定が必要です。管理者に連絡してください。",
+          "乗務記録簿の PDF にはサーバーに Chromium または Chrome が必要です。管理者に CHROMIUM_EXECUTABLE の設定を依頼してください。",
       });
     }
     try {

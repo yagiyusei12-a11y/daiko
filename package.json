@@ -31,8 +31,7 @@
     "fastify": "^5.2.2",
     "pdf-lib": "^1.17.1",
     "prisma": "^6.19.3",
-    "puppeteer-core": "^24.43.1",
-    "xlsx-populate": "^1.21.0"
+    "puppeteer-core": "^24.43.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

@@ -7,6 +7,10 @@ export function userFacingJommuPdfError(err: unknown): string {
   const m = err.message;
   if (m.startsWith("LibreOffice が PDF")) return m;
   if (m.startsWith("soffice の実行に失敗")) return m;
+  if ((err as NodeJS.ErrnoException).code === "PDF_CHROMIUM_MISSING") {
+    return "乗務記録簿の PDF には CHROMIUM_EXECUTABLE の設定が必要です。管理者に連絡してください。";
+  }
+  if (m.includes("CHROMIUM_EXECUTABLE")) return m;
   if (m.startsWith("jommu:")) return m;
   if (m.startsWith("乗務記録簿テンプレが見つかりません")) return m;
   if (m.startsWith("pdf 結合:")) return m;
