@@ -1,5 +1,5 @@
 /**
- * 乗務記録簿: templates/jommu-print（背景 SVG + セマンティックな HTML）から PDF 用ドキュメントを組み立てる。
+ * 乗務記録簿: templates/jommu-print/record-book（セマンティック HTML + CSS）を埋めて PDF 用ドキュメントを組み立てる。
  */
 
 import { existsSync } from "node:fs";
@@ -9,16 +9,20 @@ import type { JommuKirokuboModel } from "./jommu-types.js";
 
 const TEMPLATE_DIR = path.join(process.cwd(), "templates", "jommu-print");
 
-let cachedBaseHtml: string | null = null;
+let cachedShellHtml: string | null = null;
+let cachedRecordCss: string | null = null;
 let cachedFontFaceBlock: string | null = null;
-let cachedBgDataUrl: string | null = null;
 
-function escapeHtml(s: string): string {
+function escapeAttr(s: string): string {
   return s
     .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/\r|\n/g, " ");
+}
+
+function roInput(value: string): string {
+  return `<input type="text" class="field-input" readonly value="${escapeAttr(value)}" />`;
 }
 
 function displayClockIn(m: JommuKirokuboModel): string | null {
@@ -33,58 +37,46 @@ function displayClockOut(m: JommuKirokuboModel): string | null {
   return last || null;
 }
 
-function td(text: string, ...classes: string[]): string {
-  const cls = classes.filter(Boolean).join(" ");
-  const attr = cls ? ` class="${cls}"` : "";
-  const body = text ? escapeHtml(text) : "";
-  return `<td${attr}>${body}</td>`;
-}
-
-function tripRow(model: JommuKirokuboModel, index: number): string {
-  const trip = model.trips[index];
+function tripRow(m: JommuKirokuboModel, index: number): string {
+  const n = index + 1;
+  const trip = m.trips[index];
   const companion =
-    trip && model.accompanyingCrewName.trim() ? model.accompanyingCrewName.trim() : "";
-  if (!trip) {
-    return `<tr>
-      <td class="idx jmu-c">${index + 1}</td>
-      ${td("")}
-      ${td("")}
-      ${td("")}
-      ${td("", "jmu-c")}
-      ${td("")}
-      ${td("")}
-      ${td("", "jmu-c")}
-      ${td("", "jmu-c")}
-      ${td("", "jmu-r")}
-      ${td("", "jmu-r")}
-      ${td("")}
-      ${td("")}
-    </tr>`;
-  }
+    trip && m.accompanyingCrewName.trim() ? m.accompanyingCrewName.trim() : "";
+  const empty = () =>
+    `<tr><th scope="row">${n}</th>${Array.from({ length: 11 }, () => `<td>${roInput("")}</td>`).join("")}</tr>`;
+  if (!trip) return empty();
+
+  const driven = trip.charterVehicleNo.trim();
+  const km = trip.distanceKm.trim() ? `${trip.distanceKm}km` : "";
+  const yen = trip.fareYen.trim() ? `${trip.fareYen}円` : "";
+
   return `<tr>
-    <td class="idx jmu-c">${index + 1}</td>
-    ${td(trip.clientName)}
-    ${td(trip.charterVehicleNo)}
-    ${td(trip.origin)}
-    ${td(trip.departedHm, "jmu-c")}
-    ${td(trip.viaText)}
-    ${td(trip.destination)}
-    ${td(trip.arrivedHm, "jmu-c")}
-    ${td(trip.distanceKm ? `${trip.distanceKm}km` : "", "jmu-c")}
-    ${td(trip.fareYen ? `${trip.fareYen}円` : "", "jmu-r")}
-    ${td(trip.charterVehicleNo)}
-    ${td(companion)}
+    <th scope="row">${n}</th>
+    <td>${roInput(trip.clientName)}</td>
+    <td>${roInput(trip.charterVehicleNo)}</td>
+    <td>${roInput(trip.origin)}</td>
+    <td class="col-time">${roInput(trip.departedHm)}</td>
+    <td>${roInput(trip.viaText)}</td>
+    <td>${roInput(trip.destination)}</td>
+    <td class="col-time">${roInput(trip.arrivedHm)}</td>
+    <td class="col-km">${roInput(km)}</td>
+    <td class="col-yen">${roInput(yen)}</td>
+    <td>${roInput(driven)}</td>
+    <td>${roInput(companion)}</td>
   </tr>`;
 }
 
-function buildJommuMainHtml(m: JommuKirokuboModel): string {
+function meterVal(s: string): string {
+  const t = s.trim();
+  return t ? `${t}㎞` : "";
+}
+
+function buildMainHtml(m: JommuKirokuboModel): string {
   const y = m.yParts.y;
   const mo = m.yParts.m.replace(/^0+/, "") || m.yParts.m;
   const d = m.yParts.d.replace(/^0+/, "") || m.yParts.d;
-  const cin = displayClockIn(m);
-  const cout = displayClockOut(m);
-  const cinDisp = cin ? escapeHtml(cin) : "";
-  const coutDisp = cout ? escapeHtml(cout) : "";
+  const cin = displayClockIn(m) ?? "";
+  const cout = displayClockOut(m) ?? "";
 
   const rows: string[] = [];
   for (let i = 0; i < 10; i++) rows.push(tripRow(m, i));
@@ -93,97 +85,136 @@ function buildJommuMainHtml(m: JommuKirokuboModel): string {
   const o2 = m.odoEndKm?.trim() ?? "";
   const o3 = m.totalOdoKm?.trim() ?? "";
   const o4 = m.actualDistanceKmSum.trim();
-  const u = (s: string) => (s ? `${escapeHtml(s)}㎞` : "—");
 
   return `
-<div class="jmu-title">乗 務 記 録 簿</div>
-<div class="jmu-kigen">＜保存期間：最後に記載した日から２年間＞</div>
-<div class="jmu-meta">
-  <div style="display:flex;flex-wrap:wrap;gap:10px 28px;align-items:baseline;">
-    <div style="display:flex;gap:8px;align-items:baseline;">
-      <label>乗務員氏名</label>
-      <span>${escapeHtml(m.crewName)}</span>
-    </div>
-    <div style="display:flex;gap:4px;align-items:baseline;">
-      <label>業務年月日</label>
-      <span>${escapeHtml(y)}</span><span>年</span>
-      <span>${escapeHtml(mo)}</span><span>月</span>
-      <span>${escapeHtml(d)}</span><span>日</span>
-    </div>
-    <div style="display:flex;gap:8px;align-items:baseline;min-width:12em;">
-      <label>事業者名</label>
-      <span>${escapeHtml(m.operatorName)}</span>
-    </div>
-  </div>
-  <div class="jmu-meta-row2">
-    <label>随伴車</label>
-    <div class="v">${escapeHtml(m.escortVehicleLabel)}</div>
-    <label>登録番号</label>
-    <div class="v">${escapeHtml(m.escortVehiclePlate)}</div>
-    <label>安全運転管理者名</label>
-    <div class="v">${escapeHtml(m.safetyManagerName)}</div>
-  </div>
-  <div class="jmu-clock-row">
-    <span><strong>始業時刻</strong>　${cinDisp}</span>
-    <span><strong>終業時刻</strong>　${coutDisp}</span>
-  </div>
-</div>
-<div class="jmu-tbl-wrap">
-  <table class="jmu-tbl">
-    <colgroup>
-      <col style="width:36px" />
-      <col style="width:118px" />
-      <col style="width:162px" />
-      <col style="width:102px" />
-      <col style="width:96px" />
-      <col style="width:124px" />
-      <col style="width:110px" />
-      <col style="width:76px" />
-      <col style="width:80px" />
-      <col style="width:88px" />
-      <col style="width:86px" />
-      <col style="width:128px" />
-    </colgroup>
-    <thead>
-      <tr>
-        <th></th>
-        <th>依頼者</th>
-        <th>客車の<br/>車両番号</th>
-        <th>依頼場所</th>
-        <th>開始時刻</th>
-        <th>経由地</th>
-        <th>到着場所</th>
-        <th>到着時刻</th>
-        <th>走行距離</th>
-        <th>料金</th>
-        <th>運転した<br/>車両</th>
-        <th>同伴<br/>乗務員名</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows.join("\n")}
-    </tbody>
-  </table>
-</div>
-<div class="jmu-foot">
-  <span class="lab"><strong>メーター距離等</strong></span>
-  <span class="lab">始業時</span><span class="val">${u(o1)}</span>
-  <span class="lab">終業時</span><span class="val">${u(o2)}</span>
-  <span class="lab">走行距離合計</span><span class="val">${u(o3)}</span>
-  <span class="lab">実車走行距離</span><span class="val">${u(o4)}</span>
-  <span class="lab">売上合計</span><span class="val">${escapeHtml(m.salesTotalYen)}円</span>
-</div>
-`.trim();
+    <header class="sheet-header">
+      <h1 class="sheet-title">乗 務 記 録 簿</h1>
+      <p class="sheet-note">＜保存期間：最後に記載した日から２年間＞</p>
+    </header>
+
+    <section class="meta-block" aria-label="ヘッダー情報">
+      <div class="meta-grid meta-grid--3">
+        <div class="field">
+          <label class="field-label" for="crew-name">乗務員氏名</label>
+          <input class="field-input" id="crew-name" name="crewName" type="text" readonly value="${escapeAttr(m.crewName)}" />
+        </div>
+        <div class="field">
+          <span class="field-label">業務年月日</span>
+          <div class="meta-date" role="group" aria-label="業務年月日">
+            <input class="field-input" name="businessYear" type="text" readonly value="${escapeAttr(y)}" aria-label="年" />
+            <span class="unit">年</span>
+            <input class="field-input" name="businessMonth" type="text" readonly value="${escapeAttr(mo)}" aria-label="月" />
+            <span class="unit">月</span>
+            <input class="field-input" name="businessDay" type="text" readonly value="${escapeAttr(d)}" aria-label="日" />
+            <span class="unit">日</span>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label" for="operator-name">事業者名</label>
+          <input class="field-input" id="operator-name" name="operatorName" type="text" readonly value="${escapeAttr(m.operatorName)}" />
+        </div>
+      </div>
+
+      <div class="meta-times meta-block">
+        <div class="field">
+          <label class="field-label" for="clock-in">始業時刻</label>
+          <input class="field-input" id="clock-in" name="clockIn" type="text" readonly value="${escapeAttr(cin)}" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="clock-out">終業時刻</label>
+          <input class="field-input" id="clock-out" name="clockOut" type="text" readonly value="${escapeAttr(cout)}" />
+        </div>
+      </div>
+
+      <div class="meta-grid meta-grid--2">
+        <div class="field">
+          <label class="field-label" for="escort-vehicle">随伴車</label>
+          <input class="field-input" id="escort-vehicle" name="escortVehicle" type="text" readonly value="${escapeAttr(m.escortVehicleLabel)}" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="vehicle-reg">登録番号</label>
+          <input class="field-input" id="vehicle-reg" name="vehicleRegistration" type="text" readonly value="${escapeAttr(m.escortVehiclePlate)}" />
+        </div>
+        <div class="field" style="grid-column: 1 / -1">
+          <label class="field-label" for="safety-manager">安全運転　管理者名</label>
+          <input class="field-input" id="safety-manager" name="safetyManagerName" type="text" readonly value="${escapeAttr(m.safetyManagerName)}" />
+        </div>
+      </div>
+    </section>
+
+    <section class="meta-block" aria-label="乗務記録">
+      <div class="table-scroll">
+        <table class="record-table">
+          <caption>乗務記録</caption>
+          <thead>
+            <tr>
+              <th scope="col">No</th>
+              <th scope="col">依頼者</th>
+              <th scope="col">客車の車両番号</th>
+              <th scope="col">依頼場所</th>
+              <th scope="col">開始時刻</th>
+              <th scope="col">経由地</th>
+              <th scope="col">到着場所</th>
+              <th scope="col">到着時刻</th>
+              <th scope="col">走行距離<span class="nowrap">（km）</span></th>
+              <th scope="col">料金<span class="nowrap">（円）</span></th>
+              <th scope="col">運転した車両<span class="nowrap">（代行など）</span></th>
+              <th scope="col">同伴乗務員名</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.join("\n")}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="meter-section" aria-labelledby="meter-heading">
+      <h2 id="meter-heading">メーター距離等</h2>
+      <div class="meter-grid">
+        <div class="meter-field field">
+          <label class="field-label" for="odo-start">始業時（㎞）</label>
+          <input class="field-input" id="odo-start" name="odoStartKm" type="text" readonly value="${escapeAttr(meterVal(o1))}" />
+        </div>
+        <div class="meter-field field">
+          <label class="field-label" for="odo-end">終業時（㎞）</label>
+          <input class="field-input" id="odo-end" name="odoEndKm" type="text" readonly value="${escapeAttr(meterVal(o2))}" />
+        </div>
+        <div class="meter-field field">
+          <label class="field-label" for="odo-total">走行距離合計（㎞）</label>
+          <input class="field-input" id="odo-total" name="odoTotalKm" type="text" readonly value="${escapeAttr(meterVal(o3))}" />
+        </div>
+        <div class="meter-field field">
+          <label class="field-label" for="actual-km">実車走行距離（㎞）</label>
+          <input class="field-input" id="actual-km" name="actualDistanceKm" type="text" readonly value="${escapeAttr(meterVal(o4))}" />
+        </div>
+        <div class="meter-field field">
+          <label class="field-label" for="sales-total">売上合計（円）</label>
+          <input class="field-input" id="sales-total" name="salesTotalYen" type="text" readonly value="${escapeAttr(m.salesTotalYen ? `${m.salesTotalYen}円` : "")}" />
+        </div>
+      </div>
+    </section>
+  `.trim();
 }
 
-async function loadBaseHtml(): Promise<string> {
-  if (cachedBaseHtml) return cachedBaseHtml;
-  const p = path.join(TEMPLATE_DIR, "sheet.html");
+async function loadShellHtml(): Promise<string> {
+  if (cachedShellHtml) return cachedShellHtml;
+  const p = path.join(TEMPLATE_DIR, "record-book.html");
   if (!existsSync(p)) {
     throw new Error(`乗務記録簿テンプレが見つかりません: ${p}（cwd=${process.cwd()}）`);
   }
-  cachedBaseHtml = await fs.readFile(p, "utf8");
-  return cachedBaseHtml;
+  cachedShellHtml = await fs.readFile(p, "utf8");
+  return cachedShellHtml;
+}
+
+async function loadRecordBookCss(): Promise<string> {
+  if (cachedRecordCss) return cachedRecordCss;
+  const p = path.join(TEMPLATE_DIR, "record-book.css");
+  if (!existsSync(p)) {
+    throw new Error(`乗務記録簿 CSS が見つかりません: ${p}`);
+  }
+  cachedRecordCss = await fs.readFile(p, "utf8");
+  return cachedRecordCss;
 }
 
 async function loadFontFaceBlock(): Promise<string> {
@@ -207,34 +238,21 @@ async function loadFontFaceBlock(): Promise<string> {
   return cachedFontFaceBlock;
 }
 
-async function loadBgDataUrl(): Promise<string> {
-  if (cachedBgDataUrl) return cachedBgDataUrl;
-  const p = path.join(TEMPLATE_DIR, "bg.svg");
-  if (!existsSync(p)) {
-    throw new Error("jommu: 乗務記録簿テンプレの背景 SVG が欠けています。再デプロイを試してください。");
-  }
-  const svg = await fs.readFile(p, "utf8");
-  cachedBgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-  return cachedBgDataUrl;
-}
-
-function injectPrintPageSize(html: string): string {
-  const inj = "<style>@page{size:1286px 909px;margin:0;}</style>";
-  if (html.includes("</head>")) return html.replace("</head>", `${inj}</head>`);
-  return `${inj}${html}`;
-}
-
 /**
- * Puppeteer でそのまま setContent できる完全 HTML（1286×909 の 1 ページ）。
+ * Puppeteer でそのまま setContent できる完全 HTML（A4 横印刷は record-book.css の @page に従う）。
  */
 export async function buildJommuKirokuboSheetHtml(model: JommuKirokuboModel): Promise<string> {
-  const [base, fontFace, bg] = await Promise.all([loadBaseHtml(), loadFontFaceBlock(), loadBgDataUrl()]);
-  let html = base
+  const [shell, fontFace, css] = await Promise.all([
+    loadShellHtml(),
+    loadFontFaceBlock(),
+    loadRecordBookCss(),
+  ]);
+  const html = shell
     .replace("__JOMMU_FONT_FACE__", fontFace)
-    .replace("__JOMMU_BG__", bg)
-    .replace("__JOMMU_MAIN__", buildJommuMainHtml(model));
+    .replace("__JOMMU_STYLES__", css)
+    .replace("__JOMMU_MAIN__", buildMainHtml(model));
   if (html.includes("__JOMMU")) {
     throw new Error("jommu: テンプレの埋め込みが不完全です（プレースホルダが残りました）");
   }
-  return injectPrintPageSize(html);
+  return html;
 }
