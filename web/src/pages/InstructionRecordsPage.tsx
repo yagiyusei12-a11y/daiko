@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { Card, Err } from "../ui";
+import { useSavedToast } from "../saved-toast";
 import {
   DEFAULT_INSTRUCTION_ITEMS,
   DEFAULT_REMARKS,
@@ -18,6 +19,7 @@ function toDatetimeLocalValue(d: Date): string {
 }
 
 export default function InstructionRecordsPage(): JSX.Element {
+  const { flashSaved } = useSavedToast();
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [employees, setEmployees] = useState<EmployeeOpt[]>([]);
@@ -106,6 +108,7 @@ export default function InstructionRecordsPage(): JSX.Element {
       setErr(r.error);
       return;
     }
+    flashSaved();
     setDateLocal(toDatetimeLocalValue(new Date()));
     setInstructionVenue("");
     setInstructionItems(DEFAULT_INSTRUCTION_ITEMS);
@@ -121,6 +124,7 @@ export default function InstructionRecordsPage(): JSX.Element {
     instructionItems,
     specialNotes,
     remarks,
+    flashSaved,
   ]);
 
   return (

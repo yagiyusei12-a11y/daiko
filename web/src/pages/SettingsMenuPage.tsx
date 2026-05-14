@@ -157,6 +157,7 @@ export default function SettingsMenuPage(): JSX.Element {
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
   const [empSel, setEmpSel] = useState<string | "new" | null>(null);
   const [empForm, setEmpForm] = useState({
+    linkedUserId: null as string | null,
     loginEmail: "",
     password: "",
     familyName: "",
@@ -318,6 +319,7 @@ export default function SettingsMenuPage(): JSX.Element {
     if (!e) {
       setEmpSel("new");
       setEmpForm({
+        linkedUserId: null,
         loginEmail: "",
         password: "",
         familyName: "",
@@ -355,6 +357,7 @@ export default function SettingsMenuPage(): JSX.Element {
       licenseConditions = rawLc.filter((c) => allowedForLoad.includes(c));
     }
     setEmpForm({
+      linkedUserId: e.userId ?? null,
       loginEmail: e.loginEmail ?? "",
       password: "",
       familyName: e.familyName,
@@ -712,8 +715,12 @@ export default function SettingsMenuPage(): JSX.Element {
               type="email"
               value={empForm.loginEmail}
               onChange={(e) => setEmpForm({ ...empForm, loginEmail: e.target.value })}
-              disabled={!!empSel && empSel !== "new"}
-              title={empSel !== "new" ? "ログインIDの変更は未対応です" : undefined}
+              disabled={empSel === "new" ? false : !empForm.linkedUserId}
+              title={
+                empSel !== "new" && !empForm.linkedUserId
+                  ? "ログインユーザーが未作成のため、ここでは変更できません"
+                  : undefined
+              }
             />
             <label>パスワード{empSel !== "new" ? "（変更する場合のみ）" : ""}</label>
             <input

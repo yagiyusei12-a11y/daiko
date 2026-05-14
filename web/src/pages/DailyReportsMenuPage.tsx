@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiFetch } from "../api";
 import { Card, Err } from "../ui";
+import { useSavedToast } from "../saved-toast";
 
 function tokyoTodayYmd(): string {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date()).slice(0, 10);
@@ -16,6 +17,7 @@ type ReportRow = {
 
 export default function DailyReportsMenuPage(): JSX.Element {
   const nav = useNavigate();
+  const { flashSaved } = useSavedToast();
   const [err, setErr] = useState<string | null>(null);
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [vehicles, setVehicles] = useState<{ id: string; label: string }[]>([]);
@@ -74,6 +76,7 @@ export default function DailyReportsMenuPage(): JSX.Element {
     setBusy(false);
     if (!r.ok) setErr(r.error);
     else {
+      flashSaved();
       setCreateOpen(false);
       nav(`/daily-reports/${r.data.id}`);
     }

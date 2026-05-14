@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../api";
 import { Card, Err } from "../ui";
+import { useSavedToast } from "../saved-toast";
 import "../instruction-records-print.css";
 
 type EmployeeOpt = { id: string; familyName: string; givenName: string; status: string };
@@ -62,6 +63,7 @@ function empLabel(e: EmployeeOpt): string {
 }
 
 export default function ComplaintsPage(): JSX.Element {
+  const { flashSaved } = useSavedToast();
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [rows, setRows] = useState<ComplaintApi[]>([]);
@@ -179,6 +181,7 @@ export default function ComplaintsPage(): JSX.Element {
       setErr(r.error);
       return;
     }
+    flashSaved();
     setModalOpen(false);
     await loadRows();
   }

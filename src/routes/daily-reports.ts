@@ -120,6 +120,16 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       escortOdometerStartM = Math.max(0, Math.floor(Number(b.escortOdometerStartM) || 0));
     }
 
+    if (escortVehicleId && escortOdometerStartM != null) {
+      const veh = await prisma.vehicle.findFirst({ where: { id: escortVehicleId, tenantId }, select: { currentOdometer: true } });
+      const curOdo = veh?.currentOdometer;
+      if (curOdo != null && escortOdometerStartM < curOdo) {
+        return reply.code(400).send({
+          error: `随伴車の開始ODOは車両マスタの現在ODO（${curOdo}）以上にしてください`,
+        });
+      }
+    }
+
     const dr = await prisma.dailyReport.create({
       data: {
         tenantId,
@@ -248,6 +258,42 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     }
     if (b.meterEnd !== undefined) {
       data.meterEnd = Math.max(0, Math.floor(Number(b.meterEnd) || 0));
+    }
+
+    let previewEscortVid = dr.escortVehicleId;
+    if (b.escortVehicleId !== undefined) {
+      previewEscortVid = b.escortVehicleId === null || b.escortVehicleId === "" ? null : String(b.escortVehicleId).trim();
+    }
+    let previewEscortStart = dr.escortOdometerStartM;
+    if (b.escortOdometerStartM !== undefined) {
+      previewEscortStart =
+        b.escortOdometerStartM === null || b.escortOdometerStartM === ""
+          ? null
+          : Math.max(0, Math.floor(Number(b.escortOdometerStartM) || 0));
+    }
+    let previewEscortEnd = dr.escortOdometerEndM;
+    if (b.escortOdometerEndM !== undefined) {
+      previewEscortEnd =
+        b.escortOdometerEndM === null || b.escortOdometerEndM === ""
+          ? null
+          : Math.max(0, Math.floor(Number(b.escortOdometerEndM) || 0));
+    }
+    for (const [odoLabel, odoVal] of [
+      ["開始ODO", previewEscortStart],
+      ["終了ODO", previewEscortEnd],
+    ] as const) {
+      if (previewEscortVid && odoVal != null) {
+        const veh = await prisma.vehicle.findFirst({
+          where: { id: previewEscortVid, tenantId },
+          select: { currentOdometer: true },
+        });
+        const curOdo = veh?.currentOdometer;
+        if (curOdo != null && odoVal < curOdo) {
+          return reply.code(400).send({
+            error: `随伴車の${odoLabel}は車両マスタの現在ODO（${curOdo}）以上にしてください`,
+          });
+        }
+      }
     }
 
     await prisma.dailyReport.update({ where: { id }, data });
@@ -381,7 +427,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     });
     const vehicles = await prisma.vehicle.findMany({
       where: { tenantId, active: true },
-      select: { id: true, label: true, plate: true },
+      select: { id: true, label: true, plate: true, currentOdometer: true },
       orderBy: { label: "asc" },
     });
 
@@ -422,6 +468,8 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         arrivedAt: now,
         distanceM: 0,
         fareYen: 0,
+        tripPaymentMethod: "CASH",
+        tripReceiptIssued: false,
         legSurchargesJson: {},
       },
     });
@@ -462,6 +510,19 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       }
       if (b.fareYen !== undefined) data.fareYen = Math.max(0, Math.floor(Number(b.fareYen) || 0));
       if (b.parkingAdvanceYen !== undefined) data.parkingAdvanceYen = Math.max(0, Math.floor(Number(b.parkingAdvanceYen) || 0));
+
+      const TRIP_PAYMENT = new Set(["CASH", "CARD", "PAYPAY", "RECEIVABLE", "OTHER"]);
+      if (b.tripPaymentMethod !== undefined) {
+        if (b.tripPaymentMethod === null || b.tripPaymentMethod === "") {
+          data.tripPaymentMethod = null;
+        } else {
+          const u = String(b.tripPaymentMethod).trim().toUpperCase();
+          if (!TRIP_PAYMENT.has(u)) return reply.code(400).send({ error: "tripPaymentMethod が不正です" });
+          data.tripPaymentMethod = u;
+        }
+      }
+      if (typeof b.tripReceiptIssued === "boolean") data.tripReceiptIssued = b.tripReceiptIssued;
+
       if (b.tripMeterStartM !== undefined) {
         data.tripMeterStartM =
           b.tripMeterStartM === null || b.tripMeterStartM === "" ? null : Math.max(0, Math.floor(Number(b.tripMeterStartM) || 0));

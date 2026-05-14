@@ -24,7 +24,7 @@ export function SavedToastProvider({ children }: { children: ReactNode }): JSX.E
       {children}
       {visible ? (
         <div className="saved-toast" role="status" aria-live="polite">
-          保存しました。
+          保存しました
         </div>
       ) : null}
     </Ctx.Provider>

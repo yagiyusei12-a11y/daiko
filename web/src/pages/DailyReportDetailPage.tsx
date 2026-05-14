@@ -6,7 +6,7 @@ import { useSavedToast } from "../saved-toast";
 import { reverseGeocodeTownJa } from "../lib/nominatim";
 
 type EmpMini = { id: string; familyName: string; givenName: string };
-type VehMini = { id: string; label: string; plate: string | null };
+type VehMini = { id: string; label: string; plate: string | null; currentOdometer?: number | null };
 
 type TripLegFull = {
   id: string;
@@ -32,6 +32,8 @@ type TripLegFull = {
   applyLateNightFlatYen: boolean;
   applyEarlyRushFlatYen: boolean;
   legSurchargesJson: unknown;
+  tripPaymentMethod: string | null;
+  tripReceiptIssued: boolean;
 };
 
 type ReportDetail = {
@@ -262,6 +264,8 @@ function TripWizard({
   const [destination, setDestination] = useState(trip.destination);
   const [fareYen, setFareYen] = useState(trip.fareYen);
   const [parkingAdvanceYen, setParkingAdvanceYen] = useState(trip.parkingAdvanceYen ?? 0);
+  const [tripPaymentMethod, setTripPaymentMethod] = useState(() => (trip.tripPaymentMethod ?? "CASH").trim() || "CASH");
+  const [tripReceiptIssued, setTripReceiptIssued] = useState(() => Boolean(trip.tripReceiptIssued));
   const [tripStartKm, setTripStartKm] = useState(() => tripMeterKmFromM(trip.tripMeterStartM));
   const [tripEndKm, setTripEndKm] = useState(() => tripMeterKmFromM(trip.tripMeterEndM));
   const [departedLocal, setDepartedLocal] = useState(() => toDatetimeLocalValue(new Date(trip.departedAt)));
@@ -288,6 +292,8 @@ function TripWizard({
     setDestination(trip.destination);
     setFareYen(trip.fareYen);
     setParkingAdvanceYen(trip.parkingAdvanceYen ?? 0);
+    setTripPaymentMethod((trip.tripPaymentMethod ?? "CASH").trim() || "CASH");
+    setTripReceiptIssued(Boolean(trip.tripReceiptIssued));
     setTripStartKm(tripMeterKmFromM(trip.tripMeterStartM));
     setTripEndKm(tripMeterKmFromM(trip.tripMeterEndM));
     setDepartedLocal(toDatetimeLocalValue(new Date(trip.departedAt)));
@@ -319,6 +325,7 @@ function TripWizard({
 
   const distanceKmAuto = useMemo(() => Math.max(0, tripEndKm - tripStartKm), [tripEndKm, tripStartKm]);
   const travelMinutesAuto = useMemo(() => travelMinutesBetween(departedLocal, arrivedLocal), [departedLocal, arrivedLocal]);
+  const tripTotalYen = useMemo(() => fareYen + parkingAdvanceYen, [fareYen, parkingAdvanceYen]);
 
   const tariffCap = useMemo(() => tariffVersions.find((t) => t.id === tariffVersionId), [tariffVersions, tariffVersionId]);
   const showNightPct = (tariffCap?.nightSurchargeBps ?? 0) > 0;
@@ -377,6 +384,8 @@ function TripWizard({
         viaStopsJson: viaFiltered,
         fareYen,
         parkingAdvanceYen,
+        tripPaymentMethod,
+        tripReceiptIssued,
         tripMeterStartM: startM > 0 ? startM : null,
         tripMeterEndM: endM > 0 ? endM : null,
         distanceM: distM,
@@ -427,9 +436,6 @@ function TripWizard({
         <button type="button" className="settings-secondary" onClick={() => setDepartedLocal(toDatetimeLocalValue(new Date()))}>
           現在時刻を開始にセット
         </button>
-        <label>駐車場料金（立替金・円）</label>
-        <input type="number" min={0} value={parkingAdvanceYen} onChange={(e) => setParkingAdvanceYen(Math.max(0, Math.floor(Number(e.target.value) || 0)))} />
-        <p className="settings-hint">売上・運賃とは別に記録されます。</p>
         <label>依頼場所</label>
         <input value={origin} onChange={(e) => setOrigin(e.target.value)} />
         <GpsTownButton label="GPSで町名を入力" onTown={(t) => setOrigin((o) => (o ? `${o} ${t}`.trim() : t))} disabled={busy} />
@@ -502,6 +508,29 @@ function TripWizard({
         </select>
         <label>運賃（円）</label>
         <input type="number" min={0} value={fareYen} onChange={(e) => setFareYen(Math.max(0, Math.floor(Number(e.target.value) || 0)))} />
+        <label>駐車場料金（立替金・円）</label>
+        <input
+          type="number"
+          min={0}
+          value={parkingAdvanceYen}
+          onChange={(e) => setParkingAdvanceYen(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+        />
+        <p className="settings-hint">売上・運賃とは別に記録されます。</p>
+        <label>支払方法</label>
+        <select value={tripPaymentMethod} onChange={(e) => setTripPaymentMethod(e.target.value)}>
+          <option value="CASH">現金</option>
+          <option value="CARD">カード</option>
+          <option value="PAYPAY">PayPay</option>
+          <option value="RECEIVABLE">売掛</option>
+          <option value="OTHER">その他</option>
+        </select>
+        <label className="settings-inline-check" style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.25rem" }}>
+          <input type="checkbox" checked={tripReceiptIssued} onChange={(e) => setTripReceiptIssued(e.target.checked)} />
+          領収書を発行した
+        </label>
+        <p style={{ margin: "0.35rem 0 0", fontWeight: 600, fontSize: "0.95rem" }}>
+          合計（運賃＋駐車場料金）: ¥{tripTotalYen.toLocaleString("ja-JP")}
+        </p>
 
         {showSurchargeDetails ? (
           <details className="settings-fieldset" style={{ marginTop: "0.5rem" }}>
@@ -585,6 +614,7 @@ function TripWizard({
 
 export default function DailyReportDetailPage(): JSX.Element {
   const { reportId } = useParams<{ reportId: string }>();
+  const { flashSaved } = useSavedToast();
   const [err, setErr] = useState<string | null>(null);
   const [report, setReport] = useState<ReportDetail | null>(null);
   const [defaults, setDefaults] = useState<Defaults | null>(null);
@@ -676,7 +706,10 @@ export default function DailyReportDetailPage(): JSX.Element {
     const r = await apiFetch(`/daily-reports/${reportId}`, { method: "PATCH", json: body });
     setSessionBusy(false);
     if (!r.ok) setSessionErr(r.error);
-    else void load();
+    else {
+      flashSaved();
+      void load();
+    }
   }
 
   async function openNewTripDialog(): Promise<void> {
@@ -776,6 +809,15 @@ export default function DailyReportDetailPage(): JSX.Element {
   }
 
   async function saveEscort(): Promise<void> {
+    if (escortVehicleId) {
+      const v = vehicles.find((x) => x.id === escortVehicleId);
+      const cur = v?.currentOdometer;
+      if (cur != null && escortOdoStart < cur) {
+        setSessionErr(`随伴車のODOは車両マスタの現在ODO（${cur}）以上にしてください`);
+        return;
+      }
+    }
+    setSessionErr(null);
     await patchSession({
       escortVehicleId: escortVehicleId || null,
       escortOdometerStartM: escortVehicleId ? escortOdoStart : null,
@@ -784,6 +826,14 @@ export default function DailyReportDetailPage(): JSX.Element {
 
   async function submitOdoEnd(): Promise<void> {
     if (!reportId) return;
+    if (report?.escortVehicleId) {
+      const v = vehicles.find((x) => x.id === report.escortVehicleId);
+      const cur = v?.currentOdometer;
+      if (cur != null && odoEndInput < cur) {
+        setErr(`随伴車の終了ODOは車両マスタの現在ODO（${cur}）以上にしてください`);
+        return;
+      }
+    }
     setContinueBusy(true);
     const r = await apiFetch(`/daily-reports/${reportId}`, {
       method: "PATCH",
@@ -792,6 +842,7 @@ export default function DailyReportDetailPage(): JSX.Element {
     setContinueBusy(false);
     if (!r.ok) setErr(r.error);
     else {
+      flashSaved();
       setContinueOpen(false);
       setContinueStep("choose");
       void load();
@@ -814,6 +865,13 @@ export default function DailyReportDetailPage(): JSX.Element {
     if (!schedulePayload || !report) return [];
     return schedulePayload.reservations.filter((x) => x.driverEmployeeId === report.mainEmployeeId);
   }, [schedulePayload, report]);
+
+  const escortMasterOdoHint = useMemo(() => {
+    if (!escortVehicleId) return null;
+    const cur = vehicles.find((v) => v.id === escortVehicleId)?.currentOdometer;
+    if (cur == null) return null;
+    return `車両マスタの現在ODOは ${cur} です（これ未満は保存できません）。`;
+  }, [escortVehicleId, vehicles]);
 
   const editTrip = useMemo(() => {
     if (!report || !editTripOpen || !editTripId) return null;
@@ -883,6 +941,7 @@ export default function DailyReportDetailPage(): JSX.Element {
             value={escortOdoStart}
             onChange={(e) => setEscortOdoStart(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
           />
+          {escortMasterOdoHint ? <p className="settings-hint" style={{ marginTop: "0.25rem" }}>{escortMasterOdoHint}</p> : null}
           <p className="settings-hint">当日初めてその随伴車を使うときなどに入力し、「随伴車・ODOを保存」で記録します。</p>
           <button type="button" className="settings-secondary" disabled={sessionBusy} onClick={() => void saveEscort()}>
             随伴車・ODOを保存

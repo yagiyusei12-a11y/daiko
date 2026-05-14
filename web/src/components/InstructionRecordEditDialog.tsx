@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { Err } from "../ui";
+import { useSavedToast } from "../saved-toast";
 import type { InstructionRow } from "../lib/instruction-records-ui";
 
 type EmployeeOpt = { id: string; familyName: string; givenName: string; status: string };
@@ -28,6 +29,7 @@ type Props = {
 };
 
 export function InstructionRecordEditDialog({ open, record, employees, onClose, onSaved }: Props): JSX.Element | null {
+  const { flashSaved } = useSavedToast();
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [recipientIds, setRecipientIds] = useState<Set<string>>(new Set());
@@ -109,10 +111,12 @@ export function InstructionRecordEditDialog({ open, record, employees, onClose, 
       setErr(r.error);
       return;
     }
+    flashSaved();
     onSaved();
     onClose();
   }, [
     record,
+    flashSaved,
     recipientIds,
     instructorIds,
     dateLocal,

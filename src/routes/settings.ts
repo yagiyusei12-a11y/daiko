@@ -450,6 +450,25 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
       await prisma.user.update({ where: { id: emp.linkedUsers[0].id }, data: { passwordHash } });
     }
 
+    if (b.loginEmail !== undefined && emp.linkedUsers[0]) {
+      const nextEmail = String(b.loginEmail ?? "").trim().toLowerCase();
+      if (!nextEmail) {
+        return reply.code(400).send({ error: "ログインID（メール）を空にすることはできません" });
+      }
+      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail);
+      if (!emailOk) return reply.code(400).send({ error: "ログインIDは有効なメール形式にしてください" });
+      const uid = emp.linkedUsers[0].id;
+      const current = emp.linkedUsers[0].email?.toLowerCase() ?? "";
+      if (nextEmail !== current) {
+        const taken = await prisma.user.findFirst({
+          where: { tenantId, email: nextEmail, NOT: { id: uid } },
+          select: { id: true },
+        });
+        if (taken) return reply.code(409).send({ error: "このログインIDは既に使われています" });
+        await prisma.user.update({ where: { id: uid }, data: { email: nextEmail } });
+      }
+    }
+
     await prisma.employee.update({
       where: { id },
       data: {

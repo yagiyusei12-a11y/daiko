@@ -591,6 +591,10 @@ model TripLeg {
 
   /// 駐車場等の立替金（円）。運賃・売上集計とは別扱い
   parkingAdvanceYen Int @default(0)
+  /// 支払方法: CASH | CARD | PAYPAY | RECEIVABLE | OTHER（null は未指定扱いで UI は現金相当）
+  tripPaymentMethod String?
+  /// 領収書を発行したか
+  tripReceiptIssued Boolean @default(false)
   /// 運行区間のメーター開始（任意・記録用、メートル単位の整数など運用で統一）
   tripMeterStartM Int?
   /// 運行区間のメーター終了（任意）
