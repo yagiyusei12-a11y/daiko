@@ -28,6 +28,8 @@ export type MeUser = {
   staffMenuVisibility?: StaffMenuVisibilityClient;
   /** 日付変更時間（28時間表記）。rollHour = dayChangeHour - 24 */
   dayChangeHour: number;
+  /** 環境変数で指定したデモ用ログイン（パスワード不要入口）のとき true */
+  demoSession?: boolean;
 };
 
 /**
@@ -92,6 +94,8 @@ type AuthCtx = {
   loading: boolean;
   refreshMe: () => Promise<void>;
   login: (slug: string, email: string, password: string) => Promise<string | undefined>;
+  /** サーバーにデモ用テナント／ユーザーが設定されている場合のみ成功 */
+  enterDemo: () => Promise<string | undefined>;
   register: (p: {
     tenantName: string;
     slug: string;
@@ -142,6 +146,14 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     return undefined;
   }, [refreshMe]);
 
+  const enterDemo = useCallback(async () => {
+    const r = await apiFetch<{ accessToken: string; refreshToken: string }>("/auth/demo", { method: "POST" });
+    if (!r.ok) return r.error;
+    setTokens(r.data.accessToken, r.data.refreshToken);
+    await refreshMe();
+    return undefined;
+  }, [refreshMe]);
+
   const register = useCallback(
     async (p: {
       tenantName: string;
@@ -178,8 +190,8 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   );
 
   const value = useMemo(
-    () => ({ me, loading, refreshMe, login, register, logout, can }),
-    [me, loading, refreshMe, login, register, logout, can],
+    () => ({ me, loading, refreshMe, login, enterDemo, register, logout, can }),
+    [me, loading, refreshMe, login, enterDemo, register, logout, can],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

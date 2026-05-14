@@ -8,6 +8,13 @@ import { hashToken, randomRefreshToken } from "../lib/tokens.js";
 
 const REFRESH_DAYS = 30;
 
+function demoEnv(): { slug: string; email: string } | null {
+  const slug = (process.env.DAIKO_DEMO_TENANT_SLUG ?? "").trim().toLowerCase();
+  const email = (process.env.DAIKO_DEMO_USER_EMAIL ?? "").trim().toLowerCase();
+  if (!slug || !email) return null;
+  return { slug, email };
+}
+
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post<{
     Body: {
@@ -116,6 +123,20 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     return issueTokens(reply, user.id, user.tenantId, user.email);
   });
 
+  app.get("/auth/demo-config", async () => {
+    return { available: demoEnv() != null };
+  });
+
+  app.post("/auth/demo", async (_req, reply) => {
+    const cfg = demoEnv();
+    if (!cfg) return reply.code(404).send({ error: "demo not configured" });
+    const tenant = await prisma.tenant.findUnique({ where: { slug: cfg.slug } });
+    if (!tenant) return reply.code(503).send({ error: "demo tenant not found" });
+    const user = await prisma.user.findFirst({ where: { tenantId: tenant.id, email: cfg.email } });
+    if (!user) return reply.code(503).send({ error: "demo user not found" });
+    return issueTokens(reply, user.id, user.tenantId, user.email);
+  });
+
   app.post<{ Body: { refreshToken?: string } }>("/auth/refresh", async (req, reply) => {
     const raw = String(req.body?.refreshToken || "");
     if (!raw) return reply.code(400).send({ error: "refreshToken required" });
@@ -158,6 +179,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       : (user.displayName?.trim() || user.email);
     const sm = coerceStaffMenuVisibilityFromCustomJson(user.tenant.settings?.customJson);
     const rollHour = user.tenant.settings?.businessDayRollHour ?? 4;
+    const demo = demoEnv();
+    const demoSession = Boolean(demo && user.email.toLowerCase() === demo.email && user.tenant.slug === demo.slug);
     return {
       user: {
         id: user.id,
@@ -174,6 +197,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           allowedSubTabIdsByNav: sm.allowedSubTabIdsByNav,
         },
         dayChangeHour: rollHour + 24,
+        demoSession,
       },
     };
   });

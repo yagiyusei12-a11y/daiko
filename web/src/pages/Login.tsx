@@ -35,7 +35,7 @@ export default function Login(): JSX.Element {
         </form>
         <div className="auth-footer-row">
           <Link to="/register">新規テナント登録</Link>
-          <Link to="/sample">サンプルページ</Link>
+          <Link to="/demo">デモ画面</Link>
         </div>
       </Card>
     </div>

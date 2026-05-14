@@ -36,7 +36,8 @@ export default function Shell(): JSX.Element {
       return;
     }
     const t = me.tradeName?.trim() || me.tenant.name;
-    document.title = t ? `${t} · Daiko` : "Daiko";
+    const suffix = me.demoSession ? "（デモ）" : "";
+    document.title = t ? `${t}${suffix} · Daiko` : "Daiko";
   }, [me]);
 
   if (loading) {
@@ -62,6 +63,20 @@ export default function Shell(): JSX.Element {
   if (touchNav) {
     return (
       <div className="app-shell" data-device={device}>
+        {me.demoSession ? (
+          <div
+            className="app-demo-banner"
+            style={{
+              padding: "0.35rem 0.75rem",
+              fontSize: "0.85rem",
+              background: "var(--color-warn-bg, #fff8e6)",
+              borderBottom: "1px solid var(--color-border, #e0ddd8)",
+              textAlign: "center",
+            }}
+          >
+            デモ閲覧中（保存データはデモ用テナントに記録されます）
+          </div>
+        ) : null}
         <header className="app-header">
           <div className="app-header-bar">
             <span className="app-header-brand">{me.tradeName?.trim() || me.tenant.name}</span>
@@ -95,6 +110,20 @@ export default function Shell(): JSX.Element {
         </div>
       </nav>
       <div className="app-content-area">
+        {me.demoSession ? (
+          <div
+            className="app-demo-banner"
+            style={{
+              padding: "0.35rem 0.75rem",
+              fontSize: "0.85rem",
+              background: "var(--color-warn-bg, #fff8e6)",
+              borderBottom: "1px solid var(--color-border, #e0ddd8)",
+              textAlign: "center",
+            }}
+          >
+            デモ閲覧中（保存データはデモ用テナントに記録されます）
+          </div>
+        ) : null}
         <main className="app-main">
           <SavedToastProvider>
             <Outlet />
