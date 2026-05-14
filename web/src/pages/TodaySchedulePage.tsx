@@ -299,7 +299,8 @@ export default function TodaySchedulePage(): JSX.Element {
     setParking("");
     setTripEstimateMinutes(bookingDefaultEstimate);
     setVehicleId("");
-    setStartLocal(`${viewDate}T10:00`);
+    const nowRounded = new Date(Math.round(Date.now() / (15 * 60 * 1000)) * (15 * 60 * 1000));
+    setStartLocal(formatUtcAsTokyoDatetimeLocal(nowRounded));
     const first = data?.drivers[0]?.employeeId ?? "";
     setDriverEmployeeId(first);
     setDialogOpen(true);
@@ -830,7 +831,7 @@ export default function TodaySchedulePage(): JSX.Element {
                 <label htmlFor="sr-phone">電話番号</label>
                 <input id="sr-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
                 <label htmlFor="sr-start">日時（開始）</label>
-                <input id="sr-start" type="datetime-local" value={startLocal} onChange={(e) => setStartLocal(e.target.value)} />
+                <input id="sr-start" type="datetime-local" step="900" value={startLocal} onChange={(e) => setStartLocal(e.target.value)} />
                 <label htmlFor="sr-pickup">迎え先</label>
                 <input id="sr-pickup" type="text" value={pickup} onChange={(e) => setPickup(e.target.value)} />
                 <label>経由地（行を追加できます）</label>
@@ -937,7 +938,7 @@ export default function TodaySchedulePage(): JSX.Element {
             <div className="attend-shift-dialog-scroll">
               <div className="settings-form">
                 <label htmlFor="sd-start">日時（開始）</label>
-                <input id="sd-start" type="datetime-local" value={mStartLocal} onChange={(e) => setMStartLocal(e.target.value)} />
+                <input id="sd-start" type="datetime-local" step="900" value={mStartLocal} onChange={(e) => setMStartLocal(e.target.value)} />
                 <label htmlFor="sd-dur">ブロック時間（分・15分刻み）</label>
                 <select id="sd-dur" value={mDuration} onChange={(e) => setMDuration(Number(e.target.value))}>
                   {durationSelectOptions.map((m) => (
