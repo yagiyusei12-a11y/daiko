@@ -1693,6 +1693,25 @@ button.settings-danger:disabled {
   opacity: 0.95;
   background: color-mix(in srgb, var(--color-accent) 75%, #1e3a5f) !important;
 }
+.attend-schedule-row--drag-target .attend-schedule-track {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  outline: 2px dashed var(--color-accent);
+  outline-offset: -2px;
+  border-radius: 2px;
+}
+.attend-schedule-bar--ghost {
+  z-index: 3;
+  opacity: 0.55;
+  background: color-mix(in srgb, var(--color-accent) 75%, #1e3a5f) !important;
+  pointer-events: none;
+  font-size: 0.58rem;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 2px;
+  border: 2px dashed rgba(255,255,255,0.7);
+}
 
 .dash-driver-table-wrap {
   margin-top: 0.5rem;

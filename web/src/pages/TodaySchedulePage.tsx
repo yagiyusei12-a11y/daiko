@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../api";
-import { SCHEDULE_UNASSIGNED_DRIVER_ID, scheduleDbUnassignedToDriverColumnKey } from "../lib/schedule-constants";
+import {
+  SCHEDULE_UNASSIGNED_DRIVER_ID,
+  scheduleDbUnassignedToDriverColumnKey,
+  parseScheduleUnassignedLaneEmployeeId,
+} from "../lib/schedule-constants";
 import { useSavedToast } from "../saved-toast";
 import { useDeviceKind } from "../hooks/useDeviceKind";
 import { Card, Err } from "../ui";
@@ -153,7 +157,13 @@ type DragCtx = {
   startMin: number;
   endMin: number;
   last: { a: number; b: number };
+  originDriverId: string;
+  targetDriverId: string;
 };
+
+function isUnassignedDriverId(id: string): boolean {
+  return id === SCHEDULE_UNASSIGNED_DRIVER_ID || parseScheduleUnassignedLaneEmployeeId(id) !== null;
+}
 
 export default function TodaySchedulePage(): JSX.Element {
   const { flashSaved } = useSavedToast();
@@ -196,6 +206,7 @@ export default function TodaySchedulePage(): JSX.Element {
   const [mParking, setMParking] = useState("");
 
   const [dragPreview, setDragPreview] = useState<Record<string, { a: number; b: number }>>({});
+  const [dragTargetDriverId, setDragTargetDriverId] = useState<string | null>(null);
   const dragRef = useRef<DragCtx | null>(null);
   const dragMovedRef = useRef(false);
 
@@ -430,6 +441,7 @@ export default function TodaySchedulePage(): JSX.Element {
     if (pos < edge) kind = "resize-l";
     else if (pos > spanPx - edge) kind = "resize-r";
     dragMovedRef.current = false;
+    const originDriverId = reservationColumnKey(rv, availabilityMode);
     dragRef.current = {
       pointerId: e.pointerId,
       rv,
@@ -441,6 +453,8 @@ export default function TodaySchedulePage(): JSX.Element {
       startMin: a0,
       endMin: b0,
       last: { a: a0, b: b0 },
+      originDriverId,
+      targetDriverId: originDriverId,
     };
 
     function onMove(ev: PointerEvent): void {
@@ -456,6 +470,27 @@ export default function TodaySchedulePage(): JSX.Element {
         const sh = snap15(deltaMin);
         a = snap15(d.startMin + sh);
         b = snap15(d.endMin + sh);
+        // cross-row detection: only for unassigned rows
+        if (isUnassignedDriverId(d.originDriverId)) {
+          const els = document.elementsFromPoint(ev.clientX, ev.clientY);
+          let foundRow = false;
+          for (const el of els) {
+            const tid = (el as HTMLElement).dataset?.driverId;
+            if (tid !== undefined) {
+              foundRow = true;
+              const newTarget = isUnassignedDriverId(tid) ? tid : d.originDriverId;
+              if (newTarget !== d.targetDriverId) {
+                d.targetDriverId = newTarget;
+                setDragTargetDriverId(newTarget !== d.originDriverId ? newTarget : null);
+              }
+              break;
+            }
+          }
+          if (!foundRow && d.targetDriverId !== d.originDriverId) {
+            d.targetDriverId = d.originDriverId;
+            setDragTargetDriverId(null);
+          }
+        }
       } else if (d.kind === "resize-l") {
         a = snap15(d.startMin + deltaMin);
         if (a >= b - 15) a = b - 15;
@@ -481,24 +516,31 @@ export default function TodaySchedulePage(): JSX.Element {
         delete next[d.rv.id];
         return next;
       });
+      setDragTargetDriverId(null);
       if (!moved) {
         openDetail(d.rv);
         return;
       }
       const origA = minutesSinceTokyoDay(viewDate, d.rv.startsAt);
       const origB = minutesSinceTokyoDay(viewDate, d.rv.endsAt);
-      if (fin.a === origA && fin.b === origB) return;
+      const timeChanged = fin.a !== origA || fin.b !== origB;
+      const rowChanged = d.targetDriverId !== d.originDriverId;
+      if (!timeChanged && !rowChanged) return;
       const base = tokyoMidnightUtcMs(viewDate);
       const startIso = new Date(base + fin.a * 60000).toISOString();
       void (async () => {
         const startLocalStr = formatUtcAsTokyoDatetimeLocal(new Date(startIso));
         const dur = fin.b - fin.a;
+        const patchBody: Record<string, unknown> = {
+          startLocal: startLocalStr,
+          durationMinutes: dur,
+        };
+        if (rowChanged) {
+          patchBody.driverEmployeeId = d.targetDriverId;
+        }
         const r = await apiFetch(`/dispatch/reservations/${encodeURIComponent(d.rv.id)}`, {
           method: "PATCH",
-          json: {
-            startLocal: startLocalStr,
-            durationMinutes: dur,
-          },
+          json: patchBody,
         });
         if (!r.ok) {
           setErr(r.error);
@@ -684,14 +726,28 @@ export default function TodaySchedulePage(): JSX.Element {
               </div>
               {data.drivers.map((row) => {
                 const resList = reservationsByDriver.get(row.employeeId) ?? [];
+                const isTargetRow = dragTargetDriverId === row.employeeId;
+                const ghostRv = isTargetRow
+                  ? (() => {
+                      const d = dragRef.current;
+                      if (!d) return null;
+                      const pr = dragPreview[d.rv.id] ?? { a: minutesSinceTokyoDay(viewDate, d.rv.startsAt), b: minutesSinceTokyoDay(viewDate, d.rv.endsAt) };
+                      return { rv: d.rv, a: pr.a, b: pr.b };
+                    })()
+                  : null;
                 return (
-                  <div key={row.employeeId} className="attend-schedule-row">
+                  <div
+                    key={row.employeeId}
+                    className={`attend-schedule-row${isTargetRow ? " attend-schedule-row--drag-target" : ""}`}
+                    data-driver-id={row.employeeId}
+                  >
                     <div className="attend-schedule-name">{row.name}</div>
-                    <div className="attend-schedule-track">
+                    <div className="attend-schedule-track" data-driver-id={row.employeeId}>
                       {resList.map((rv) => {
                         const { a, b } = effectiveMinutes(rv);
                         const bar = scheduleBarPercentages(a, b, scheduleAxis);
                         const label = barLabel(rv);
+                        const isCrossRowDragging = dragTargetDriverId !== null && dragRef.current?.rv.id === rv.id;
                         return (
                           <button
                             key={rv.id}
@@ -708,6 +764,7 @@ export default function TodaySchedulePage(): JSX.Element {
                               color: "#fff",
                               whiteSpace: "nowrap",
                               textOverflow: "ellipsis",
+                              opacity: isCrossRowDragging ? 0.35 : 1,
                             }}
                             title={`${rv.detail.customerName} ${rv.detail.pickup}→${rv.detail.dropoff}`}
                             onPointerDown={(e) => {
@@ -719,6 +776,22 @@ export default function TodaySchedulePage(): JSX.Element {
                           </button>
                         );
                       })}
+                      {ghostRv ? (() => {
+                        const bar = scheduleBarPercentages(ghostRv.a, ghostRv.b, scheduleAxis);
+                        return (
+                          <div
+                            key="drag-ghost"
+                            className="attend-schedule-bar attend-schedule-bar--reservation attend-schedule-bar--ghost"
+                            style={{
+                              left: `${bar.startPct}%`,
+                              width: `${bar.sizePct}%`,
+                              pointerEvents: "none",
+                            }}
+                          >
+                            {barLabel(ghostRv.rv)}
+                          </div>
+                        );
+                      })() : null}
                     </div>
                   </div>
                 );
