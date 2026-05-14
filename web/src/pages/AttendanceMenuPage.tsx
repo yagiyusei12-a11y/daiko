@@ -672,6 +672,7 @@ export default function AttendanceMenuPage(): JSX.Element {
   >([]);
   const [tcLoading, setTcLoading] = useState(false);
   const [tcAlcoholOpen, setTcAlcoholOpen] = useState(false);
+  const [tcAlcoholPhase, setTcAlcoholPhase] = useState<"CLOCK_IN" | "CLOCK_OUT">("CLOCK_IN");
   const [tcAlcoholErr, setTcAlcoholErr] = useState<string | null>(null);
   const [tcBreathList, setTcBreathList] = useState<BreathalyzerEntry[]>([]);
   const [alcBreathId, setAlcBreathId] = useState("");
@@ -1057,7 +1058,7 @@ export default function AttendanceMenuPage(): JSX.Element {
     return true;
   }
 
-  async function beginClockIn(): Promise<void> {
+  async function openAlcoholDialog(phase: "CLOCK_IN" | "CLOCK_OUT"): Promise<void> {
     if (!tcEmployeeId || !tcDate) return;
     setErr(null);
     setTcAlcoholErr(null);
@@ -1075,10 +1076,11 @@ export default function AttendanceMenuPage(): JSX.Element {
     setAlcMethod(first?.verificationMethods?.[0] ?? "");
     setAlcDetected(false);
     setAlcNote("");
+    setTcAlcoholPhase(phase);
     setTcAlcoholOpen(true);
   }
 
-  async function submitAlcoholClockIn(): Promise<void> {
+  async function submitAlcohol(): Promise<void> {
     setTcAlcoholErr(null);
     const hasBreathalyzers = tcBreathList.length > 0;
     if (hasBreathalyzers && (!alcBreathId || !alcMethod)) {
@@ -1104,7 +1106,7 @@ export default function AttendanceMenuPage(): JSX.Element {
     if (alcBreathId) alcoholCheck.breathalyzerId = alcBreathId;
     if (alcMethod) alcoholCheck.verificationMethod = alcMethod;
 
-    const ok = await postTimecardPunch("CLOCK_IN", alcoholCheck);
+    const ok = await postTimecardPunch(tcAlcoholPhase, alcoholCheck);
     if (ok) setTcAlcoholOpen(false);
   }
 
@@ -1418,7 +1420,7 @@ export default function AttendanceMenuPage(): JSX.Element {
                 type="button"
                 className="settings-primary"
                 disabled={!tcEmployeeId || tcLoading}
-                onClick={() => void beginClockIn()}
+                onClick={() => void openAlcoholDialog("CLOCK_IN")}
               >
                 出勤
               </button>
@@ -1426,7 +1428,7 @@ export default function AttendanceMenuPage(): JSX.Element {
                 type="button"
                 className="settings-primary"
                 disabled={!tcEmployeeId || tcLoading}
-                onClick={() => void postTimecardPunch("CLOCK_OUT")}
+                onClick={() => void openAlcoholDialog("CLOCK_OUT")}
               >
                 退勤
               </button>
@@ -1925,7 +1927,7 @@ export default function AttendanceMenuPage(): JSX.Element {
             onMouseDown={(e) => e.stopPropagation()}
           >
             <h2 id="tc-alc-title" className="pricing-modal-title">
-              出勤（アルコールチェック）
+              {tcAlcoholPhase === "CLOCK_IN" ? "出勤" : "退勤"}（アルコールチェック）
             </h2>
             <div className="attend-shift-dialog-scroll">
               <Err msg={tcAlcoholErr} />
@@ -1969,8 +1971,8 @@ export default function AttendanceMenuPage(): JSX.Element {
               </div>
             </div>
             <div className="pricing-modal-actions">
-              <button type="button" className="settings-primary" disabled={tcLoading} onClick={() => void submitAlcoholClockIn()}>
-                出勤を記録
+              <button type="button" className="settings-primary" disabled={tcLoading} onClick={() => void submitAlcohol()}>
+                {tcAlcoholPhase === "CLOCK_IN" ? "出勤" : "退勤"}を記録
               </button>
               <button type="button" disabled={tcLoading} onClick={() => setTcAlcoholOpen(false)}>
                 キャンセル

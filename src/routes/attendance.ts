@@ -692,7 +692,7 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
     if (!emp) return reply.code(404).send({ error: "従業員が見つかりません" });
 
     let alcoholCheckJson: Prisma.InputJsonValue | undefined;
-    if (kindStr === "CLOCK_IN") {
+    if (kindStr === "CLOCK_IN" || kindStr === "CLOCK_OUT") {
       const settings = await prisma.tenantSettings.findUnique({ where: { tenantId } });
       const basics = coerceBusinessBasicsFromCustomJson(settings?.customJson);
       const built = await buildAlcoholCheckJsonForClockIn(tenantId, basics, b.alcoholCheck);
