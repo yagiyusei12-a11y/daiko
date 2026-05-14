@@ -543,4 +543,108 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
       return reply.type("text/html; charset=utf-8").send(html);
     },
   );
+
+  app.post<{ Body: Record<string, unknown> }>("/documents/alcohol-check-pdf", async (req, reply) => {
+    const { tenantId } = jwtUser(req);
+    const b = req.body || {};
+    const yearMonth = String(b.yearMonth ?? "").trim();
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth)) {
+      return reply.code(400).send({ error: "yearMonth は yyyy-MM 形式で指定してください" });
+    }
+    const [y, m] = yearMonth.split("-");
+    const dateFrom = `${y}-${m}-01`;
+    const nextMonth = m === "12" ? `${Number(y) + 1}-01-01` : `${y}-${String(Number(m) + 1).padStart(2, "0")}-01`;
+
+    const punches = await prisma.timeCardPunch.findMany({
+      where: {
+        tenantId,
+        businessDate: { gte: dateFrom, lt: nextMonth },
+        kind: { in: ["CLOCK_IN", "CLOCK_OUT"] },
+      },
+      orderBy: [{ businessDate: "asc" }, { punchedAt: "asc" }],
+      include: { employee: { select: { familyName: true, givenName: true } } },
+    });
+
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+
+    type AlcoholRow = {
+      businessDate: string;
+      phase: string;
+      name: string;
+      breathalyzerName: string;
+      verificationMethod: string;
+      alcoholDetected: boolean;
+      instructionsNote: string;
+      verifierName: string;
+    };
+
+    const rows: AlcoholRow[] = punches
+      .filter((p) => p.alcoholCheckJson !== null)
+      .map((p) => {
+        const ac = (p.alcoholCheckJson ?? {}) as Record<string, unknown>;
+        return {
+          businessDate: p.businessDate,
+          phase: p.kind === "CLOCK_IN" ? "出勤" : "退勤",
+          name: `${p.employee.familyName} ${p.employee.givenName}`,
+          breathalyzerName: typeof ac.breathalyzerName === "string" ? ac.breathalyzerName : "—",
+          verificationMethod: typeof ac.verificationMethod === "string" ? ac.verificationMethod : "—",
+          alcoholDetected: Boolean(ac.alcoholDetected),
+          instructionsNote: typeof ac.instructionsNote === "string" ? ac.instructionsNote : "",
+          verifierName: typeof ac.verifierName === "string" ? ac.verifierName : "—",
+        };
+      });
+
+    const tableRows = rows
+      .map(
+        (r) => `<tr>
+      <td>${r.businessDate}</td>
+      <td>${r.name}</td>
+      <td>${r.phase}</td>
+      <td>${r.breathalyzerName}</td>
+      <td>${r.verificationMethod}</td>
+      <td class="${r.alcoholDetected ? "positive" : ""}">${r.alcoholDetected ? "あり" : "なし"}</td>
+      <td class="note">${r.instructionsNote.replace(/</g, "&lt;").replace(/\n/g, "<br>")}</td>
+      <td>${r.verifierName}</td>
+    </tr>`,
+      )
+      .join("\n");
+
+    const [ym_y, ym_m] = yearMonth.split("-");
+    const title = `アルコール点検記録 ${ym_y}年${Number(ym_m)}月`;
+    const html = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>${title}</title>
+<style>
+  @page { size: A4 portrait; margin: 15mm 12mm; }
+  body { font-family: "Noto Sans JP", sans-serif; font-size: 10pt; color: #0f172a; margin: 0; }
+  h1 { font-size: 14pt; font-weight: 700; text-align: center; margin: 0 0 4pt; }
+  .sub { font-size: 10pt; text-align: center; color: #475569; margin: 0 0 10pt; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  th { background: #1e293b; color: #fff; padding: 4pt 5pt; text-align: center; white-space: nowrap; }
+  td { border: 1px solid #cbd5e1; padding: 3pt 5pt; vertical-align: top; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  td.positive { color: #dc2626; font-weight: 700; }
+  td.note { font-size: 8pt; max-width: 80pt; word-break: break-all; }
+</style>
+</head>
+<body>
+<h1>${title}</h1>
+<p class="sub">${tenant?.name ?? ""}</p>
+<table>
+  <thead>
+    <tr>
+      <th>日付</th><th>氏名</th><th>区分</th><th>検知器</th><th>確認方法</th><th>酒気帯び</th><th>指示事項</th><th>確認者</th>
+    </tr>
+  </thead>
+  <tbody>
+${tableRows || "<tr><td colspan=\"8\" style=\"text-align:center;color:#94a3b8\">記録なし</td></tr>"}
+  </tbody>
+</table>
+</body>
+</html>`;
+
+    return sendHtmlOrPdf(reply, req, b, html, `alcohol-check_${yearMonth}`);
+  });
 }

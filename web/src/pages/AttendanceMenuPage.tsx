@@ -1067,15 +1067,11 @@ export default function AttendanceMenuPage(): JSX.Element {
     }
     const raw = r.data.breathalyzers;
     const list = Array.isArray(raw) ? raw.filter((b) => b && typeof b.id === "string" && typeof b.name === "string") : [];
-    if (list.length === 0) {
-      void postTimecardPunch("CLOCK_IN");
-      return;
-    }
     setTcBreathList(list);
     const first = list[0];
-    setAlcBreathId(first.id);
+    setAlcBreathId(first?.id ?? "");
     setAlcVerifierId("");
-    setAlcMethod(first.verificationMethods?.[0] ?? "対面");
+    setAlcMethod(first?.verificationMethods?.[0] ?? "");
     setAlcDetected(false);
     setAlcNote("");
     setTcAlcoholOpen(true);
@@ -1083,26 +1079,31 @@ export default function AttendanceMenuPage(): JSX.Element {
 
   async function submitAlcoholClockIn(): Promise<void> {
     setTcAlcoholErr(null);
-    if (!alcBreathId || !alcVerifierId || !alcMethod) {
-      setTcAlcoholErr("アルコール探知機・確認者・確認方法を選んでください。");
+    const hasBreathalyzers = tcBreathList.length > 0;
+    if (hasBreathalyzers && (!alcBreathId || !alcMethod)) {
+      setTcAlcoholErr("アルコール探知機・確認方法を選んでください。");
       return;
     }
-    if (safetyManagers.length === 0) {
-      setTcAlcoholErr("安全運転管理者が名簿にいません。設定の名簿でフラグを付けてください。");
+    if (!alcVerifierId && safetyManagers.length > 0) {
+      setTcAlcoholErr("確認者（安全運転管理者）を選んでください。");
       return;
     }
-    const dev = tcBreathList.find((x) => x.id === alcBreathId);
-    if (!dev || !dev.verificationMethods.includes(alcMethod)) {
-      setTcAlcoholErr("確認方法が不正です。");
-      return;
+    if (hasBreathalyzers) {
+      const dev = tcBreathList.find((x) => x.id === alcBreathId);
+      if (!dev || !dev.verificationMethods.includes(alcMethod)) {
+        setTcAlcoholErr("確認方法が不正です。");
+        return;
+      }
     }
-    const ok = await postTimecardPunch("CLOCK_IN", {
-      breathalyzerId: alcBreathId,
-      verifierEmployeeId: alcVerifierId,
-      verificationMethod: alcMethod,
+    const alcoholCheck: Record<string, unknown> = {
       alcoholDetected: alcDetected,
       instructionsNote: alcNote.trim() || null,
-    });
+    };
+    if (alcVerifierId) alcoholCheck.verifierEmployeeId = alcVerifierId;
+    if (alcBreathId) alcoholCheck.breathalyzerId = alcBreathId;
+    if (alcMethod) alcoholCheck.verificationMethod = alcMethod;
+
+    const ok = await postTimecardPunch("CLOCK_IN", alcoholCheck);
     if (ok) setTcAlcoholOpen(false);
   }
 

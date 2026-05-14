@@ -11,42 +11,45 @@ async function buildAlcoholCheckJsonForClockIn(
   basics: BusinessBasicsV2,
   raw: unknown,
 ): Promise<{ ok: true; json: Prisma.InputJsonValue | null } | { ok: false; error: string }> {
-  if (basics.breathalyzers.length === 0) {
-    return { ok: true, json: null };
-  }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return { ok: false, error: "出勤時はアルコールチェック情報が必要です" };
+    return { ok: true, json: null };
   }
   const ac = raw as Record<string, unknown>;
   const breathalyzerId = String(ac.breathalyzerId ?? "").trim();
   const verifierEmployeeId = String(ac.verifierEmployeeId ?? "").trim();
   const verificationMethod = String(ac.verificationMethod ?? "").trim();
-  if (!breathalyzerId || !verifierEmployeeId || !verificationMethod) {
-    return { ok: false, error: "アルコール探知機・確認者・確認方法をすべて指定してください" };
-  }
-  const dev = basics.breathalyzers.find((d) => d.id === breathalyzerId);
-  if (!dev) return { ok: false, error: "アルコール探知機の指定が不正です" };
-  if (!dev.verificationMethods.includes(verificationMethod)) {
-    return { ok: false, error: "確認方法がこのアルコール探知機の一覧にありません" };
-  }
-  const verifier = await prisma.employee.findFirst({
-    where: { id: verifierEmployeeId, tenantId, safetyDrivingManager: true, status: "ACTIVE" },
-    select: { id: true, familyName: true, givenName: true },
-  });
-  if (!verifier) {
-    return { ok: false, error: "確認者は安全運転管理者から選んでください" };
-  }
   const alcoholDetected = Boolean(ac.alcoholDetected);
   let instructionsNote: string | null = null;
   if (ac.instructionsNote !== undefined && ac.instructionsNote !== null && String(ac.instructionsNote).trim()) {
     instructionsNote = String(ac.instructionsNote).trim().slice(0, 2000);
   }
+
+  let breathalyzerName: string | null = null;
+  if (breathalyzerId) {
+    const dev = basics.breathalyzers.find((d) => d.id === breathalyzerId);
+    if (!dev) return { ok: false, error: "アルコール探知機の指定が不正です" };
+    if (verificationMethod && !dev.verificationMethods.includes(verificationMethod)) {
+      return { ok: false, error: "確認方法がこのアルコール探知機の一覧にありません" };
+    }
+    breathalyzerName = dev.name;
+  }
+
+  let verifierName: string | null = null;
+  if (verifierEmployeeId) {
+    const verifier = await prisma.employee.findFirst({
+      where: { id: verifierEmployeeId, tenantId, safetyDrivingManager: true, status: "ACTIVE" },
+      select: { id: true, familyName: true, givenName: true },
+    });
+    if (!verifier) {
+      return { ok: false, error: "確認者は安全運転管理者から選んでください" };
+    }
+    verifierName = `${verifier.familyName} ${verifier.givenName}`;
+  }
+
   const json = {
-    breathalyzerId,
-    breathalyzerName: dev.name,
-    verifierEmployeeId,
-    verifierName: `${verifier.familyName} ${verifier.givenName}`,
-    verificationMethod,
+    ...(breathalyzerId ? { breathalyzerId, breathalyzerName } : {}),
+    ...(verifierEmployeeId ? { verifierEmployeeId, verifierName } : {}),
+    ...(verificationMethod ? { verificationMethod } : {}),
     alcoholDetected,
     instructionsNote,
     recordedAt: new Date().toISOString(),
@@ -939,6 +942,52 @@ export async function registerAttendanceRoutes(app: FastifyInstance): Promise<vo
       const n = `${a.familyName}${a.givenName}`.localeCompare(`${b.familyName}${b.givenName}`, "ja");
       return n;
     });
+
+    return { yearMonth, rows };
+  });
+
+  app.get<{ Querystring: { yearMonth?: string } }>("/timecard/alcohol-checks", async (req, reply) => {
+    const { tenantId } = jwtUser(req);
+    const yearMonth = String(req.query?.yearMonth ?? "").trim();
+    if (!YM_RE.test(yearMonth)) {
+      return reply.code(400).send({ error: "yearMonth は yyyy-MM 形式で指定してください" });
+    }
+    const [y, m] = yearMonth.split("-");
+    const dateFrom = `${y}-${m}-01`;
+    const nextMonth = m === "12" ? `${Number(y) + 1}-01-01` : `${y}-${String(Number(m) + 1).padStart(2, "0")}-01`;
+
+    const punches = await prisma.timeCardPunch.findMany({
+      where: {
+        tenantId,
+        businessDate: { gte: dateFrom, lt: nextMonth },
+        kind: { in: ["CLOCK_IN", "CLOCK_OUT"] },
+        NOT: { alcoholCheckJson: { equals: null as unknown as Prisma.InputJsonValue } },
+      },
+      orderBy: [{ businessDate: "asc" }, { punchedAt: "asc" }],
+      include: {
+        employee: { select: { id: true, familyName: true, givenName: true } },
+      },
+    });
+
+    const rows = punches
+      .filter((p) => p.alcoholCheckJson !== null)
+      .map((p) => {
+        const ac = (p.alcoholCheckJson ?? {}) as Record<string, unknown>;
+        return {
+          id: p.id,
+          businessDate: p.businessDate,
+          phase: p.kind === "CLOCK_IN" ? "出勤" : "退勤",
+          employeeId: p.employee.id,
+          familyName: p.employee.familyName,
+          givenName: p.employee.givenName,
+          punchedAt: p.punchedAt.toISOString(),
+          breathalyzerName: typeof ac.breathalyzerName === "string" ? ac.breathalyzerName : null,
+          verificationMethod: typeof ac.verificationMethod === "string" ? ac.verificationMethod : null,
+          alcoholDetected: Boolean(ac.alcoholDetected),
+          instructionsNote: typeof ac.instructionsNote === "string" ? ac.instructionsNote : null,
+          verifierName: typeof ac.verifierName === "string" ? ac.verifierName : null,
+        };
+      });
 
     return { yearMonth, rows };
   });

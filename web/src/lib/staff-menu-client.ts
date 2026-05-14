@@ -29,6 +29,7 @@ export const STAFF_SUB_TAB_LABELS: Record<string, { id: string; label: string }[
   ],
   documents: [
     { id: "nippo", label: "日報" },
+    { id: "alcohol-check", label: "アルコール点検" },
     { id: "meibo", label: "従業員名簿" },
     { id: "seiyaku", label: "誓約書" },
     { id: "nintei", label: "認定証" },

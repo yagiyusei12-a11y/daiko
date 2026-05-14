@@ -1174,6 +1174,128 @@ function HenkoKisaiPrintBlock(): JSX.Element {
   );
 }
 
+type AlcoholCheckRow = {
+  id: string;
+  businessDate: string;
+  phase: string;
+  employeeId: string;
+  familyName: string;
+  givenName: string;
+  punchedAt: string;
+  breathalyzerName: string | null;
+  verificationMethod: string | null;
+  alcoholDetected: boolean;
+  instructionsNote: string | null;
+  verifierName: string | null;
+};
+
+function tokyoYm(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit" })
+    .format(new Date())
+    .slice(0, 7);
+}
+
+function AlcoholCheckPrintBlock(): JSX.Element {
+  const [yearMonth, setYearMonth] = useState(tokyoYm);
+  const [rows, setRows] = useState<AlcoholCheckRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfErr, setPdfErr] = useState<string | null>(null);
+
+  const load = useCallback(async (ym: string) => {
+    setLoading(true);
+    setErr(null);
+    const r = await apiFetch<{ rows: AlcoholCheckRow[] }>(`/attendance/timecard/alcohol-checks?yearMonth=${encodeURIComponent(ym)}`);
+    setLoading(false);
+    if (!r.ok) { setErr(r.error); return; }
+    setRows(r.data.rows ?? []);
+  }, []);
+
+  useEffect(() => { void load(yearMonth); }, [yearMonth, load]);
+
+  async function savePdf(): Promise<void> {
+    setPdfBusy(true);
+    setPdfErr(null);
+    const r = await apiFetchBlob("/documents/alcohol-check-pdf", {
+      method: "POST",
+      json: { yearMonth, outputFormat: "pdf" },
+    });
+    setPdfBusy(false);
+    if (!r.ok) { setPdfErr(r.error); return; }
+    downloadBrowserBlob(r.blob, r.filename ?? `alcohol-check_${yearMonth}.pdf`);
+  }
+
+  const [y, m] = yearMonth.split("-");
+
+  return (
+    <div style={{ marginTop: "0.75rem" }}>
+      <div className="settings-toolbar" style={{ marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: 500 }}>
+          年月
+          <input
+            type="month"
+            value={yearMonth}
+            onChange={(e) => setYearMonth(e.target.value)}
+            style={{ padding: "0.3rem 0.5rem", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)", fontSize: "0.85rem" }}
+          />
+        </label>
+        <button type="button" className="settings-secondary" onClick={() => {
+          const d = new Date(`${yearMonth}-01`);
+          d.setMonth(d.getMonth() - 1);
+          setYearMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+        }}>◀ 前月</button>
+        <button type="button" className="settings-secondary" onClick={() => setYearMonth(tokyoYm())}>今月</button>
+        <button type="button" className="settings-secondary" onClick={() => {
+          const d = new Date(`${yearMonth}-01`);
+          d.setMonth(d.getMonth() + 1);
+          setYearMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+        }}>次月 ▶</button>
+      </div>
+
+      {err ? <p style={{ color: "var(--color-accent)" }}>{err}</p> : null}
+      {loading ? <p className="settings-hint">読み込み中…</p> : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+            <thead>
+              <tr style={{ background: "var(--color-section-bg)" }}>
+                {["日付", "氏名", "区分", "検知器", "確認方法", "酒気帯び", "指示事項", "確認者"].map((h) => (
+                  <th key={h} style={{ padding: "0.4rem 0.6rem", textAlign: "left", borderBottom: "2px solid var(--color-border)", whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr><td colSpan={8} style={{ padding: "1rem", textAlign: "center", color: "var(--color-muted)" }}>記録なし</td></tr>
+              ) : rows.map((row) => (
+                <tr key={row.id} style={{ borderBottom: "1px solid var(--color-border)" }}>
+                  <td style={{ padding: "0.35rem 0.6rem", whiteSpace: "nowrap" }}>{row.businessDate}</td>
+                  <td style={{ padding: "0.35rem 0.6rem", whiteSpace: "nowrap" }}>{row.familyName} {row.givenName}</td>
+                  <td style={{ padding: "0.35rem 0.6rem", whiteSpace: "nowrap" }}>{row.phase}</td>
+                  <td style={{ padding: "0.35rem 0.6rem" }}>{row.breathalyzerName ?? "—"}</td>
+                  <td style={{ padding: "0.35rem 0.6rem" }}>{row.verificationMethod ?? "—"}</td>
+                  <td style={{ padding: "0.35rem 0.6rem", color: row.alcoholDetected ? "#dc2626" : undefined, fontWeight: row.alcoholDetected ? 700 : undefined }}>
+                    {row.alcoholDetected ? "あり" : "なし"}
+                  </td>
+                  <td style={{ padding: "0.35rem 0.6rem", maxWidth: "160px", wordBreak: "break-all" }}>{row.instructionsNote || "—"}</td>
+                  <td style={{ padding: "0.35rem 0.6rem", whiteSpace: "nowrap" }}>{row.verifierName ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div style={{ marginTop: "1rem", display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+        <button type="button" className="settings-primary" disabled={pdfBusy || loading} onClick={() => void savePdf()}>
+          {pdfBusy ? "生成中…" : `PDFで保存（${y}年${Number(m)}月）`}
+        </button>
+        {pdfErr ? <span style={{ color: "#dc2626", fontSize: "0.82rem" }}>{pdfErr}</span> : null}
+      </div>
+    </div>
+  );
+}
+
 export default function DocumentsPage(): JSX.Element {
   const { me } = useAuth();
   const [tab, setTab] = useState("nippo");
@@ -1183,6 +1305,11 @@ export default function DocumentsPage(): JSX.Element {
       id: "nippo",
       label: "日報",
       children: <DailyReportJommuPrintBlock />,
+    },
+    {
+      id: "alcohol-check",
+      label: "アルコール点検",
+      children: <AlcoholCheckPrintBlock />,
     },
     {
       id: "meibo",
