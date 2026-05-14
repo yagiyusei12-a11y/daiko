@@ -4,6 +4,7 @@ import { apiFetch } from "../api";
 import { Card, Err } from "../ui";
 import { useSavedToast } from "../saved-toast";
 import { reverseGeocodeTownJa } from "../lib/nominatim";
+import { useAuth, formatFlexDatetime } from "../auth";
 
 type EmpMini = { id: string; familyName: string; givenName: string };
 type VehMini = { id: string; label: string; plate: string | null; currentOdometer?: number | null };
@@ -143,16 +144,13 @@ function formatKm(k: number): string {
   return s;
 }
 
-function formatTripStartDisplay(departedIso: string): string {
-  const d = new Date(departedIso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat("ja-JP", {
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(d);
+function formatTripStartDisplay(departedIso: string, businessDate: string, dayChangeHour: number): string {
+  if (!departedIso) return "—";
+  const label = formatFlexDatetime(departedIso, businessDate, dayChangeHour);
+  if (!label) return "—";
+  // yyyy/mm/dd HH:MM → mm/dd HH:MM (年を省略して表示を短く)
+  const m = label.match(/^\d{4}\/(\d{2}\/\d{2} \d{2}:\d{2})$/);
+  return m ? m[1] : label;
 }
 
 function viaSummaryFromTrip(trip: TripLegFull): string {
@@ -246,6 +244,8 @@ function TripWizard({
   onSubmitted,
   sectionTitle = "運行",
   schedulePrefill,
+  businessDate,
+  dayChangeHour = 28,
 }: {
   reportId: string;
   trip: TripLegFull;
@@ -256,6 +256,8 @@ function TripWizard({
   onSubmitted: () => void | Promise<void>;
   sectionTitle?: string;
   schedulePrefill?: SchedulePrefillPayload | null;
+  businessDate?: string;
+  dayChangeHour?: number;
 }): JSX.Element {
   const { flashSaved } = useSavedToast();
   const j0 = trip.legSurchargesJson;
@@ -435,6 +437,11 @@ function TripWizard({
         />
         <label>開始時刻</label>
         <input type="datetime-local" value={departedLocal} onChange={(e) => setDepartedLocal(e.target.value)} />
+        {businessDate && departedLocal ? (
+          <span className="settings-hint" style={{ marginTop: "-0.5rem" }}>
+            事業日換算: {formatFlexDatetime(new Date(departedLocal).toISOString(), businessDate, dayChangeHour)}
+          </span>
+        ) : null}
         <button type="button" className="settings-secondary" onClick={() => setDepartedLocal(toDatetimeLocalValue(new Date()))}>
           現在時刻を開始にセット
         </button>
@@ -486,6 +493,11 @@ function TripWizard({
         <GpsTownButton label="GPSで町名を到着に入力" onTown={(t) => setDestination((d) => (d ? `${d} ${t}`.trim() : t))} disabled={busy} />
         <label>到着時刻</label>
         <input type="datetime-local" value={arrivedLocal} onChange={(e) => setArrivedLocal(e.target.value)} />
+        {businessDate && arrivedLocal ? (
+          <span className="settings-hint" style={{ marginTop: "-0.5rem" }}>
+            事業日換算: {formatFlexDatetime(new Date(arrivedLocal).toISOString(), businessDate, dayChangeHour)}
+          </span>
+        ) : null}
         <button type="button" className="settings-secondary" onClick={() => setArrivedLocal(toDatetimeLocalValue(new Date()))}>
           現在時刻を到着にセット
         </button>
@@ -630,6 +642,7 @@ function TripWizard({
 export default function DailyReportDetailPage(): JSX.Element {
   const { reportId } = useParams<{ reportId: string }>();
   const { flashSaved } = useSavedToast();
+  const { me } = useAuth();
   const [err, setErr] = useState<string | null>(null);
   const [report, setReport] = useState<ReportDetail | null>(null);
   const [defaults, setDefaults] = useState<Defaults | null>(null);
@@ -1007,7 +1020,7 @@ export default function DailyReportDetailPage(): JSX.Element {
             <tbody>
               {tableTrips.map((t) => {
                 const rowDisabled = addTripOpen;
-                const startLabel = formatTripStartDisplay(t.departedAt);
+                const startLabel = formatTripStartDisplay(t.departedAt, report.businessDate, me?.dayChangeHour ?? 28);
                 const viaLabel = viaSummaryFromTrip(t);
                 const clientLabel = t.clientName?.trim() ? t.clientName : "（未入力）";
                 const delSummary = `${startLabel} ${clientLabel}`;
@@ -1103,6 +1116,8 @@ export default function DailyReportDetailPage(): JSX.Element {
                 paymentMethods={paymentMethods}
                 sectionTitle="運行入力"
                 schedulePrefill={schedulePrefill}
+                businessDate={report?.businessDate}
+                dayChangeHour={me?.dayChangeHour ?? 28}
                 onSubmitted={async () => {
                   clearAddTripUi();
                   await load();
@@ -1149,6 +1164,8 @@ export default function DailyReportDetailPage(): JSX.Element {
                 features={features}
                 paymentMethods={paymentMethods}
                 sectionTitle="運行入力"
+                businessDate={report?.businessDate}
+                dayChangeHour={me?.dayChangeHour ?? 28}
                 onSubmitted={async () => {
                   closeEditTripDialog();
                   await load();

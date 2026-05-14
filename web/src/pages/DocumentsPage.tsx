@@ -7,7 +7,7 @@ import { DAIKO_STANDARD_YAKKAN_DEFAULT_BODY } from "../lib/daikoYakkanDefaultBod
 import ComplaintLedgerPrintBlock from "../components/ComplaintLedgerPrintBlock";
 import InstructionRecordListPrintBlock from "../components/InstructionRecordListPrintBlock";
 import { Card, Tabs, type TabDef } from "../ui";
-import { useAuth } from "../auth";
+import { useAuth, formatFlexDatetime } from "../auth";
 import { filterSubTabsForMe } from "../lib/staff-menu-client";
 
 function PanelHint({ children }: { children: React.ReactNode }): JSX.Element {
@@ -1196,6 +1196,7 @@ function tokyoYm(): string {
 }
 
 function AlcoholCheckPrintBlock(): JSX.Element {
+  const { me } = useAuth();
   const [yearMonth, setYearMonth] = useState(tokyoYm);
   const [rows, setRows] = useState<AlcoholCheckRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1270,7 +1271,7 @@ function AlcoholCheckPrintBlock(): JSX.Element {
               ) : rows.map((row) => (
                 <tr key={row.id} style={{ borderBottom: "1px solid var(--color-border)" }}>
                   <td style={{ padding: "0.35rem 0.6rem", whiteSpace: "nowrap" }}>
-                    {new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(row.punchedAt))}
+                    {formatFlexDatetime(row.punchedAt, row.businessDate, me?.dayChangeHour ?? 28)}
                   </td>
                   <td style={{ padding: "0.35rem 0.6rem", whiteSpace: "nowrap" }}>{row.familyName} {row.givenName}</td>
                   <td style={{ padding: "0.35rem 0.6rem", whiteSpace: "nowrap" }}>{row.phase}</td>

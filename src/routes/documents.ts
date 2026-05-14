@@ -566,16 +566,28 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
     });
 
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+    const tenantSettings2 = await prisma.tenantSettings.findUnique({ where: { tenantId }, select: { businessDayRollHour: true } });
+    const rollHour2 = tenantSettings2?.businessDayRollHour ?? 4;
 
-    const fmtTokyo = (d: Date) =>
-      new Intl.DateTimeFormat("ja-JP", {
+    const fmtFlex = (d: Date, businessDate: string) => {
+      const parts = new Intl.DateTimeFormat("ja-JP", {
         timeZone: "Asia/Tokyo",
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
         hour: "2-digit",
         minute: "2-digit",
-      }).format(d);
+        hour12: false,
+      }).formatToParts(d);
+      const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+      const calDate = `${get("year")}-${get("month")}-${get("day")}`;
+      const h = Number(get("hour"));
+      const min = get("minute");
+      if (rollHour2 > 0 && calDate > businessDate && h < rollHour2) {
+        return `${businessDate.replace(/-/g, "/")} ${String(24 + h).padStart(2, "0")}:${min}`;
+      }
+      return `${calDate.replace(/-/g, "/")} ${String(h).padStart(2, "0")}:${min}`;
+    };
 
     type AlcoholRow = {
       punchedAtLabel: string;
@@ -589,11 +601,10 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
     };
 
     const rows: AlcoholRow[] = punches
-      .filter((p) => p.alcoholCheckJson !== null)
       .map((p) => {
         const ac = (p.alcoholCheckJson ?? {}) as Record<string, unknown>;
         return {
-          punchedAtLabel: fmtTokyo(p.punchedAt),
+          punchedAtLabel: fmtFlex(p.punchedAt, p.businessDate),
           phase: p.kind === "CLOCK_IN" ? "出勤" : "退勤",
           name: `${p.employee.familyName} ${p.employee.givenName}`,
           breathalyzerName: typeof ac.breathalyzerName === "string" ? ac.breathalyzerName : "—",

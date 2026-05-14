@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../api";
-import { useAuth, currentBusinessYmd } from "../auth";
+import { useAuth, currentBusinessYmd, formatFlexDatetime } from "../auth";
 import {
   SCHEDULE_UNASSIGNED_DRIVER_ID,
   scheduleDbUnassignedToDriverColumnKey,
@@ -847,6 +847,11 @@ export default function TodaySchedulePage(): JSX.Element {
                 <input id="sr-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
                 <label htmlFor="sr-start">日時（開始）</label>
                 <input id="sr-start" type="datetime-local" step="900" value={startLocal} onChange={(e) => setStartLocal(e.target.value)} />
+                {startLocal ? (
+                  <span className="settings-hint" style={{ marginTop: "-0.5rem" }}>
+                    事業日換算: {formatFlexDatetime(new Date(startLocal).toISOString(), viewDate, me?.dayChangeHour ?? 28)}
+                  </span>
+                ) : null}
                 <label htmlFor="sr-pickup">迎え先</label>
                 <input id="sr-pickup" type="text" value={pickup} onChange={(e) => setPickup(e.target.value)} />
                 <label>経由地（行を追加できます）</label>
@@ -954,6 +959,11 @@ export default function TodaySchedulePage(): JSX.Element {
               <div className="settings-form">
                 <label htmlFor="sd-start">日時（開始）</label>
                 <input id="sd-start" type="datetime-local" step="900" value={mStartLocal} onChange={(e) => setMStartLocal(e.target.value)} />
+                {mStartLocal ? (
+                  <span className="settings-hint" style={{ marginTop: "-0.5rem" }}>
+                    事業日換算: {formatFlexDatetime(new Date(mStartLocal).toISOString(), viewDate, me?.dayChangeHour ?? 28)}
+                  </span>
+                ) : null}
                 <label htmlFor="sd-dur">ブロック時間（分・15分刻み）</label>
                 <select id="sd-dur" value={mDuration} onChange={(e) => setMDuration(Number(e.target.value))}>
                   {durationSelectOptions.map((m) => (

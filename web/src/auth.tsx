@@ -55,6 +55,38 @@ export function currentBusinessYmd(dayChangeHour: number): string {
   return ymd;
 }
 
+/**
+ * punchedAt (ISO) を事業日基準の28時間表記でフォーマットする。
+ * 例: businessDate="2026-05-14", punchedAt="2026-05-15T00:30+09:00", dayChangeHour=28
+ *   → "2026/05/14 24:30"
+ */
+export function formatFlexDatetime(
+  iso: string,
+  businessDateYmd: string,
+  dayChangeHour: number,
+): string {
+  const rollHour = dayChangeHour - 24;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const tokyoParts = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (t: string) => tokyoParts.find((p) => p.type === t)?.value ?? "00";
+  const calDate = `${get("year")}-${get("month")}-${get("day")}`;
+  const hour = Number(get("hour"));
+  const min = get("minute");
+  if (rollHour > 0 && calDate > businessDateYmd && hour < rollHour) {
+    return `${businessDateYmd.replace(/-/g, "/")} ${String(24 + hour).padStart(2, "0")}:${min}`;
+  }
+  return `${calDate.replace(/-/g, "/")} ${String(hour).padStart(2, "0")}:${min}`;
+}
+
 type AuthCtx = {
   me: MeUser | null;
   loading: boolean;
