@@ -29,7 +29,7 @@ export type StaffHeaderNavId = (typeof STAFF_HEADER_NAV_IDS)[number];
 export const STAFF_SUB_TAB_IDS: Record<string, readonly string[]> = {
   settings: ["company", "basics", "employees-roster", "employees-compensation", "vehicles", "till", "pricing", "online-booking"],
   documents: ["nippo", "meibo", "seiyaku", "nintei", "yakkan", "shido", "kujo", "henko"],
-  attendance: ["shift", "adjust", "timecard"],
+  attendance: ["shift", "adjust", "timecard", "timecard-list"],
 };
 
 export type StaffMenuVisibilityV1 = {

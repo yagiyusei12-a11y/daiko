@@ -708,7 +708,7 @@ export default function AttendanceMenuPage(): JSX.Element {
   }, [tcListYm]);
 
   useEffect(() => {
-    if (tab === "timecard") void loadTcList();
+    if (tab === "timecard" || tab === "timecard-list") void loadTcList();
   }, [tab, tcListYm, loadTcList]);
 
   const loadMonthApp = useCallback(
@@ -1342,8 +1342,7 @@ export default function AttendanceMenuPage(): JSX.Element {
       {staffOnly && !me?.employeeId ? (
         <p className="settings-hint">このアカウントは従業員に紐づいていないため、タイムカードを利用できません。</p>
       ) : (
-        <div className="attend-tc-layout">
-          <div className="attend-tc-col attend-tc-col--form">
+        <div className="attend-tc-col attend-tc-col--form">
             <label>氏名（名簿）</label>
             {canPickEmployee ? (
               <select value={tcEmployeeId} onChange={(e) => setTcEmployeeId(e.target.value)}>
@@ -1444,8 +1443,17 @@ export default function AttendanceMenuPage(): JSX.Element {
                 ))}
               </ul>
             )}
-          </div>
+        </div>
+      )}
+    </div>
+  );
 
+  const timeCardListPanel = (
+    <div className="settings-form attend-shift-root attend-tc-page">
+      {staffOnly && !me?.employeeId ? (
+        <p className="settings-hint">このアカウントは従業員に紐づいていないため、タイムカードを利用できません。</p>
+      ) : (
+        <div className="attend-tc-layout">
           <div className="attend-tc-col attend-tc-col--list">
             <h3 className="attend-shift-section-title">タイムカード一覧</h3>
             <div className="attend-shift-month-nav attend-tc-list-month">
@@ -1551,6 +1559,7 @@ export default function AttendanceMenuPage(): JSX.Element {
     { id: "shift", label: "シフト", children: shiftPanel },
     { id: "adjust", label: "シフト調整", children: adjustPanel },
     { id: "timecard", label: "タイムカード", children: timeCardPanel },
+    { id: "timecard-list", label: "タイムカード一覧", children: timeCardListPanel },
   ];
 
   const visTabs = me ? filterSubTabsForMe("attendance", tabItems, me) : tabItems;
