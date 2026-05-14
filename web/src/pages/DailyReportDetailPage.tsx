@@ -242,6 +242,7 @@ function TripWizard({
   tariffVersions,
   defaults,
   features,
+  paymentMethods,
   onSubmitted,
   sectionTitle = "運行",
   schedulePrefill,
@@ -251,6 +252,7 @@ function TripWizard({
   tariffVersions: TariffOpt[];
   defaults: Defaults;
   features: string[];
+  paymentMethods: string[];
   onSubmitted: () => void | Promise<void>;
   sectionTitle?: string;
   schedulePrefill?: SchedulePrefillPayload | null;
@@ -518,11 +520,24 @@ function TripWizard({
         <p className="settings-hint">売上・運賃とは別に記録されます。</p>
         <label>支払方法</label>
         <select value={tripPaymentMethod} onChange={(e) => setTripPaymentMethod(e.target.value)}>
-          <option value="CASH">現金</option>
-          <option value="CARD">カード</option>
-          <option value="PAYPAY">PayPay</option>
-          <option value="RECEIVABLE">売掛</option>
-          <option value="OTHER">その他</option>
+          {paymentMethods.length > 0 ? (
+            <>
+              {!paymentMethods.includes(tripPaymentMethod) && (
+                <option value={tripPaymentMethod}>{tripPaymentMethod}</option>
+              )}
+              {paymentMethods.map((pm) => (
+                <option key={pm} value={pm}>{pm}</option>
+              ))}
+            </>
+          ) : (
+            <>
+              <option value="CASH">現金</option>
+              <option value="CARD">カード</option>
+              <option value="PAYPAY">PayPay</option>
+              <option value="RECEIVABLE">売掛</option>
+              <option value="OTHER">その他</option>
+            </>
+          )}
         </select>
         <label className="settings-inline-check" style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.25rem" }}>
           <input type="checkbox" checked={tripReceiptIssued} onChange={(e) => setTripReceiptIssued(e.target.checked)} />
@@ -620,6 +635,7 @@ export default function DailyReportDetailPage(): JSX.Element {
   const [defaults, setDefaults] = useState<Defaults | null>(null);
   const [features, setFeatures] = useState<string[]>([]);
   const [tariffVersions, setTariffVersions] = useState<TariffOpt[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
   const [employees, setEmployees] = useState<EmpMini[]>([]);
   const [vehicles, setVehicles] = useState<VehMini[]>([]);
 
@@ -657,6 +673,7 @@ export default function DailyReportDetailPage(): JSX.Element {
       tariffVersions: TariffOpt[];
       employees: EmpMini[];
       vehicles: VehMini[];
+      paymentMethods: string[];
     }>(`/daily-reports/${reportId}`);
     if (!r.ok) {
       setErr(r.error);
@@ -682,6 +699,7 @@ export default function DailyReportDetailPage(): JSX.Element {
     );
     setEmployees(r.data.employees ?? []);
     setVehicles(r.data.vehicles ?? []);
+    setPaymentMethods(r.data.paymentMethods ?? []);
     const rep = r.data.report;
     setPartnerId(rep.partnerEmployeeId ?? "");
     setEscortVehicleId(rep.escortVehicleId ?? "");
@@ -1082,6 +1100,7 @@ export default function DailyReportDetailPage(): JSX.Element {
                 tariffVersions={tariffVersions}
                 defaults={defaults}
                 features={features}
+                paymentMethods={paymentMethods}
                 sectionTitle="運行入力"
                 schedulePrefill={schedulePrefill}
                 onSubmitted={async () => {
@@ -1128,6 +1147,7 @@ export default function DailyReportDetailPage(): JSX.Element {
                 tariffVersions={tariffVersions}
                 defaults={defaults}
                 features={features}
+                paymentMethods={paymentMethods}
                 sectionTitle="運行入力"
                 onSubmitted={async () => {
                   closeEditTripDialog();

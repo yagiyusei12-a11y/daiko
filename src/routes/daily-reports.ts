@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { authenticate, jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
 import { coercePricingPrefs, mergeLegSurchargesJson, tripSurchargeDefaults } from "../lib/pricing-prefs.js";
+import { coerceBusinessBasicsFromCustomJson } from "../lib/business-basics.js";
 import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
 import { hasSecondClassDriverLicense } from "../lib/employee-license.js";
 import { isChromiumConfiguredForPdf } from "../lib/html-to-pdf.js";
@@ -402,6 +403,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     if (!report) return reply.code(404).send({ error: "not found" });
     const settings = await prisma.tenantSettings.findUnique({ where: { tenantId } });
     const prefs = coercePricingPrefs(asObj(settings?.customJson).pricingPrefs);
+    const basics = coerceBusinessBasicsFromCustomJson(settings?.customJson);
 
     const tariffVersions = await prisma.tariffPlanVersion.findMany({
       where: { plan: { tenantId } },
@@ -449,6 +451,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       })),
       pricingDefaults: tripSurchargeDefaults(prefs),
       pricingFeatures: prefs.features,
+      paymentMethods: basics.paymentMethods,
     };
   });
 
