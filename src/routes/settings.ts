@@ -12,6 +12,11 @@ import {
 } from "../lib/business-basics.js";
 import { coerceTillFromCustomJson, mergeTillIntoCustomJson, parseTillPut } from "../lib/till-settings.js";
 import { coercePricingPrefs, mergePricingPrefsUpdate } from "../lib/pricing-prefs.js";
+import {
+  coerceOnlineBookingFromCustomJson,
+  mergeOnlineBookingIntoCustomJson,
+  parseOnlineBookingPut,
+} from "../lib/online-booking-settings.js";
 import { prisma } from "../db.js";
 import { reverseGeocodeTownJaCached } from "../lib/reverse-geocode-cache.js";
 import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
@@ -663,6 +668,36 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const nextPrefs = mergePricingPrefsUpdate(prevPrefs, b);
 
     const nextCustom = { ...prevRoot, pricingPrefs: nextPrefs as unknown as Record<string, unknown> };
+
+    await prisma.tenantSettings.upsert({
+      where: { tenantId },
+      create: {
+        tenantId,
+        businessDayRollHour: 4,
+        featureFlags: {},
+        customJson: nextCustom as Prisma.InputJsonValue,
+      },
+      update: { customJson: nextCustom as Prisma.InputJsonValue },
+    });
+    return { ok: true };
+  });
+
+  app.get("/online-booking", async (req) => {
+    const { tenantId } = jwtUser(req);
+    const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { slug: true } });
+    const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+    const settings = coerceOnlineBookingFromCustomJson(s?.customJson);
+    return { ...settings, tenantSlug: tenant.slug };
+  });
+
+  app.put<{ Body: Record<string, unknown> }>("/online-booking", async (req, reply) => {
+    const { tenantId } = jwtUser(req);
+    const parsed = parseOnlineBookingPut((req.body || {}) as Record<string, unknown>);
+    if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
+
+    const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+    const prevRoot = asObj(s?.customJson);
+    const nextCustom = mergeOnlineBookingIntoCustomJson(prevRoot, parsed.value);
 
     await prisma.tenantSettings.upsert({
       where: { tenantId },

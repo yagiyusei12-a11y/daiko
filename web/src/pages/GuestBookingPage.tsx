@@ -4,12 +4,20 @@ import { publicFetch } from "../lib/public-api";
 
 type BusinessHourSlot = { id: string; open: string; close: string };
 
+type OnlineBookingInfo = {
+  enabled: boolean;
+  message: string;
+  durationOptions: number[];
+  daysAhead: number;
+};
+
 type BookingInitResp = {
   tenant: { name: string };
   date: string;
   timeZone: string;
   businessHours: BusinessHourSlot[];
   isClosed: boolean;
+  onlineBooking: OnlineBookingInfo;
 };
 
 type AvailabilitySlot = { startLocal: string; endLocal: string; availableCount: number };
@@ -24,7 +32,7 @@ type AvailabilityResp = {
 
 type CreateOk = { id: string };
 
-const DURATION_OPTIONS = [30, 45, 60, 75, 90, 120, 150, 180, 240];
+const DEFAULT_DURATION_OPTIONS = [30, 45, 60, 75, 90, 120, 150, 180, 240];
 
 function tokyoTodayYmd(): string {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date()).slice(0, 10);
@@ -54,6 +62,13 @@ export default function GuestBookingPage(): JSX.Element {
   const [init, setInit] = useState<BookingInitResp | null>(null);
   const [initErr, setInitErr] = useState<string | null>(null);
   const [initLoading, setInitLoading] = useState(true);
+
+  const [obInfo, setObInfo] = useState<OnlineBookingInfo>({
+    enabled: true,
+    message: "",
+    durationOptions: DEFAULT_DURATION_OPTIONS,
+    daysAhead: 30,
+  });
 
   const [date, setDate] = useState<string>(tokyoTodayYmd);
   const [durationMinutes, setDurationMinutes] = useState<number>(60);
@@ -89,6 +104,14 @@ export default function GuestBookingPage(): JSX.Element {
           return;
         }
         setInit(r.data);
+        if (r.data.onlineBooking) {
+          setObInfo(r.data.onlineBooking);
+          // durationOptions が変わったとき、現在選択中の duration が含まれていなければ最初の値に戻す
+          setDurationMinutes((prev) => {
+            const opts = r.data.onlineBooking.durationOptions;
+            return opts.includes(prev) ? prev : (opts[0] ?? 60);
+          });
+        }
       },
     );
     return () => {
@@ -173,6 +196,20 @@ export default function GuestBookingPage(): JSX.Element {
     );
   }
 
+  if (!obInfo.enabled) {
+    return (
+      <GuestShell title={init.tenant.name}>
+        <p style={{ lineHeight: 1.7, color: "var(--color-muted)", textAlign: "center", padding: "1.5rem 0" }}>
+          現在ネット予約は受け付けていません。<br />
+          お電話でお問い合わせください。
+        </p>
+        {obInfo.message ? (
+          <p style={{ lineHeight: 1.7, whiteSpace: "pre-wrap", color: "var(--color-text)" }}>{obInfo.message}</p>
+        ) : null}
+      </GuestShell>
+    );
+  }
+
   if (done) {
     return (
       <GuestShell title={init.tenant.name}>
@@ -208,6 +245,11 @@ export default function GuestBookingPage(): JSX.Element {
 
   return (
     <GuestShell title={init.tenant.name}>
+      {obInfo.message ? (
+        <p style={{ margin: "0 0 1rem", lineHeight: 1.7, whiteSpace: "pre-wrap", borderLeft: "3px solid var(--color-accent)", paddingLeft: "0.75rem" }}>
+          {obInfo.message}
+        </p>
+      ) : null}
       <p style={{ margin: "0 0 1rem", color: "var(--color-muted)", fontSize: "0.95rem" }}>
         ご希望日と時間を選んで、必要事項をご入力ください。
       </p>
@@ -221,6 +263,15 @@ export default function GuestBookingPage(): JSX.Element {
           type="date"
           value={date}
           min={tokyoTodayYmd()}
+          max={
+            obInfo.daysAhead > 0
+              ? (() => {
+                  const d = new Date();
+                  d.setDate(d.getDate() + obInfo.daysAhead);
+                  return d.toISOString().slice(0, 10);
+                })()
+              : undefined
+          }
           onChange={(e) => setDate(e.target.value)}
         />
         <p style={{ margin: 0, color: "var(--color-muted)", fontSize: "0.85rem" }}>{formatDayTitleJa(date)}</p>
@@ -233,7 +284,7 @@ export default function GuestBookingPage(): JSX.Element {
           value={durationMinutes}
           onChange={(e) => setDurationMinutes(Number(e.target.value))}
         >
-          {DURATION_OPTIONS.map((m) => (
+          {obInfo.durationOptions.map((m) => (
             <option key={m} value={m}>
               {m} 分
             </option>

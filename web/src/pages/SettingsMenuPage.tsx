@@ -7,6 +7,7 @@ import { Card, Err, Tabs, type TabDef } from "../ui";
 import PricingSettingsPanel from "./PricingSettingsPanel";
 import BasicSettingsPanel from "./BasicSettingsPanel";
 import TillSettingsPanel from "./TillSettingsPanel";
+import OnlineBookingSettingsPanel from "./OnlineBookingSettingsPanel";
 
 const JP_PREFECTURES = [
   "北海道",
@@ -973,6 +974,8 @@ export default function SettingsMenuPage(): JSX.Element {
 
   const tillPanel = <TillSettingsPanel setErr={setErr} busy={busy} setBusy={setBusy} />;
 
+  const onlineBookingPanel = <OnlineBookingSettingsPanel setErr={setErr} busy={busy} setBusy={setBusy} />;
+
   const tabItems: TabDef[] = [
     { id: "company", label: "会社情報", children: companyPanel },
     { id: "basics", label: "基本", children: basicsPanel },
@@ -980,6 +983,7 @@ export default function SettingsMenuPage(): JSX.Element {
     { id: "vehicles", label: "随伴車", children: vehiclesPanel },
     { id: "till", label: "レジ", children: tillPanel },
     { id: "pricing", label: "料金", children: pricingPanel },
+    { id: "online-booking", label: "ネット予約", children: onlineBookingPanel },
   ];
 
   return (

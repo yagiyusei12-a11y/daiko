@@ -9,6 +9,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 import { coerceBusinessBasicsFromCustomJson, resolveBusinessHoursForYmd } from "../lib/business-basics.js";
+import { coerceOnlineBookingFromCustomJson } from "../lib/online-booking-settings.js";
 import {
   coerceDetail,
   createDispatchReservationPoolAssign,
@@ -65,6 +66,7 @@ export async function registerPublicBookingRoutes(app: FastifyInstance): Promise
 
       const settings = await prisma.tenantSettings.findUnique({ where: { tenantId: tenant.id } });
       const basics = coerceBusinessBasicsFromCustomJson(settings?.customJson);
+      const obSettings = coerceOnlineBookingFromCustomJson(settings?.customJson);
       const businessHours = resolveBusinessHoursForYmd(date, basics);
       const isClosed = basics.temporaryClosureDates.includes(date) || businessHours.length === 0;
 
@@ -74,6 +76,12 @@ export async function registerPublicBookingRoutes(app: FastifyInstance): Promise
         timeZone: "Asia/Tokyo",
         businessHours,
         isClosed,
+        onlineBooking: {
+          enabled: obSettings.enabled,
+          message: obSettings.message,
+          durationOptions: obSettings.durationOptions,
+          daysAhead: obSettings.daysAhead,
+        },
       };
     },
   );
