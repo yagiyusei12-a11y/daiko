@@ -15,6 +15,25 @@
     msgEl.textContent = "";
   }
 
+  const menuBtn = document.getElementById("menu-btn");
+  const mobileNav = document.getElementById("mobile-nav");
+
+  function closeMobileNav() {
+    if (!menuBtn || !mobileNav) return;
+    menuBtn.setAttribute("aria-expanded", "false");
+    menuBtn.setAttribute("aria-label", "メニューを開く");
+    mobileNav.hidden = true;
+  }
+
+  if (menuBtn && mobileNav) {
+    menuBtn.addEventListener("click", function () {
+      const open = menuBtn.getAttribute("aria-expanded") === "true";
+      menuBtn.setAttribute("aria-expanded", open ? "false" : "true");
+      menuBtn.setAttribute("aria-label", open ? "メニューを開く" : "メニューを閉じる");
+      mobileNav.hidden = open;
+    });
+  }
+
   document.querySelectorAll('a[href^="#"]').forEach(function (link) {
     link.addEventListener("click", function (e) {
       const id = link.getAttribute("href");
@@ -22,6 +41,7 @@
       const target = document.querySelector(id);
       if (!target) return;
       e.preventDefault();
+      closeMobileNav();
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   });

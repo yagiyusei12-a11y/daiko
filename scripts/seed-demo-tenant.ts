@@ -25,8 +25,12 @@ async function main(): Promise<void> {
       tenantId: payload.tenantId,
       counts: {
         employees: payload.employeeIds.length,
+        vehicles: payload.vehicleIds.length,
         dailyReports: payload.dailyReportIds.length,
+        tripLegs: payload.tripLegIds.length,
         timeCardPunches: payload.timeCardPunchIds.length,
+        dispatchReservations: payload.dispatchReservationIds.length,
+        confirmedShifts: payload.confirmedShiftIds.length,
         complaints: payload.complaintIds.length,
       },
     }),
