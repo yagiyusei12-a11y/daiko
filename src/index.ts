@@ -20,6 +20,7 @@ import { registerInstructionRecordsRoutes } from "./routes/instruction-records.j
 import { registerLiffBookingRoutes } from "./routes/liff-booking.js";
 import { registerPublicBookingRoutes } from "./routes/public-booking.js";
 import { registerEmployeeInviteRoutes } from "./routes/employee-invite.js";
+import { registerPublicInquiryRoutes } from "./routes/public-inquiry.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -43,10 +44,10 @@ const helmetOpts =
           directives: {
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             imgSrc: ["'self'", "data:", "blob:"],
             connectSrc: ["'self'"],
-            fontSrc: ["'self'", "data:"],
+            fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
             frameSrc: ["'self'"],
             objectSrc: ["'none'"],
             baseUri: ["'self'"],
@@ -79,10 +80,19 @@ if (process.env.OPENAPI_UI === "1" || process.env.NODE_ENV !== "production") {
 
 app.get("/health", async () => ({ ok: true, service: "daiko" }));
 
-/** ルートは API より先に登録（本番でトップが 404 にならないよう明示的に） */
+/** ルートは API より先に登録 */
 app.get("/app", async (_, reply) => reply.redirect("/app/", 302));
-app.get("/", async (_, reply) => reply.redirect("/app/", 302));
 app.get("/web", async (_, reply) => reply.redirect("/app/", 302));
+
+const lpStaticRoot = join(__dirname, "../public/lp");
+app.get("/", async (_, reply) => {
+  return reply.type("text/html; charset=utf-8").sendFile("index.html", lpStaticRoot);
+});
+await app.register(fastifyStatic, {
+  root: lpStaticRoot,
+  prefix: "/lp/",
+  decorateReply: false,
+});
 
 const v1 = "/api/v1";
 await app.register(registerAuthRoutes, { prefix: v1 });
@@ -94,6 +104,7 @@ await app.register(registerDispatchRoutes, { prefix: `${v1}/dispatch` });
 await app.register(registerLiffBookingRoutes, { prefix: `${v1}/liff` });
 await app.register(registerPublicBookingRoutes, { prefix: `${v1}/public` });
 await app.register(registerEmployeeInviteRoutes, { prefix: `${v1}/public` });
+await app.register(registerPublicInquiryRoutes, { prefix: `${v1}/public` });
 await app.register(registerInstructionRecordsRoutes, { prefix: `${v1}/instruction-records` });
 await app.register(registerComplaintsRoutes, { prefix: `${v1}/complaints` });
 await app.register(registerDocumentsRoutes, { prefix: v1 });

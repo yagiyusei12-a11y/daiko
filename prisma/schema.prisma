@@ -863,6 +863,21 @@ model LegalChangeNotice {
   @@index([tenantId, createdAt])
 }
 
+/// 紹介LPからのお問い合わせ（マーケティング用・テナント非紐付け）
+model MarketingInquiry {
+  id          String   @id @default(cuid())
+  companyName String
+  contactName String
+  email       String
+  phone       String?
+  message     String   @db.Text
+  clientIp    String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 /// 従業員自己登録用ワンタイムURL
 model EmployeeInviteToken {
   id        String    @id @default(cuid())
