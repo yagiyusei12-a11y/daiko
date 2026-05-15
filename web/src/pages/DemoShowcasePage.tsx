@@ -80,8 +80,8 @@ export default function DemoShowcasePage(): JSX.Element {
           </h2>
           <ul className="settings-hint" style={{ margin: "0.35rem 0 0", paddingLeft: "1.2rem", lineHeight: 1.65 }}>
             <li>
-              <strong>本番のデモデータで触る（ログイン不要）</strong>
-              ：サーバーにデモ用の店舗IDとユーザーが設定されている場合、下のボタンからそのままスタッフ画面に入れます（入力した内容はデモ用テナントに保存されます）。
+              <strong>デモ専用データで触る（ログイン不要）</strong>
+              ：下のボタンから、本番店舗とは分離したデモ用テナント（サンプルデータ入り）のスタッフ画面に入れます。操作内容はデモ用DBにのみ保存されます。
             </li>
             <li>
               <strong>自分の店舗で使う</strong>：<Link to="/login">ログイン</Link>
