@@ -743,6 +743,130 @@ a {
   color: var(--lp-muted);
 }
 
+/* Screen showcase */
+.lp-showcase {
+  background: linear-gradient(180deg, #fff 0%, var(--lp-bg) 100%);
+}
+
+.lp-showcase-block {
+  display: grid;
+  gap: 2rem;
+  align-items: center;
+  margin-bottom: 4rem;
+}
+
+.lp-showcase-block:last-child {
+  margin-bottom: 0;
+}
+
+@media (min-width: 900px) {
+  .lp-showcase-block {
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 3rem;
+  }
+
+  .lp-showcase-block--reverse .lp-showcase-media {
+    order: 2;
+  }
+
+  .lp-showcase-block--reverse .lp-showcase-copy {
+    order: 1;
+  }
+}
+
+.lp-showcase-media {
+  border-radius: var(--lp-radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--lp-border);
+  box-shadow: var(--lp-shadow-lg);
+  background: #f1f5f9;
+  line-height: 0;
+}
+
+.lp-showcase-media img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.lp-showcase-media--pdf {
+  max-width: 22rem;
+  margin: 0 auto;
+}
+
+@media (min-width: 900px) {
+  .lp-showcase-media--pdf {
+    margin: 0;
+    max-width: none;
+  }
+}
+
+.lp-showcase-tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lp-blue);
+  background: var(--lp-blue-soft);
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  margin-bottom: 0.75rem;
+}
+
+.lp-showcase-copy h3 {
+  font-family: var(--lp-display);
+  font-size: clamp(1.25rem, 3vw, 1.65rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.75rem;
+  line-height: 1.35;
+}
+
+.lp-showcase-lead {
+  color: var(--lp-muted);
+  margin: 0 0 1.25rem;
+  font-size: 1rem;
+}
+
+.lp-showcase-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.lp-showcase-list li {
+  position: relative;
+  padding-left: 1.1rem;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--lp-text);
+}
+
+.lp-showcase-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 50%;
+  background: var(--lp-coral);
+}
+
+.lp-showcase-list strong {
+  color: var(--lp-blue-dark);
+  font-weight: 700;
+  margin-right: 0.25rem;
+}
+
+.lp-showcase-cta {
+  margin: 1.5rem 0 0;
+}
+
 /* About */
 .lp-about {
   background: var(--lp-surface);
