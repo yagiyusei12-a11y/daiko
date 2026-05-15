@@ -865,17 +865,22 @@ model LegalChangeNotice {
 
 /// 紹介LPからのお問い合わせ（マーケティング用・テナント非紐付け）
 model MarketingInquiry {
-  id          String   @id @default(cuid())
-  companyName String
-  contactName String
-  email       String
-  phone       String?
-  message     String   @db.Text
-  clientIp    String?
-  userAgent   String?
-  createdAt   DateTime @default(now())
+  id              String    @id @default(cuid())
+  companyName     String
+  contactName     String
+  email           String
+  phone           String?
+  message         String    @db.Text
+  status          String    @default("OPEN")
+  adminNotes      String?   @db.Text
+  emailNotifiedAt DateTime?
+  clientIp        String?
+  userAgent       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([createdAt])
+  @@index([status, createdAt])
 }
 
 /// 従業員自己登録用ワンタイムURL

@@ -30,6 +30,8 @@ export type MeUser = {
   dayChangeHour: number;
   /** 環境変数で指定したデモ用ログイン（パスワード不要入口）のとき true */
   demoSession?: boolean;
+  /** DAIKO_PLATFORM_ADMIN_EMAILS に含まれるメールのとき true */
+  platformAdmin?: boolean;
 };
 
 /**

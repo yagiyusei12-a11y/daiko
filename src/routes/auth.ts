@@ -5,6 +5,7 @@ import { userEffectivePermissionList } from "../lib/permissions.js";
 import { coerceStaffMenuVisibilityFromCustomJson } from "../lib/staff-menu-visibility-settings.js";
 import { prisma } from "../db.js";
 import { hashToken, randomRefreshToken } from "../lib/tokens.js";
+import { isPlatformAdminEmail } from "../lib/platform-admin.js";
 
 const REFRESH_DAYS = 30;
 
@@ -198,6 +199,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         },
         dayChangeHour: rollHour + 24,
         demoSession,
+        platformAdmin: isPlatformAdminEmail(user.email),
       },
     };
   });

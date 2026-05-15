@@ -1,0 +1,275 @@
+.platform-shell {
+  min-height: 100vh;
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.platform-header {
+  background: #0f172a;
+  color: #fff;
+  border-bottom: 1px solid #1e293b;
+}
+
+.platform-header-inner {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0.75rem 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.platform-brand {
+  font-weight: 700;
+  font-size: 1rem;
+  margin-right: auto;
+}
+
+.platform-nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.platform-nav a {
+  color: #cbd5e1;
+  text-decoration: none;
+  padding: 0.4rem 0.85rem;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.platform-nav a:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.platform-nav a.active {
+  color: #fff;
+  background: #2563eb;
+}
+
+.platform-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.platform-header-actions a {
+  color: #93c5fd;
+}
+
+.platform-header-actions button {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  border-radius: 0.4rem;
+  padding: 0.35rem 0.65rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.platform-main {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.platform-loading,
+.platform-denied {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem;
+}
+
+.platform-page-head {
+  margin-bottom: 1.25rem;
+}
+
+.platform-page-head h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.5rem;
+}
+
+.platform-page-head p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+.platform-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  align-items: center;
+}
+
+.platform-toolbar select,
+.platform-toolbar input {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.platform-table-wrap {
+  overflow-x: auto;
+  background: #fff;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.platform-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.platform-table th,
+.platform-table td {
+  padding: 0.65rem 0.85rem;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+}
+
+.platform-table th {
+  background: #f8fafc;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.platform-table tr:hover td {
+  background: #f8fafc;
+}
+
+.platform-table tr.is-selected td {
+  background: #eff6ff;
+}
+
+.platform-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.platform-badge--open {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.platform-badge--progress {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.platform-badge--closed {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.platform-detail {
+  margin-top: 1.25rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+}
+
+.platform-detail h2 {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+}
+
+.platform-field {
+  margin-bottom: 1rem;
+}
+
+.platform-field label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 0.25rem;
+}
+
+.platform-field p,
+.platform-field textarea,
+.platform-field select,
+.platform-field input {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.platform-field textarea,
+.platform-field input[type="text"],
+.platform-field input[type="tel"],
+.platform-field input[type="search"],
+.platform-field select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+
+.platform-field textarea {
+  min-height: 5rem;
+}
+
+.platform-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.platform-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.platform-btn--primary {
+  background: #2563eb;
+  color: #fff;
+}
+
+.platform-btn--ghost {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.platform-pagination {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.platform-grid-2 {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .platform-grid-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}

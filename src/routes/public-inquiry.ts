@@ -3,6 +3,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { prisma } from "../db.js";
+import { formatInquiryMailBody, inquiryNotifyRecipients, sendMail } from "../lib/mail.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -66,7 +67,7 @@ export async function registerPublicInquiryRoutes(app: FastifyInstance): Promise
 
     const ua = String(req.headers["user-agent"] ?? "").slice(0, 500) || null;
 
-    await prisma.marketingInquiry.create({
+    const row = await prisma.marketingInquiry.create({
       data: {
         companyName,
         contactName,
@@ -77,6 +78,35 @@ export async function registerPublicInquiryRoutes(app: FastifyInstance): Promise
         userAgent: ua,
       },
     });
+
+    const recipients = inquiryNotifyRecipients();
+    if (recipients.length > 0) {
+      const mail = formatInquiryMailBody({
+        id: row.id,
+        companyName,
+        contactName,
+        email,
+        phone,
+        message,
+        createdAt: row.createdAt,
+      });
+      try {
+        const result = await sendMail({
+          to: recipients,
+          subject: mail.subject,
+          text: mail.text,
+          html: mail.html,
+        });
+        if (result.sent) {
+          await prisma.marketingInquiry.update({
+            where: { id: row.id },
+            data: { emailNotifiedAt: new Date() },
+          });
+        }
+      } catch (err) {
+        req.log.error({ err, inquiryId: row.id }, "inquiry notify mail failed");
+      }
+    }
 
     return { ok: true };
   });

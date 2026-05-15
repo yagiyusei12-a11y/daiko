@@ -21,6 +21,7 @@ import { registerLiffBookingRoutes } from "./routes/liff-booking.js";
 import { registerPublicBookingRoutes } from "./routes/public-booking.js";
 import { registerEmployeeInviteRoutes } from "./routes/employee-invite.js";
 import { registerPublicInquiryRoutes } from "./routes/public-inquiry.js";
+import { registerPlatformRoutes } from "./routes/platform.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -105,6 +106,7 @@ await app.register(registerLiffBookingRoutes, { prefix: `${v1}/liff` });
 await app.register(registerPublicBookingRoutes, { prefix: `${v1}/public` });
 await app.register(registerEmployeeInviteRoutes, { prefix: `${v1}/public` });
 await app.register(registerPublicInquiryRoutes, { prefix: `${v1}/public` });
+await app.register(registerPlatformRoutes, { prefix: `${v1}/platform` });
 await app.register(registerInstructionRecordsRoutes, { prefix: `${v1}/instruction-records` });
 await app.register(registerComplaintsRoutes, { prefix: `${v1}/complaints` });
 await app.register(registerDocumentsRoutes, { prefix: v1 });
