@@ -191,6 +191,13 @@
   font-size: 1.1rem;
 }
 
+.platform-detail--empty {
+  min-height: 12rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 .platform-field {
   margin-bottom: 1rem;
 }
@@ -228,37 +235,103 @@
   min-height: 5rem;
 }
 
-.platform-actions {
+/* 店舗アプリの index.css（button[type=button] 等）より優先 */
+.platform-shell .platform-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 1rem;
 }
 
-.platform-btn {
-  padding: 0.5rem 1rem;
+.platform-shell .platform-actions--top {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.platform-shell .platform-actions--sticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  margin: 1rem -1.25rem -1.25rem;
+  padding: 0.85rem 1.25rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, #fff 24%);
+  border-top: 1px solid #e2e8f0;
+  box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
+}
+
+.platform-shell .platform-btn {
+  margin-top: 0;
+  padding: 0.55rem 1.1rem;
   border-radius: 0.5rem;
   border: none;
   font-weight: 600;
   cursor: pointer;
   font-size: 0.9rem;
+  transform: none;
+  box-shadow: none;
 }
 
-.platform-btn--primary {
+.platform-shell .platform-btn--primary {
   background: #2563eb;
   color: #fff;
+  border: 1px solid #1d4ed8;
 }
 
-.platform-btn--ghost {
+.platform-shell .platform-btn--primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  filter: none;
+  transform: none;
+}
+
+.platform-shell .platform-btn--ghost {
   background: #fff;
   border: 1px solid #cbd5e1;
   color: #334155;
 }
 
-.platform-btn--danger {
+.platform-shell .platform-btn--ghost:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.platform-shell .platform-btn--danger {
   background: #fff;
   border: 1px solid #fecaca;
   color: #b91c1c;
+}
+
+.platform-shell .platform-btn--danger:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #f87171;
+}
+
+.platform-shell .platform-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.platform-callout {
+  margin: 1rem 0;
+  padding: 0.85rem 1rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 0.5rem;
+  color: #1e40af;
+  font-size: 0.9rem;
+}
+
+.platform-inquiry-layout {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@media (min-width: 1024px) {
+  .platform-inquiry-layout {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    align-items: start;
+  }
 }
 
 .platform-hint {

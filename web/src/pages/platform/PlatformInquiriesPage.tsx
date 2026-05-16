@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "../../api";
 import { Err } from "../../ui";
 
@@ -62,6 +62,7 @@ export default function PlatformInquiriesPage(): JSX.Element {
   const [replyOpen, setReplyOpen] = useState(false);
   const [replySubject, setReplySubject] = useState("");
   const [replyBody, setReplyBody] = useState("");
+  const detailRef = useRef<HTMLElement | null>(null);
 
   const load = useCallback(async () => {
     setErr(null);
@@ -97,9 +98,26 @@ export default function PlatformInquiriesPage(): JSX.Element {
   }, [load]);
 
   useEffect(() => {
-    if (selectedId) void loadDetail(selectedId);
-    else setDetail(null);
+    if (selectedId) {
+      void loadDetail(selectedId);
+      detailRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } else {
+      setDetail(null);
+    }
   }, [selectedId, loadDetail]);
+
+  function selectInquiry(id: string): void {
+    setSelectedId(id);
+  }
+
+  function beginReply(row: InquiryRow, e?: React.MouseEvent): void {
+    e?.stopPropagation();
+    setSelectedId(row.id);
+    setReplySubject(defaultReplySubject(row.companyName));
+    setReplyBody("");
+    setReplyOpen(true);
+    void loadDetail(row.id);
+  }
 
   function openReplyModal(): void {
     if (!detail) return;
@@ -167,11 +185,16 @@ export default function PlatformInquiriesPage(): JSX.Element {
     <div>
       <header className="platform-page-head">
         <h1>お問い合わせ（LP）</h1>
-        <p>紹介サイトから届いた問い合わせの確認・返信・ステータス管理</p>
+        <p>
+          一覧の「返信」または行をクリックして詳細を開き、<strong>メール返信</strong>
+          からお客様へ送信できます（メールアプリではなくこの画面から送れます）。
+        </p>
       </header>
 
       {err ? <Err msg={err} /> : null}
 
+      <div className="platform-inquiry-layout">
+      <div>
       <div className="platform-toolbar">
         <label>
           ステータス{" "}
@@ -203,6 +226,7 @@ export default function PlatformInquiriesPage(): JSX.Element {
               <th>メール</th>
               <th>状態</th>
               <th>最終返信</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -211,7 +235,7 @@ export default function PlatformInquiriesPage(): JSX.Element {
                 key={row.id}
                 className={row.id === selectedId ? "is-selected" : undefined}
                 style={{ cursor: "pointer" }}
-                onClick={() => setSelectedId(row.id)}
+                onClick={() => selectInquiry(row.id)}
               >
                 <td>{formatDt(row.createdAt)}</td>
                 <td>{row.companyName}</td>
@@ -225,11 +249,20 @@ export default function PlatformInquiriesPage(): JSX.Element {
                   <span className={statusBadge(row.status)}>{statusLabel(row.status)}</span>
                 </td>
                 <td>{row.lastRepliedAt ? formatDt(row.lastRepliedAt) : "—"}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="platform-btn platform-btn--primary"
+                    onClick={(e) => beginReply(row, e)}
+                  >
+                    返信
+                  </button>
+                </td>
               </tr>
             ))}
             {items.length === 0 ? (
               <tr>
-                <td colSpan={6}>問い合わせはありません</td>
+                <td colSpan={7}>問い合わせはありません</td>
               </tr>
             ) : null}
           </tbody>
@@ -258,8 +291,13 @@ export default function PlatformInquiriesPage(): JSX.Element {
         </button>
       </div>
 
+      {!detail ? (
+        <p className="platform-callout">問い合わせを選択するか、一覧の「返信」を押してメール送信を開始してください。</p>
+      ) : null}
+      </div>
+
       {detail ? (
-        <section className="platform-detail" aria-label="問い合わせ詳細">
+        <section ref={detailRef} className="platform-detail" aria-label="問い合わせ詳細">
           <h2>{detail.companyName}</h2>
           <div className="platform-grid-2">
             <div className="platform-field">
@@ -318,21 +356,27 @@ export default function PlatformInquiriesPage(): JSX.Element {
             </div>
           ) : null}
 
-          <div className="platform-actions">
-            <button type="button" className="platform-btn platform-btn--primary" disabled={busy} onClick={() => void saveDetail()}>
-              保存
-            </button>
+          <div className="platform-actions platform-actions--sticky">
             <button type="button" className="platform-btn platform-btn--primary" disabled={busy} onClick={openReplyModal}>
               メール返信
+            </button>
+            <button type="button" className="platform-btn platform-btn--ghost" disabled={busy} onClick={() => void saveDetail()}>
+              ステータス・メモを保存
             </button>
             <button type="button" className="platform-btn platform-btn--danger" disabled={busy} onClick={() => void deleteInquiry()}>
               削除
             </button>
           </div>
         </section>
-      ) : null}
+      ) : (
+        <section className="platform-detail platform-detail--empty" aria-label="問い合わせ詳細">
+          <h2>詳細</h2>
+          <p className="platform-hint">左の一覧から問い合わせを選ぶか、「返信」を押すと内容の確認とメール送信ができます。</p>
+        </section>
+      )}
+      </div>
 
-      {replyOpen && detail ? (
+      {replyOpen && (detail ?? items.find((x) => x.id === selectedId)) ? (
         <div className="platform-modal-backdrop" role="presentation" onClick={() => !busy && setReplyOpen(false)}>
           <div
             className="platform-modal"
@@ -340,8 +384,13 @@ export default function PlatformInquiriesPage(): JSX.Element {
             aria-labelledby="reply-modal-title"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 id="reply-modal-title">メール返信 — {detail.contactName} 様</h2>
-            <p className="platform-hint">送信先: {detail.email}（送信後、ステータスは「対応済」になります）</p>
+            <h2 id="reply-modal-title">
+              メール返信 — {(detail ?? items.find((x) => x.id === selectedId))!.contactName} 様
+            </h2>
+            <p className="platform-hint">
+              送信先: {(detail ?? items.find((x) => x.id === selectedId))!.email}
+              （送信後、ステータスは「対応済」になります）
+            </p>
             <div className="platform-field">
               <label htmlFor="reply-subject">件名</label>
               <input

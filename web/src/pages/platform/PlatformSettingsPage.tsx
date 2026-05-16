@@ -8,6 +8,27 @@ type PlaceholderInfo = {
   description: string;
 };
 
+function SettingsActions({
+  busy,
+  onSave,
+  onReload,
+}: {
+  busy: boolean;
+  onSave: () => void;
+  onReload: () => void;
+}): JSX.Element {
+  return (
+    <>
+      <button type="button" className="platform-btn platform-btn--primary" disabled={busy} onClick={onSave}>
+        保存
+      </button>
+      <button type="button" className="platform-btn platform-btn--ghost" disabled={busy} onClick={onReload}>
+        再読み込み
+      </button>
+    </>
+  );
+}
+
 export default function PlatformSettingsPage(): JSX.Element {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -21,7 +42,7 @@ export default function PlatformSettingsPage(): JSX.Element {
     const r = await apiFetch<{
       subject: string;
       body: string;
-      placeholders: PlaceholderInfo[];
+      placeholders?: PlaceholderInfo[];
     }>("/platform/settings/inquiry-auto-reply");
     if (!r.ok) {
       setErr(r.error);
@@ -29,7 +50,7 @@ export default function PlatformSettingsPage(): JSX.Element {
     }
     setSubject(r.data.subject);
     setBody(r.data.body);
-    setPlaceholders(r.data.placeholders);
+    setPlaceholders(r.data.placeholders ?? []);
   }, []);
 
   useEffect(() => {
@@ -54,6 +75,12 @@ export default function PlatformSettingsPage(): JSX.Element {
     setSaved(true);
   }
 
+  const actionProps = {
+    busy,
+    onSave: () => void save(),
+    onReload: () => void load(),
+  };
+
   return (
     <div>
       <header className="platform-page-head">
@@ -65,6 +92,10 @@ export default function PlatformSettingsPage(): JSX.Element {
       {saved ? <p className="platform-hint platform-hint--ok">保存しました</p> : null}
 
       <section className="platform-detail">
+        <div className="platform-actions platform-actions--top">
+          <SettingsActions {...actionProps} />
+        </div>
+
         <div className="platform-field">
           <label htmlFor="auto-reply-subject">件名</label>
           <input
@@ -101,13 +132,9 @@ export default function PlatformSettingsPage(): JSX.Element {
             ))}
           </ul>
         </div>
-        <div className="platform-actions">
-          <button type="button" className="platform-btn platform-btn--primary" disabled={busy} onClick={() => void save()}>
-            保存
-          </button>
-          <button type="button" className="platform-btn platform-btn--ghost" disabled={busy} onClick={() => void load()}>
-            再読み込み
-          </button>
+
+        <div className="platform-actions platform-actions--sticky">
+          <SettingsActions {...actionProps} />
         </div>
       </section>
     </div>
