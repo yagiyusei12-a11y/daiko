@@ -64,7 +64,7 @@ const html = `<!DOCTYPE html>
         <a href="#effects">導入効果</a>
         <a href="#steps">使い方</a>
         <a href="#contact">お問い合わせ</a>
-        <a class="lp-btn lp-btn--primary" href="/app/demo">デモで試す</a>
+        <a class="lp-btn lp-btn--primary" href="/app/">デモで試す</a>
       </nav>
     </header>
 
@@ -97,7 +97,7 @@ const html = `<!DOCTYPE html>
                 <li>※初期費用なし</li>
               </ul>
               <${d} class="lp-hero-cta-secondary">
-                <a class="lp-btn lp-btn--white lp-btn--lg" href="/app/demo">ログイン不要のデモを見る</a>
+                <a class="lp-btn lp-btn--white lp-btn--lg" href="/app/">ログイン不要のデモを見る</a>
                 <a class="lp-btn lp-btn--ghost lp-btn--lg" href="#contact">導入のご相談</a>
               </${d}>
             </${d}>
@@ -289,7 +289,7 @@ const html = `<!DOCTYPE html>
               <span class="lp-step-badge">STEP 1</span>
               <h3>デモで体験</h3>
               <p>ログイン不要。サンプルデータ入りの環境で、画面の操作感をそのまま確認できます。</p>
-              <a class="lp-link-arrow" href="/app/demo">デモを開く →</a>
+              <a class="lp-link-arrow" href="/app/">デモを開く →</a>
             </article>
             <article class="lp-step-card">
               <span class="lp-step-badge">STEP 2</span>
@@ -313,7 +313,7 @@ const html = `<!DOCTYPE html>
             <p>本番データとは分離したデモ環境をご用意しています。まずはお気軽にお試しください。</p>
           </${d}>
           <${d} class="lp-demo-band-actions">
-            <a class="lp-btn lp-btn--white lp-btn--lg" href="/app/demo">デモ画面に入る</a>
+            <a class="lp-btn lp-btn--white lp-btn--lg" href="/app/">デモ画面に入る</a>
             <a class="lp-btn lp-btn--outline-white lp-btn--lg" href="#contact">お問い合わせ</a>
           </${d}>
         </${d}>
@@ -376,7 +376,7 @@ const html = `<!DOCTYPE html>
       <${d} class="lp-wrap lp-footer-inner">
         <a class="lp-logo lp-logo--footer" href="/">Daiko</a>
         <nav class="lp-footer-nav" aria-label="フッターリンク">
-          <a href="/app/demo">デモ</a>
+          <a href="/app/">デモ</a>
           <a href="/app/login">ログイン</a>
           <a href="/app/register">新規登録</a>
         </nav>

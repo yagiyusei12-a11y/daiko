@@ -83,6 +83,7 @@ app.get("/health", async () => ({ ok: true, service: "daiko" }));
 
 /** ルートは API より先に登録 */
 app.get("/app", async (_, reply) => reply.redirect("/app/", 302));
+app.get("/app/demo", async (_, reply) => reply.redirect("/app/", 302));
 app.get("/web", async (_, reply) => reply.redirect("/app/", 302));
 
 const lpStaticRoot = join(__dirname, "../public/lp");

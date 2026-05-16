@@ -103,7 +103,7 @@ const showcase = `
                 <li><strong>メリット</strong>更新時期のたびに同じ手順で再出力でき、事務担当の引き継ぎも楽になります。</li>
               </ul>
               <p class="lp-showcase-cta">
-                <a class="lp-btn lp-btn--primary" href="/app/demo">デモで書類作成を試す</a>
+                <a class="lp-btn lp-btn--primary" href="/app/">デモで書類作成を試す</a>
               </p>
             </${d}>
           </article>

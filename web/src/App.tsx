@@ -13,7 +13,6 @@ import DashboardPage from "./pages/DashboardPage";
 import SettingsMenuPage from "./pages/SettingsMenuPage";
 import GuestBookingPage from "./pages/GuestBookingPage";
 import EmployeeInvitePage from "./pages/EmployeeInvitePage";
-import DemoShowcasePage from "./pages/DemoShowcasePage";
 import PlatformShell from "./layout/PlatformShell";
 import PlatformInquiriesPage from "./pages/platform/PlatformInquiriesPage";
 import PlatformSettingsPage from "./pages/platform/PlatformSettingsPage";
@@ -24,14 +23,14 @@ export default function App(): JSX.Element {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route path="/demo" element={<DemoShowcasePage />} />
+      <Route path="/demo" element={<Navigate to="/" replace />} />
       <Route path="/platform" element={<PlatformShell />}>
         <Route index element={<Navigate to="/platform/inquiries" replace />} />
         <Route path="inquiries" element={<PlatformInquiriesPage />} />
         <Route path="settings" element={<PlatformSettingsPage />} />
         <Route path="tenants" element={<PlatformTenantsPage />} />
       </Route>
-      <Route path="/sample" element={<Navigate to="/demo" replace />} />
+      <Route path="/sample" element={<Navigate to="/" replace />} />
       <Route path="/book/:slug" element={<GuestBookingPage />} />
       <Route path="/invite/:token" element={<EmployeeInvitePage />} />
       <Route element={<Shell />}>

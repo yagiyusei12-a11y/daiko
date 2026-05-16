@@ -1,5 +1,6 @@
 import { NavLink, Outlet, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { getAccessToken } from "../api";
 import { useAuth } from "../auth";
 import { useDeviceKind } from "../hooks/useDeviceKind";
 import { SavedToastProvider } from "../saved-toast";
@@ -13,12 +14,24 @@ import {
 } from "../lib/staff-menu-client";
 
 export default function Shell(): JSX.Element {
-  const { me, loading, logout } = useAuth();
+  const { me, loading, logout, enterDemo } = useAuth();
   const device = useDeviceKind();
   const location = useLocation();
   const pathname = location.pathname;
   const navigate = useNavigate();
   const touchNav = device === "phone" || device === "tablet";
+  const demoBootStarted = useRef(false);
+  const [demoBooting, setDemoBooting] = useState(false);
+
+  useEffect(() => {
+    if (loading || me || demoBootStarted.current || getAccessToken()) return;
+    demoBootStarted.current = true;
+    setDemoBooting(true);
+    void (async () => {
+      await enterDemo();
+      setDemoBooting(false);
+    })();
+  }, [loading, me, enterDemo]);
 
   const navMeta = useMemo(() => (me ? filterHeaderNavMetaForMe(me) : [...STAFF_HEADER_NAV_META]), [me]);
 
@@ -40,7 +53,7 @@ export default function Shell(): JSX.Element {
     document.title = t ? `${t}${suffix} · Daiko` : "Daiko";
   }, [me]);
 
-  if (loading) {
+  if (loading || demoBooting) {
     return (
       <div className="app-loading">
         <div className="app-loading-spinner" aria-hidden />
