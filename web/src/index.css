@@ -2160,10 +2160,12 @@ button.settings-danger:disabled {
 }
 
 /* —— スマホ向けデイリースケジュール（Googleカレンダー風） —— */
+.schedule-gcal-page,
 .schedule-mobile-page {
   margin: -0.75rem -0.75rem 0;
 }
 
+.schedule-gcal-page .card,
 .schedule-mobile-page .card {
   padding: 0;
   border: none;
@@ -2171,8 +2173,163 @@ button.settings-danger:disabled {
   background: transparent;
 }
 
+.schedule-gcal-page .card-title,
 .schedule-mobile-page .card-title {
   display: none;
+}
+
+.gcal-schedule-hint {
+  margin: 0.5rem 0.75rem 0;
+  padding: 0 0.25rem;
+}
+
+.gcal-day-header-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.35rem;
+}
+
+.gcal-view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 2px;
+  background: #f1f5f9;
+}
+
+.gcal-view-toggle-btn {
+  border: none;
+  background: transparent;
+  padding: 0.25rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.gcal-view-toggle-btn.is-active {
+  background: #fff;
+  color: var(--color-text);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.gcal-driver-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.6875rem;
+  color: var(--color-muted);
+}
+
+.gcal-driver-swatch {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 3px;
+  border: 1px solid;
+  margin-right: 0.25rem;
+  vertical-align: middle;
+}
+
+.gcal-day-scroll--week {
+  overflow: auto;
+}
+
+.gcal-week {
+  min-width: min(100%, 54rem);
+}
+
+.gcal-week-head {
+  display: grid;
+  grid-template-columns: 3.25rem repeat(7, minmax(5rem, 1fr));
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #fff;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.gcal-week-head-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.35rem 0.15rem;
+  border: none;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.gcal-week-head-cell--today .gcal-week-head-num {
+  background: #2563eb;
+  color: #fff;
+  border-radius: 999px;
+}
+
+.gcal-week-head-dow {
+  font-size: 0.625rem;
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+.gcal-week-head-num {
+  font-size: 0.875rem;
+  font-weight: 700;
+  min-width: 1.75rem;
+  text-align: center;
+  line-height: 1.75rem;
+}
+
+.gcal-week-body .gcal-day-canvas {
+  position: relative;
+}
+
+.gcal-week-cols {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(5rem, 1fr));
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.gcal-week-col {
+  position: relative;
+  border-left: 1px solid color-mix(in srgb, var(--color-border) 45%, transparent);
+}
+
+.gcal-week-col:first-child {
+  border-left: none;
+}
+
+.gcal-day-events--compact .gcal-day-event {
+  padding: 0.2rem 0.3rem;
+}
+
+.gcal-day-event-route {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.2;
+}
+
+.gcal-day {
+  min-height: calc(100dvh - 8rem);
+}
+
+.app-shell--sidebar .gcal-day-fab {
+  bottom: 1.25rem;
+  right: 1.25rem;
 }
 
 .gcal-day {

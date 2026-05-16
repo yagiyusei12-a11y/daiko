@@ -7,8 +7,10 @@ import {
   parseScheduleUnassignedLaneEmployeeId,
 } from "../lib/schedule-constants";
 import { useSavedToast } from "../saved-toast";
-import { useDeviceKind } from "../hooks/useDeviceKind";
-import MobileDayScheduleView from "../components/MobileDayScheduleView";
+import GcalScheduleView, { type CalendarViewMode } from "../components/GcalScheduleView";
+import { computeScheduleAxis, minutesSinceTokyoDay, tokyoMidnightUtcMs } from "../lib/schedule-axis";
+import { buildDriverColorMap } from "../lib/schedule-driver-colors";
+import { shiftYmd, weekDatesContaining } from "../lib/schedule-week";
 import { Card, Err } from "../ui";
 
 const FLEX_HM = /^(\d{1,2}):(\d{2})$/;
@@ -17,33 +19,6 @@ function flexHmToMinutes(s: string): number {
   const m = FLEX_HM.exec(s.trim());
   if (!m) return NaN;
   return Number(m[1]) * 60 + Number(m[2]);
-}
-
-function scheduleBarPercentages(
-  startMin: number,
-  endMin: number,
-  axis: { mn: number; mx: number },
-): { startPct: number; sizePct: number } {
-  const span = axis.mx - axis.mn;
-  if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || span <= 0) return { startPct: 0, sizePct: 0 };
-  const lo = Math.min(startMin, endMin);
-  const hi = Math.max(startMin, endMin);
-  const clipLo = Math.max(axis.mn, lo);
-  const clipHi = Math.min(axis.mx, hi);
-  if (clipHi <= clipLo) return { startPct: 0, sizePct: 0 };
-  const startPct = ((clipLo - axis.mn) / span) * 100;
-  const sizePct = Math.max(0.35, ((clipHi - clipLo) / span) * 100);
-  return { startPct, sizePct: Math.min(sizePct, 100 - startPct) };
-}
-
-
-function tokyoMidnightUtcMs(ymd: string): number {
-  const [y, mo, d] = ymd.split("-").map(Number);
-  return Date.UTC(y, mo - 1, d, -9, 0, 0, 0);
-}
-
-function minutesSinceTokyoDay(ymd: string, iso: string): number {
-  return Math.floor((new Date(iso).getTime() - tokyoMidnightUtcMs(ymd)) / 60000);
 }
 
 function formatUtcAsTokyoDatetimeLocal(d: Date): string {
@@ -74,27 +49,6 @@ function formatHmFromDayMinutes(ymd: string, iso: string): string {
 
 function snap15(n: number): number {
   return Math.round(n / 15) * 15;
-}
-
-function shiftYmd(ymd: string, deltaDays: number): string {
-  const [y, m, d] = ymd.split("-").map(Number);
-  if (!Number.isFinite(y)) return ymd;
-  const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
-  dt.setUTCDate(dt.getUTCDate() + deltaDays);
-  return dt.toISOString().slice(0, 10);
-}
-
-function formatDayTitleJa(ymd: string): string {
-  const [y, m, d] = ymd.split("-").map(Number);
-  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return ymd;
-  const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
-  return new Intl.DateTimeFormat("ja-JP", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone: "Asia/Tokyo",
-  }).format(dt);
 }
 
 type BusinessHourSlot = { id: string; open: string; close: string };
@@ -166,6 +120,7 @@ type DragCtx = {
   last: { a: number; b: number };
   originDriverId: string;
   targetDriverId: string;
+  dayYmd: string;
 };
 
 function isUnassignedDriverId(id: string): boolean {
@@ -175,16 +130,15 @@ function isUnassignedDriverId(id: string): boolean {
 export default function TodaySchedulePage(): JSX.Element {
   const { flashSaved } = useSavedToast();
   const { me } = useAuth();
-  const deviceKind = useDeviceKind();
   const [viewDate, setViewDate] = useState(() => currentBusinessYmd(me?.dayChangeHour ?? 28));
+  const [calendarViewMode, setCalendarViewMode] = useState<CalendarViewMode>("day");
   const [data, setData] = useState<SchedulePayload | null>(null);
+  const [weekByDate, setWeekByDate] = useState<Record<string, SchedulePayload>>({});
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitBusy, setSubmitBusy] = useState(false);
-  const [vehicles, setVehicles] = useState<Array<{ id: string; label: string }>>([]);
-
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
   const [startLocal, setStartLocal] = useState("");
@@ -197,14 +151,11 @@ export default function TodaySchedulePage(): JSX.Element {
   const [bookingDefaultEstimate, setBookingDefaultEstimate] = useState(60);
   const [tripEstimateMinutes, setTripEstimateMinutes] = useState(60);
   const [driverEmployeeId, setDriverEmployeeId] = useState("");
-  const [vehicleId, setVehicleId] = useState("");
-
   const [detailRv, setDetailRv] = useState<ReservationRow | null>(null);
   const [detailBusy, setDetailBusy] = useState(false);
   const [mStartLocal, setMStartLocal] = useState("");
   const [mDuration, setMDuration] = useState(60);
   const [mDriver, setMDriver] = useState("");
-  const [mVehicleId, setMVehicleId] = useState("");
   const [mCustomerName, setMCustomerName] = useState("");
   const [mPhone, setMPhone] = useState("");
   const [mPickup, setMPickup] = useState("");
@@ -218,9 +169,33 @@ export default function TodaySchedulePage(): JSX.Element {
   const dragRef = useRef<DragCtx | null>(null);
   const dragMovedRef = useRef(false);
 
+  const weekDates = useMemo(() => weekDatesContaining(viewDate), [viewDate]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setErr(null);
+    if (calendarViewMode === "week") {
+      const pairs = await Promise.all(
+        weekDates.map(async (d) => {
+          const r = await apiFetch<SchedulePayload>(`/dispatch/schedule?date=${encodeURIComponent(d)}`);
+          return { d, r };
+        }),
+      );
+      setLoading(false);
+      const next: Record<string, SchedulePayload> = {};
+      for (const { d, r } of pairs) {
+        if (!r.ok) {
+          setErr(r.error);
+          setWeekByDate({});
+          setData(null);
+          return;
+        }
+        next[d] = r.data;
+      }
+      setWeekByDate(next);
+      setData(next[viewDate] ?? pairs[0]?.r.data ?? null);
+      return;
+    }
     const r = await apiFetch<SchedulePayload>(`/dispatch/schedule?date=${encodeURIComponent(viewDate)}`);
     setLoading(false);
     if (!r.ok) {
@@ -229,18 +204,11 @@ export default function TodaySchedulePage(): JSX.Element {
       return;
     }
     setData(r.data);
-  }, [viewDate]);
+  }, [viewDate, calendarViewMode, weekDates]);
 
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    void (async () => {
-      const r = await apiFetch<{ vehicles: Array<{ id: string; label: string }> }>("/settings/vehicles");
-      if (r.ok) setVehicles(r.data.vehicles ?? []);
-    })();
-  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -262,40 +230,53 @@ export default function TodaySchedulePage(): JSX.Element {
   }, [scheduleDurationOptions]);
 
   const scheduleAxis = useMemo(() => {
-    const rollHour = (me?.dayChangeHour ?? 28) - 24;
-    let mn = Number.POSITIVE_INFINITY;
-    let mx = Number.NEGATIVE_INFINITY;
-    const slots = data?.businessHours ?? [];
-    for (const s of slots) {
-      const a = flexHmToMinutes(s.open);
-      const b = flexHmToMinutes(s.close);
-      if (!Number.isNaN(a)) mn = Math.min(mn, a);
-      if (!Number.isNaN(b)) mx = Math.max(mx, b);
+    const businessHours: BusinessHourSlot[] = [];
+    const reservations: Array<ReservationRow & { viewYmd: string }> = [];
+    if (calendarViewMode === "day") {
+      if (data) {
+        businessHours.push(...data.businessHours);
+        for (const rv of data.reservations) {
+          reservations.push({ ...rv, viewYmd: viewDate });
+        }
+      }
+    } else {
+      for (const d of weekDates) {
+        const p = weekByDate[d];
+        if (!p) continue;
+        businessHours.push(...p.businessHours);
+        for (const rv of p.reservations) {
+          reservations.push({ ...rv, viewYmd: d });
+        }
+      }
     }
-    if (!Number.isFinite(mn) || !Number.isFinite(mx) || mx <= mn) {
-      mn = 7 * 60;
-      mx = 22 * 60;
-    }
-    // 既存の予定の時刻も軸に含める
-    for (const rv of data?.reservations ?? []) {
-      const a = minutesSinceTokyoDay(viewDate, rv.startsAt);
-      const b = minutesSinceTokyoDay(viewDate, rv.endsAt);
-      if (Number.isFinite(a) && a > 0) mx = Math.max(mx, a + 30);
-      if (Number.isFinite(b) && b > 0) mx = Math.max(mx, b);
-    }
-    // rollHour がある場合は日付変更時刻まで軸を延長
-    if (rollHour > 0) {
-      mx = Math.max(mx, (24 + rollHour) * 60);
-    }
-    const step = 15;
-    const slotCount = Math.max(1, Math.ceil((mx - mn) / step));
-    return { mn, mx, slotCount, step };
-  }, [data?.businessHours, data?.reservations, viewDate, me?.dayChangeHour]);
+    return computeScheduleAxis(businessHours, reservations, me?.dayChangeHour ?? 28);
+  }, [calendarViewMode, data, weekByDate, weekDates, viewDate, me?.dayChangeHour]);
 
-  const scheduleTranspose = deviceKind === "phone";
-  const scheduleSlotPx = 11;
-  const scheduleHeadPx = 36;
-  const scheduleGridPx = scheduleAxis.slotCount * scheduleSlotPx;
+  const reservationsByDate = useMemo(() => {
+    if (calendarViewMode === "day") {
+      return { [viewDate]: data?.reservations ?? [] };
+    }
+    const out: Record<string, ReservationRow[]> = {};
+    for (const d of weekDates) {
+      out[d] = weekByDate[d]?.reservations ?? [];
+    }
+    return out;
+  }, [calendarViewMode, data, weekByDate, weekDates, viewDate]);
+
+  const driverColorMap = useMemo(() => {
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    const rows =
+      calendarViewMode === "day"
+        ? (data?.drivers ?? [])
+        : weekDates.flatMap((d) => weekByDate[d]?.drivers ?? []);
+    for (const row of rows) {
+      if (seen.has(row.employeeId)) continue;
+      seen.add(row.employeeId);
+      ids.push(row.employeeId);
+    }
+    return buildDriverColorMap(ids);
+  }, [calendarViewMode, data, weekByDate, weekDates]);
 
   const availabilityMode = data?.availabilityMode ?? "confirmed_shifts";
 
@@ -318,7 +299,6 @@ export default function TodaySchedulePage(): JSX.Element {
     setVehicleNumber("");
     setParking("");
     setTripEstimateMinutes(bookingDefaultEstimate);
-    setVehicleId("");
     const nowRounded = new Date(Math.round(Date.now() / (15 * 60 * 1000)) * (15 * 60 * 1000));
     setStartLocal(formatUtcAsTokyoDatetimeLocal(nowRounded));
     const first = data?.drivers[0]?.employeeId ?? "";
@@ -335,7 +315,6 @@ export default function TodaySchedulePage(): JSX.Element {
     const dKey = reservationColumnKey(rv, availabilityMode);
     const matchDriver = data?.drivers.some((d) => d.employeeId === dKey) ? dKey : data?.drivers[0]?.employeeId ?? "";
     setMDriver(matchDriver);
-    setMVehicleId(rv.vehicleId ?? "");
     setMCustomerName(rv.detail.customerName);
     setMPhone(rv.detail.phone);
     setMPickup(rv.detail.pickup);
@@ -356,7 +335,6 @@ export default function TodaySchedulePage(): JSX.Element {
         startLocal,
         tripEstimateMinutes,
         driverEmployeeId,
-        vehicleId: vehicleId || null,
         detail: {
           customerName: customerName.trim(),
           phone: phone.trim(),
@@ -389,7 +367,6 @@ export default function TodaySchedulePage(): JSX.Element {
         startLocal: mStartLocal,
         durationMinutes: mDuration,
         driverEmployeeId: mDriver,
-        vehicleId: mVehicleId || null,
         detail: {
           customerName: mCustomerName.trim(),
           phone: mPhone.trim(),
@@ -427,17 +404,6 @@ export default function TodaySchedulePage(): JSX.Element {
     void load();
   }
 
-  const reservationsByDriver = useMemo(() => {
-    const m = new Map<string, ReservationRow[]>();
-    for (const row of data?.reservations ?? []) {
-      const id = reservationColumnKey(row, availabilityMode);
-      const arr = m.get(id) ?? [];
-      arr.push(row);
-      m.set(id, arr);
-    }
-    return m;
-  }, [data?.reservations, availabilityMode]);
-
   const durationSelectOptions = useMemo(() => {
     const s = new Set(scheduleDurationOptions);
     if (detailRv) {
@@ -449,12 +415,12 @@ export default function TodaySchedulePage(): JSX.Element {
     return [...s].sort((a, b) => a - b);
   }, [scheduleDurationOptions, detailRv]);
 
-  function effectiveMinutes(rv: ReservationRow): { a: number; b: number } {
+  function effectiveMinutes(rv: ReservationRow, dayYmd: string): { a: number; b: number } {
     const pr = dragPreview[rv.id];
     if (pr) return pr;
     return {
-      a: minutesSinceTokyoDay(viewDate, rv.startsAt),
-      b: minutesSinceTokyoDay(viewDate, rv.endsAt),
+      a: minutesSinceTokyoDay(dayYmd, rv.startsAt),
+      b: minutesSinceTokyoDay(dayYmd, rv.endsAt),
     };
   }
 
@@ -463,14 +429,15 @@ export default function TodaySchedulePage(): JSX.Element {
     rv: ReservationRow,
     track: HTMLDivElement,
     transpose: boolean,
+    dayYmd: string,
   ): void {
     if (e.button !== 0) return;
     const rect = track.getBoundingClientRect();
     const spanPx = transpose ? rect.height : rect.width;
     if (spanPx <= 0) return;
     const axisSpanMin = scheduleAxis.mx - scheduleAxis.mn;
-    const a0 = minutesSinceTokyoDay(viewDate, rv.startsAt);
-    const b0 = minutesSinceTokyoDay(viewDate, rv.endsAt);
+    const a0 = minutesSinceTokyoDay(dayYmd, rv.startsAt);
+    const b0 = minutesSinceTokyoDay(dayYmd, rv.endsAt);
     const client = transpose ? e.clientY : e.clientX;
     const edge = 10;
     const pos = transpose ? e.clientY - rect.top : e.clientX - rect.left;
@@ -492,6 +459,7 @@ export default function TodaySchedulePage(): JSX.Element {
       last: { a: a0, b: b0 },
       originDriverId,
       targetDriverId: originDriverId,
+      dayYmd,
     };
 
     function onMove(ev: PointerEvent): void {
@@ -558,12 +526,12 @@ export default function TodaySchedulePage(): JSX.Element {
         openDetail(d.rv);
         return;
       }
-      const origA = minutesSinceTokyoDay(viewDate, d.rv.startsAt);
-      const origB = minutesSinceTokyoDay(viewDate, d.rv.endsAt);
+      const origA = minutesSinceTokyoDay(d.dayYmd, d.rv.startsAt);
+      const origB = minutesSinceTokyoDay(d.dayYmd, d.rv.endsAt);
       const timeChanged = fin.a !== origA || fin.b !== origB;
       const rowChanged = d.targetDriverId !== d.originDriverId;
       if (!timeChanged && !rowChanged) return;
-      const base = tokyoMidnightUtcMs(viewDate);
+      const base = tokyoMidnightUtcMs(d.dayYmd);
       const startIso = new Date(base + fin.a * 60000).toISOString();
       void (async () => {
         const startLocalStr = formatUtcAsTokyoDatetimeLocal(new Date(startIso));
@@ -595,170 +563,65 @@ export default function TodaySchedulePage(): JSX.Element {
     e.preventDefault();
   }
 
-  function barLabel(rv: ReservationRow): string {
-    const hm = formatHmFromDayMinutes(viewDate, rv.startsAt);
-    const p = (rv.detail.pickup || "").trim();
-    const head = p.length > 18 ? `${p.slice(0, 17)}…` : p;
-    return `${head} ${hm}`.trim();
-  }
-
-  const isPhoneSchedule = deviceKind === "phone";
+  const activeDrivers = useMemo(() => {
+    const rows =
+      calendarViewMode === "day"
+        ? (data?.drivers ?? [])
+        : weekDates.flatMap((d) => weekByDate[d]?.drivers ?? []);
+    const seen = new Set<string>();
+    return rows.filter((d) => {
+      if (seen.has(d.employeeId)) return false;
+      seen.add(d.employeeId);
+      return true;
+    });
+  }, [calendarViewMode, data?.drivers, weekByDate, weekDates]);
 
   return (
-    <div className={isPhoneSchedule ? "schedule-mobile-page" : undefined}>
+    <div className="schedule-gcal-page">
     <Card title="運行スケジュール">
-      {!isPhoneSchedule ? (
-        <p style={{ margin: "0 0 0.75rem", fontSize: "0.95rem", color: "var(--color-muted)" }}>{formatDayTitleJa(viewDate)}</p>
-      ) : null}
-
-      {!isPhoneSchedule ? (
-      <div className="settings-toolbar" style={{ flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>
-        <label htmlFor="sched-view-date" className="settings-hint" style={{ margin: 0 }}>
-          表示日
-        </label>
-        <input
-          id="sched-view-date"
-          type="date"
-          value={viewDate}
-          onChange={(e) => setViewDate(e.target.value)}
-        />
-        <button type="button" className="settings-primary" disabled={loading || !data} onClick={() => openDialog()}>
-          予定登録
-        </button>
-      </div>
-      ) : null}
-
       <Err msg={err} />
 
       {loading ? (
-        <p className="settings-hint">{isPhoneSchedule ? "読み込み中…" : "読み込み中…"}</p>
-      ) : data ? (
+        <p className="settings-hint">読み込み中…</p>
+      ) : data || calendarViewMode === "week" ? (
         <>
-          {!isPhoneSchedule && onlyUnassignedDriverColumn ? (
-            <p className="settings-hint" style={{ marginBottom: "0.75rem" }}>
+          {onlyUnassignedDriverColumn ? (
+            <p className="settings-hint gcal-schedule-hint">
               この日は客車の確定シフトがありません。「未予定」を選ぶと、担当者を決める前に運行予定だけ登録できます。
             </p>
           ) : null}
-          {!isPhoneSchedule && availabilityMode === "virtual_concurrent" && data.drivers.length > 1 ? (
-            <p className="settings-hint" style={{ marginBottom: "0.75rem" }}>
-              この日の同時上限は {data.effectiveVirtualSlots} 件です。未予定は複数列で重ならない範囲に並びます。
+          {availabilityMode === "virtual_concurrent" && (data?.drivers.length ?? 0) > 1 ? (
+            <p className="settings-hint gcal-schedule-hint">
+              この日の同時上限は {data?.effectiveVirtualSlots ?? 0} 件です。未予定は複数列で重ならない範囲に並びます。
             </p>
           ) : null}
-          {scheduleTranspose ? (
-            <MobileDayScheduleView
-              viewDate={viewDate}
-              axis={scheduleAxis}
-              reservations={data.reservations}
-              drivers={data.drivers}
-              dayChangeHour={me?.dayChangeHour ?? 28}
-              getMinutes={(rv) => {
-                const { a, b } = effectiveMinutes(rv);
-                return { startMin: a, endMin: b };
-              }}
-              onEventPointerDown={(e, rv, track) => beginDrag(e, rv, track, true)}
-              onFabClick={() => openDialog()}
-              onPrevDay={() => setViewDate((d) => shiftYmd(d, -1))}
-              onNextDay={() => setViewDate((d) => shiftYmd(d, 1))}
-              onPickDate={setViewDate}
-            />
-          ) : (
-            <div className="attend-schedule-wrap">
-              <div className="attend-schedule-axis">
-                <div className="attend-schedule-corner" />
-                <div
-                  className="attend-schedule-ticks"
-                  style={{ gridTemplateColumns: `repeat(${scheduleAxis.slotCount}, minmax(0, 1fr))` }}
-                >
-                  {Array.from({ length: scheduleAxis.slotCount }, (_, i) => {
-                    const t = scheduleAxis.mn + i * scheduleAxis.step;
-                    const h = Math.floor(t / 60);
-                    const m = t % 60;
-                    const show = m === 0;
-                    return (
-                      <span key={i} className={`attend-schedule-tick${show ? " attend-schedule-tick--hour" : ""}`}>
-                        {show ? `${h}` : ""}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-              {data.drivers.map((row) => {
-                const resList = reservationsByDriver.get(row.employeeId) ?? [];
-                const isTargetRow = dragTargetDriverId === row.employeeId;
-                const ghostRv = isTargetRow
-                  ? (() => {
-                      const d = dragRef.current;
-                      if (!d) return null;
-                      const pr = dragPreview[d.rv.id] ?? { a: minutesSinceTokyoDay(viewDate, d.rv.startsAt), b: minutesSinceTokyoDay(viewDate, d.rv.endsAt) };
-                      return { rv: d.rv, a: pr.a, b: pr.b };
-                    })()
-                  : null;
-                return (
-                  <div
-                    key={row.employeeId}
-                    className={`attend-schedule-row${isTargetRow ? " attend-schedule-row--drag-target" : ""}`}
-                    data-driver-id={row.employeeId}
-                  >
-                    <div className="attend-schedule-name">{row.name}</div>
-                    <div className="attend-schedule-track" data-driver-id={row.employeeId}>
-                      {resList.map((rv) => {
-                        const { a, b } = effectiveMinutes(rv);
-                        const bar = scheduleBarPercentages(a, b, scheduleAxis);
-                        const label = barLabel(rv);
-                        const isCrossRowDragging = dragTargetDriverId !== null && dragRef.current?.rv.id === rv.id;
-                        return (
-                          <button
-                            key={rv.id}
-                            type="button"
-                            className="attend-schedule-bar attend-schedule-bar--reservation"
-                            style={{
-                              left: `${bar.startPct}%`,
-                              width: `${bar.sizePct}%`,
-                              border: "none",
-                              cursor: "grab",
-                              opacity: isCrossRowDragging ? 0.35 : 1,
-                            }}
-                            title={`${rv.detail.customerName} ${rv.detail.pickup}→${rv.detail.dropoff}`}
-                            onPointerDown={(e) => {
-                              const track = e.currentTarget.parentElement as HTMLDivElement;
-                              beginDrag(e, rv, track, false);
-                            }}
-                          >
-                            {label}
-                          </button>
-                        );
-                      })}
-                      {ghostRv ? (() => {
-                        const bar = scheduleBarPercentages(ghostRv.a, ghostRv.b, scheduleAxis);
-                        return (
-                          <div
-                            key="drag-ghost"
-                            className="attend-schedule-bar attend-schedule-bar--reservation attend-schedule-bar--ghost"
-                            style={{
-                              left: `${bar.startPct}%`,
-                              width: `${bar.sizePct}%`,
-                              pointerEvents: "none",
-                            }}
-                          >
-                            {barLabel(ghostRv.rv)}
-                          </div>
-                        );
-                      })() : null}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <GcalScheduleView
+            viewMode={calendarViewMode}
+            onViewModeChange={setCalendarViewMode}
+            viewDate={viewDate}
+            axis={scheduleAxis}
+            reservationsByDate={reservationsByDate}
+            drivers={activeDrivers}
+            driverColorMap={driverColorMap}
+            dayChangeHour={me?.dayChangeHour ?? 28}
+            getMinutes={(rv, dayYmd) => {
+              const { a, b } = effectiveMinutes(rv, dayYmd);
+              return { startMin: a, endMin: b };
+            }}
+            onEventPointerDown={(e, rv, track, dayYmd) => beginDrag(e, rv, track, true, dayYmd)}
+            onFabClick={() => openDialog()}
+            onPrev={() => setViewDate((d) => shiftYmd(d, calendarViewMode === "week" ? -7 : -1))}
+            onNext={() => setViewDate((d) => shiftYmd(d, calendarViewMode === "week" ? 7 : 1))}
+            onPickDate={setViewDate}
+            onSelectDay={(ymd) => {
+              setViewDate(ymd);
+              setCalendarViewMode("day");
+            }}
+          />
         </>
       ) : null}
 
-      {!isPhoneSchedule ? (
-      <p className="settings-hint" style={{ marginTop: "0.75rem" }}>
-        横軸は設定の営業時間（曜日別・特定日を含む）に合わせた15分刻みです。表示は運行予定のみです（確定シフトの帯は表示しません）。
-      </p>
-      ) : null}
-
+      
       {dialogOpen ? (
         <div
           className="pricing-modal-backdrop"
@@ -852,15 +715,6 @@ export default function TodaySchedulePage(): JSX.Element {
                     </option>
                   ))}
                 </select>
-                <label htmlFor="sr-veh">随伴車（任意・マスタ連携）</label>
-                <select id="sr-veh" value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
-                  <option value="">なし</option>
-                  {vehicles.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.label}
-                    </option>
-                  ))}
-                </select>
               </div>
             </div>
             <div className="pricing-modal-actions">
@@ -915,15 +769,6 @@ export default function TodaySchedulePage(): JSX.Element {
                   {(data?.drivers ?? []).map((d) => (
                     <option key={d.employeeId} value={d.employeeId}>
                       {d.name}
-                    </option>
-                  ))}
-                </select>
-                <label htmlFor="sd-veh">随伴車</label>
-                <select id="sd-veh" value={mVehicleId} onChange={(e) => setMVehicleId(e.target.value)}>
-                  <option value="">なし</option>
-                  {vehicles.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.label}
                     </option>
                   ))}
                 </select>
