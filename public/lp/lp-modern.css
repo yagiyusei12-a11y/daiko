@@ -1,0 +1,14 @@
+/* Tailwind 補助（LP モダン刷新セクション） */
+.lp-tw-header {
+  font-family: "Noto Sans JP", system-ui, sans-serif;
+}
+
+.lp-mockup-tilt {
+  transform: perspective(1200px) rotateY(-8deg) rotateX(4deg);
+}
+
+@media (max-width: 1023px) {
+  .lp-mockup-tilt {
+    transform: none;
+  }
+}

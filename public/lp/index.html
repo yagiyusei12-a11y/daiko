@@ -22,174 +22,213 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/lp/lp.css" />
+    <link rel="stylesheet" href="/lp/lp-modern.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Noto Sans JP"', "system-ui", "sans-serif"],
+              display: ['"Plus Jakarta Sans"', '"Noto Sans JP"', "sans-serif"],
+            },
+            boxShadow: {
+              soft: "0 12px 40px rgba(15, 23, 42, 0.08)",
+              glow: "0 20px 50px rgba(37, 99, 235, 0.15)",
+            },
+            colors: {
+              brand: { DEFAULT: "#2563eb", dark: "#1d4ed8", soft: "#eff6ff" },
+              accent: { DEFAULT: "#f97316", soft: "#fff7ed" },
+            },
+          },
+        },
+      };
+    </script>
   </head>
-  <body>
+  <body class="bg-white text-slate-900 antialiased">
     <a class="lp-skip" href="#main">本文へスキップ</a>
 
-    <div class="lp-topbar">
-      <p>運転代行店の経営者・管理者の方へ — まずは<strong>ログイン不要のデモ</strong>でお試しください</p>
+    <div class="bg-brand-dark text-center text-sm text-white py-2.5 px-4">
+      <p class="m-0">運転代行店の経営者・管理者の方へ — まずは<strong class="font-bold">ログイン不要のデモ</strong>でお試しください</p>
     </div>
 
-    <header class="lp-header">
-      <div class="lp-header-inner">
-        <a class="lp-logo" href="/">
-          <span class="lp-logo-mark" aria-hidden="true"></span>
+    <header class="lp-tw-header sticky top-0 z-50 border-b border-slate-100 bg-white/90 backdrop-blur-md">
+      <div class="mx-auto flex h-16 max-w-6xl items-center gap-4 px-5 lg:h-[4.25rem]">
+        <a href="/" class="mr-auto inline-flex items-center gap-2 font-display text-lg font-bold tracking-tight text-slate-900 no-underline">
+          <span class="h-8 w-8 rounded-xl bg-gradient-to-br from-brand to-blue-400 shadow-soft" aria-hidden="true"></span>
           Daiko
         </a>
-        <nav class="lp-nav" aria-label="ページ内ナビゲーション">
-          <a href="#screenshots">画面</a>
-          <a href="#about">特徴</a>
-          <a href="#benefits">メリット</a>
-          <a href="#effects">導入効果</a>
-          <a href="#steps">使い方</a>
+        <nav class="hidden items-center gap-1 lg:flex" aria-label="ページ内ナビゲーション">
+          <a href="#pains" class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 no-underline hover:bg-slate-50 hover:text-brand">お悩み</a>
+          <a href="#features" class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 no-underline hover:bg-slate-50 hover:text-brand">特徴</a>
+          <a href="#screenshots" class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 no-underline hover:bg-slate-50 hover:text-brand">画面</a>
+          <a href="#benefits" class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 no-underline hover:bg-slate-50 hover:text-brand">メリット</a>
+          <a href="#contact" class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 no-underline hover:bg-slate-50 hover:text-brand">お問い合わせ</a>
         </nav>
-        <div class="lp-header-cta">
-          <a class="lp-btn lp-btn--outline" href="/app/login">ログイン</a>
-          <a class="lp-btn lp-btn--accent" href="#contact">お問い合わせ</a>
+        <div class="hidden items-center gap-2 sm:flex">
+          <a href="/app/login" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:border-brand hover:text-brand">ログイン</a>
+          <a href="/app/register" class="rounded-xl bg-brand px-4 py-2 text-sm font-bold text-white no-underline shadow-soft hover:bg-brand-dark">無料で始める</a>
         </div>
-        <button type="button" class="lp-menu-btn" id="menu-btn" aria-label="メニューを開く" aria-expanded="false">
-          <span></span><span></span><span></span>
+        <button type="button" class="inline-flex h-10 w-10 flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 lg:hidden" id="menu-btn" aria-label="メニューを開く" aria-expanded="false">
+          <span class="block h-0.5 w-5 rounded bg-slate-700"></span>
+          <span class="block h-0.5 w-5 rounded bg-slate-700"></span>
+          <span class="block h-0.5 w-5 rounded bg-slate-700"></span>
         </button>
       </div>
-      <nav class="lp-mobile-nav" id="mobile-nav" hidden>
-        <a href="#screenshots">画面</a>
-        <a href="#about">特徴</a>
-        <a href="#benefits">メリット</a>
-        <a href="#effects">導入効果</a>
-        <a href="#steps">使い方</a>
-        <a href="#contact">お問い合わせ</a>
-        <a class="lp-btn lp-btn--primary" href="/app/demo">デモで試す</a>
+      <nav class="border-t border-slate-100 bg-white px-5 py-4 lg:hidden" id="mobile-nav" hidden>
+        <div class="flex flex-col gap-1">
+          <a href="#pains" class="rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-700 no-underline hover:bg-slate-50">お悩み</a>
+          <a href="#features" class="rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-700 no-underline hover:bg-slate-50">特徴</a>
+          <a href="#screenshots" class="rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-700 no-underline hover:bg-slate-50">画面</a>
+          <a href="#contact" class="rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-700 no-underline hover:bg-slate-50">お問い合わせ</a>
+          <a href="/app/demo" class="mt-2 rounded-xl bg-brand px-4 py-3 text-center text-sm font-bold text-white no-underline">デモで試す</a>
+        </div>
       </nav>
     </header>
 
     <main id="main">
-      <section class="lp-hero">
-        <div class="lp-hero-bg" aria-hidden="true"></div>
-        <div class="lp-wrap lp-hero-inner">
-          <div class="lp-hero-copy">
-            <div class="lp-campaign" role="note">
-              <p class="lp-campaign-eyebrow">リリース記念！今だけ初期メンバー限定</p>
-              <div class="lp-campaign-ribbon">
-                <span class="lp-campaign-before">
-                  通常月額 <s>4,980円</s><small>(税抜)</small> が
-                </span>
-                <span class="lp-campaign-highlight">今なら <em>0円</em>！</span>
+      <section class="relative overflow-hidden bg-gradient-to-b from-slate-50 via-white to-white py-16 lg:py-24">
+        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_20%_0%,rgba(59,130,246,0.12),transparent),radial-gradient(ellipse_60%_40%_at_90%_10%,rgba(249,115,22,0.08),transparent)]" aria-hidden="true"></div>
+        <div class="relative mx-auto grid max-w-6xl items-center gap-12 px-5 lg:grid-cols-2 lg:gap-16">
+          <div class="text-center lg:text-left">
+            <div class="mb-8 inline-block w-full max-w-xl text-left">
+              <p class="mb-3 text-center text-xs font-bold tracking-wide text-accent lg:text-left">＼ β版リリース記念！初期メンバー様限定 ／</p>
+              <div class="rounded-2xl border border-orange-200/80 bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 p-5 shadow-soft">
+                <p class="m-0 text-center text-base font-extrabold leading-snug text-orange-900 sm:text-lg">
+                  機能が整うまで<span class="mx-1 inline-block rounded-lg bg-orange-500 px-2 py-0.5 text-white">0円</span>でご利用いただけます！
+                </p>
+                <p class="mt-3 mb-0 text-center text-sm font-semibold leading-relaxed text-slate-700 sm:text-base">
+                  有料化後もずっと定額。月額<span class="font-extrabold text-slate-900">4,980円</span><span class="text-xs">(税抜)</span>で
+                  <span class="mt-1 block text-lg font-extrabold text-brand sm:inline sm:mt-0 sm:ml-1">【システム使い放題】</span>
+                </p>
               </div>
             </div>
-            <p class="lp-kicker">運転代行業向けクラウド</p>
-            <h1>
-              <span class="lp-hero-line">配車も、日報も、給与計算も。</span>
-              <span class="lp-hero-line lp-hero-line--accent">運転代行のすべてを、</span>
-              <span class="lp-hero-line">このシステム一つで。</span>
+
+            <p class="mb-4 inline-flex items-center rounded-full border border-brand/20 bg-brand-soft px-4 py-1.5 text-xs font-bold tracking-wide text-brand">運転代行業向けクラウド</p>
+            <h1 class="font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-slate-900 sm:text-5xl lg:text-[3.25rem]">
+              配車も、日報も、<br class="hidden sm:block" />
+              <span class="bg-gradient-to-r from-brand to-blue-500 bg-clip-text text-transparent">給与計算も、ひとつに。</span>
             </h1>
-            <p class="lp-hero-benefit">
-              面倒な運転代行の日常業務を自動化し、あなたのビジネスの<strong>売上UP</strong>と<strong>時間創出</strong>に貢献します
+            <p class="mx-auto mt-5 max-w-xl text-lg font-semibold leading-relaxed text-slate-700 lg:mx-0">
+              面倒な日常業務を自動化し、<span class="text-brand">売上UP</span>と<span class="text-brand">時間創出</span>に貢献します
             </p>
-            <p class="lp-hero-lead">
-              電話予約に追われる日々から卒業。ネット予約連携からペーパーレスな業務管理まで、次世代の店舗オペレーションをひとつに。
+            <p class="mx-auto mt-3 max-w-xl text-base leading-relaxed text-slate-500 lg:mx-0">
+              ネット予約からペーパーレスな業務管理まで。運転代行店のオペレーションを、モダンなクラウドで一本化。
             </p>
-            <div class="lp-hero-cta">
-              <a class="lp-btn lp-btn--campaign lp-btn--xl" href="/app/register">今すぐ無料で始める</a>
-              <ul class="lp-hero-cta-notes" aria-label="ご利用の安心ポイント">
-                <li>※クレジットカード登録不要</li>
-                <li>※初期費用なし</li>
+
+            <div class="mt-10 flex flex-col items-center lg:items-start">
+              <a href="/app/register" class="inline-flex w-full max-w-md items-center justify-center rounded-2xl bg-gradient-to-r from-brand to-blue-500 px-8 py-4 text-lg font-bold text-white no-underline shadow-glow transition-all hover:-translate-y-0.5 hover:shadow-lg sm:w-auto">
+                今すぐ無料で始める
+              </a>
+              <ul class="mt-4 space-y-1 text-center text-xs font-medium text-slate-500 lg:text-left">
+                <li>※機能追加完了後、自動的に課金されることはありません</li>
+                <li>※アカウント数やデータ量による従量課金は一切ありません</li>
               </ul>
-              <div class="lp-hero-cta-secondary">
-                <a class="lp-btn lp-btn--white lp-btn--lg" href="/app/demo">ログイン不要のデモを見る</a>
-                <a class="lp-btn lp-btn--ghost lp-btn--lg" href="#contact">導入のご相談</a>
+              <div class="mt-6 flex w-full max-w-md flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
+                <a href="/app/demo" class="inline-flex flex-1 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 no-underline shadow-sm hover:border-brand hover:text-brand">デモを見る</a>
+                <a href="#contact" class="inline-flex flex-1 items-center justify-center rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 no-underline hover:bg-slate-200">導入のご相談</a>
               </div>
             </div>
-            <ul class="lp-hero-tags">
-              <li>専用アプリ不要</li>
-              <li>28時間表記対応</li>
-              <li>マルチ店舗対応</li>
+
+            <ul class="mt-8 flex flex-wrap justify-center gap-2 lg:justify-start">
+              <li class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm">専用アプリ不要</li>
+              <li class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm">28時間表記</li>
+              <li class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm">マルチ店舗</li>
             </ul>
           </div>
-          <div class="lp-hero-visual" aria-hidden="true">
-            <div class="lp-mock lp-mock--phone">
-              <div class="lp-mock-header">
-                <span class="lp-mock-dot"></span>
-                <span class="lp-mock-dot"></span>
-                <span class="lp-mock-dot"></span>
-                <span>運行スケジュール</span>
+
+          <div class="relative mx-auto w-full max-w-md lg:max-w-none lg:justify-self-end">
+            <div class="lp-mockup-tilt relative">
+              <div class="absolute -left-4 top-8 z-10 hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-lg sm:block">
+                <p class="m-0 text-xs font-bold text-slate-500">本日の売上</p>
+                <p class="m-0 mt-1 font-display text-2xl font-extrabold text-brand">¥128,400</p>
               </div>
-              <div class="lp-mock-body">
-                <div class="lp-mock-row lp-mock-row--lane">
-                  <span>未予定</span>
-                  <span class="lp-mock-pill">21:45 フクソウ駅→見本町</span>
-                </div>
-                <div class="lp-mock-row">
-                  <span class="lp-mock-avatar">青空</span>
-                  <span class="lp-mock-pill lp-mock-pill--blue">22:15 ねこじる通り</span>
-                </div>
-                <div class="lp-mock-row">
-                  <span class="lp-mock-avatar">星河</span>
-                  <span class="lp-mock-pill">25:30 中央病院送迎</span>
-                </div>
-                <div class="lp-mock-stats">
-                  <div><strong>本日</strong><span>12件</span></div>
-                  <div><strong>売上</strong><span>¥128,400</span></div>
-                </div>
+              <div class="overflow-hidden rounded-[2rem] border-8 border-slate-900 bg-slate-900 shadow-2xl">
+                <div class="bg-gradient-to-r from-brand to-blue-500 px-4 py-2 text-center text-xs font-bold text-white">運行スケジュール</div>
+                <img
+                  src="/lp/screenshots/feature-trip-add.png"
+                  alt="Daiko 運行入力画面のモックアップ"
+                  width="420"
+                  height="780"
+                  class="block w-full bg-white"
+                  loading="eager"
+                  decoding="async"
+                />
               </div>
-            </div>
-            <div class="lp-mock lp-mock--card lp-mock--float">
-              <span class="lp-mock-label">タイムカード</span>
-              <p class="lp-mock-time">出勤 <strong>18:05</strong> → 退勤 <strong>27:15</strong></p>
-              <span class="lp-mock-badge">酒気帯びなし</span>
+              <div class="absolute -right-2 bottom-6 rounded-2xl border border-emerald-200 bg-white px-4 py-3 shadow-lg">
+                <p class="m-0 text-xs font-bold text-emerald-700">酒気帯び確認</p>
+                <p class="m-0 mt-0.5 text-sm font-bold text-slate-800">問題なし ✓</p>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section class="lp-pains-hero" id="pains">
-        <div class="lp-wrap lp-pains-hero-inner">
-          <h2 class="lp-pains-hero-title">こんなお悩みありませんか？</h2>
-          <ul class="lp-pains-hero-list">
-            <li>電話予約と現場入力が分断され、繁忙時にオペレーションが回らない</li>
-            <li>深夜帯の時刻や事業日のズレで、日報・給与・売上が合わなくなる</li>
-            <li>書類・届出の作成に時間がかかり、接客や配車の本業に集中できない</li>
+      <section id="pains" class="bg-gray-50 py-16 lg:py-20">
+        <div class="mx-auto max-w-6xl px-5">
+          <div class="mx-auto max-w-2xl text-center">
+            <p class="text-sm font-bold tracking-wide text-brand">PROBLEMS</p>
+            <h2 class="mt-2 font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">こんなお悩みありませんか？</h2>
+          </div>
+          <ul class="mt-12 grid gap-4 md:grid-cols-3">
+            <li class="flex gap-3 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-soft transition-all hover:-translate-y-1 hover:shadow-lg">
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600" aria-hidden="true">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+              </span>
+              <p class="m-0 text-sm font-medium leading-relaxed text-slate-700">電話予約と現場入力が分断され、繁忙時にオペレーションが回らない</p>
+            </li>
+            <li class="flex gap-3 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-soft transition-all hover:-translate-y-1 hover:shadow-lg">
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600" aria-hidden="true">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+              </span>
+              <p class="m-0 text-sm font-medium leading-relaxed text-slate-700">深夜帯の時刻や事業日のズレで、日報・給与・売上が合わなくなる</p>
+            </li>
+            <li class="flex gap-3 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-soft transition-all hover:-translate-y-1 hover:shadow-lg">
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600" aria-hidden="true">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+              </span>
+              <p class="m-0 text-sm font-medium leading-relaxed text-slate-700">書類・届出の作成に時間がかかり、接客や配車の本業に集中できない</p>
+            </li>
           </ul>
-          <p class="lp-pains-hero-resolve">
-            <span class="lp-pains-hero-resolve-label">Daikoなら、</span>
-            <strong>これらをすべて解決</strong>できます
+          <p class="mt-12 text-center text-xl font-bold text-slate-800">
+            Daikoなら、<span class="bg-gradient-to-r from-brand to-blue-500 bg-clip-text text-transparent">これらをすべて解決</span>できます
           </p>
         </div>
       </section>
 
-      <section class="lp-strip" aria-label="主な機能">
-        <div class="lp-wrap lp-strip-grid">
-          <article class="lp-strip-item">
-            <div class="lp-strip-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-            </div>
-            <h3>ネット予約</h3>
-            <p>空き枠を自動計算</p>
-          </article>
-          <article class="lp-strip-item">
-            <div class="lp-strip-icon lp-strip-icon--warm" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-            </div>
-            <h3>28時間表記</h3>
-            <p>事業日ロール対応</p>
-          </article>
-          <article class="lp-strip-item">
-            <div class="lp-strip-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-            </div>
-            <h3>日報・点検</h3>
-            <p>スマホで入力</p>
-          </article>
-          <article class="lp-strip-item">
-            <div class="lp-strip-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 8c-2.5 0-4 1.5-4 3.5S9.5 15 12 15s4-1.5 4-3.5S14.5 8 12 8zm0-6v2m0 16v2M4.2 4.2l1.4 1.4m12.8 12.8l1.4 1.4M2 12h2m16 0h2M4.2 19.8l1.4-1.4m12.8-12.8l1.4-1.4"/></svg>
-            </div>
-            <h3>給料集計</h3>
-            <p>賃金ルール連動</p>
-          </article>
+      <section id="features" class="bg-white py-16 lg:py-20">
+        <div class="mx-auto max-w-6xl px-5">
+          <div class="mx-auto max-w-2xl text-center">
+            <p class="text-sm font-bold tracking-wide text-brand">FEATURES</p>
+            <h2 class="mt-2 font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">Daikoの3つの特徴</h2>
+            <p class="mt-4 text-base leading-relaxed text-slate-500">現場の「使いやすさ」と、経営の「見える化」を両立する機能を厳選しました。</p>
+          </div>
+          <div class="mt-12 grid gap-6 md:grid-cols-3">
+            <article class="group rounded-2xl border border-slate-100 bg-white p-8 shadow-soft transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+              <div class="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-soft text-brand transition-colors group-hover:bg-brand group-hover:text-white">
+                <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              </div>
+              <h3 class="font-display text-xl font-bold tracking-tight text-slate-900">ネット予約で24時間受付</h3>
+              <p class="mt-3 text-sm leading-relaxed text-slate-600">空き枠を自動計算。電話対応を減らし、取りこぼしのない予約運用を実現します。</p>
+            </article>
+            <article class="group rounded-2xl border border-slate-100 bg-white p-8 shadow-soft transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+              <div class="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-soft text-brand transition-colors group-hover:bg-brand group-hover:text-white">
+                <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              </div>
+              <h3 class="font-display text-xl font-bold tracking-tight text-slate-900">28時間表記・事業日対応</h3>
+              <p class="mt-3 text-sm leading-relaxed text-slate-600">深夜帯のズレを防ぐ時間管理。日報・給与・売上を正しい事業日に紐づけます。</p>
+            </article>
+            <article class="group rounded-2xl border border-slate-100 bg-white p-8 shadow-soft transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+              <div class="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-soft text-brand transition-colors group-hover:bg-brand group-hover:text-white">
+                <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+              </div>
+              <h3 class="font-display text-xl font-bold tracking-tight text-slate-900">書類・帳票をオールインワン</h3>
+              <p class="mt-3 text-sm leading-relaxed text-slate-600">日報から変更届PDFまで一元管理。手書き・転記の手間を減らし監査にも対応。</p>
+            </article>
+          </div>
         </div>
       </section>
 
-      
       <section class="lp-section lp-showcase" id="screenshots">
         <div class="lp-wrap">
           <div class="lp-section-head">
@@ -294,7 +333,7 @@
             </div>
           </div>
           <div class="lp-about-copy">
-            <p class="lp-kicker lp-kicker--left">こんなお悩みありませんか？</p>
+            <p class="lp-kicker lp-kicker--left">運転代行店のリアルな課題</p>
             <h2 class="lp-heading">代行業特有の「時間」と<br />「電話」に、まっすぐ向き合う。</h2>
             <div class="lp-about-pains">
               <article>

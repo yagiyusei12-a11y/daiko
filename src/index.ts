@@ -44,7 +44,7 @@ const helmetOpts =
           useDefaults: false,
           directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'"],
+            scriptSrc: ["'self'", "https://cdn.tailwindcss.com"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             imgSrc: ["'self'", "data:", "blob:"],
             connectSrc: ["'self'"],
