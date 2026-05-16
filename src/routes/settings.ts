@@ -14,6 +14,7 @@ import {
 import { coerceTillFromCustomJson, mergeTillIntoCustomJson, parseTillPut } from "../lib/till-settings.js";
 import { coercePricingPrefs, mergePricingPrefsUpdate } from "../lib/pricing-prefs.js";
 import { debugSessionLog } from "../lib/debug-session-log.js";
+import { syncTariffPlanFromPricingPrefs } from "../lib/sync-tariff-from-pricing.js";
 import { coerceSalaryPrefs, mergeSalaryPrefsPut } from "../lib/salary-prefs.js";
 import {
   coerceOnlineBookingFromCustomJson,
@@ -807,6 +808,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
       },
       update: { customJson: nextCustom as Prisma.InputJsonValue },
     });
+    const synced = await syncTariffPlanFromPricingPrefs(prisma, tenantId, nextPrefs);
     // #region agent log
     debugSessionLog(
       "settings.ts:PUT/pricing",
@@ -815,14 +817,14 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
         regime: nextPrefs.regime,
         features: nextPrefs.features,
         mainDistanceBaseYen: nextPrefs.mainDistance?.baseFareYen ?? 0,
-        mainTimeBaseYen: nextPrefs.mainTime?.baseFareYen ?? 0,
-        pickupBaseYen: nextPrefs.pickupBaseYen ?? 0,
-        specialFareCount: nextPrefs.specialFares.length,
+        nightSurchargeBps: nextPrefs.nightSurchargeBps ?? 0,
+        nightSurchargeFlatYen: nextPrefs.nightSurchargeFlatYen ?? 0,
+        syncedTariffVersionId: synced.versionId,
       },
-      "H4",
+      "night-tariff",
     );
     // #endregion
-    return { ok: true };
+    return { ok: true, tariffVersionId: synced.versionId };
   });
 
   app.get("/salary-prefs", async (req) => {

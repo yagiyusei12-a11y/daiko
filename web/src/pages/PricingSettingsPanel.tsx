@@ -10,6 +10,7 @@ const PRICING_FEATURE_OPTS: { id: string; label: string }[] = [
   { id: "specialFare", label: "特別料金" },
   { id: "longDistanceDiscount", label: "長距離割引" },
   { id: "cancel", label: "キャンセル" },
+  { id: "nightSurcharge", label: "深夜・早朝加算" },
 ];
 
 type DistanceBand = {
@@ -54,6 +55,12 @@ type PricingPrefsV1 = {
   leftHandBaseYen: number;
   foreignCarBaseYen: number;
   cancelBaseYen: number;
+  nightSurchargeBps: number;
+  nightSurchargeFlatYen: number;
+  lateNightFlatYen: number;
+  earlyMorningFlatYen: number;
+  earlyRushFlatYen: number;
+  leftHandSurchargeBps: number;
   specialFares: SpecialFareEntry[];
   longDistanceTiers: LongDistanceDiscountTier[];
 };
@@ -116,6 +123,12 @@ function defaultPrefs(): PricingPrefsV1 {
     leftHandBaseYen: 0,
     foreignCarBaseYen: 0,
     cancelBaseYen: 0,
+    nightSurchargeBps: 0,
+    nightSurchargeFlatYen: 0,
+    lateNightFlatYen: 0,
+    earlyMorningFlatYen: 0,
+    earlyRushFlatYen: 0,
+    leftHandSurchargeBps: 0,
     specialFares: [],
     longDistanceTiers: [],
   };
@@ -144,6 +157,12 @@ function asPrefs(v: unknown): PricingPrefsV1 {
     leftHandBaseYen: Number(p.leftHandBaseYen) || 0,
     foreignCarBaseYen: Number(p.foreignCarBaseYen) || 0,
     cancelBaseYen: Number(p.cancelBaseYen) || 0,
+    nightSurchargeBps: Math.min(10000, Math.max(0, Math.floor(Number(p.nightSurchargeBps) || 0))),
+    nightSurchargeFlatYen: Math.max(0, Math.floor(Number(p.nightSurchargeFlatYen) || 0)),
+    lateNightFlatYen: Math.max(0, Math.floor(Number(p.lateNightFlatYen) || 0)),
+    earlyMorningFlatYen: Math.max(0, Math.floor(Number(p.earlyMorningFlatYen) || 0)),
+    earlyRushFlatYen: Math.max(0, Math.floor(Number(p.earlyRushFlatYen) || 0)),
+    leftHandSurchargeBps: Math.min(10000, Math.max(0, Math.floor(Number(p.leftHandSurchargeBps) || 0))),
     specialFares: sf
       .filter((x) => x && typeof x === "object" && String((x as Record<string, unknown>).name || "").trim())
       .map((x) => ({
@@ -551,6 +570,45 @@ export default function PricingSettingsPanel({ setErr, busy, setBusy }: Props): 
             onChange={(cancelBaseYen) => setPrefs({ ...prefs, cancelBaseYen })}
           />
           <p className="settings-hint">日報でキャンセルにチェックを入れると初期表示されます（変更可）。</p>
+        </fieldset>
+      )}
+
+      {prefs.features.includes("nightSurcharge") && (
+        <fieldset className="settings-fieldset">
+          <legend>深夜・早朝加算（料金プラン）</legend>
+          <p className="settings-hint">
+            保存すると日報の「料金プラン（版）」に反映され、運行の付帯料金で深夜割増などを選べるようになります。割増率は運賃に対する％（例: 20 → 20％）。
+          </p>
+          <NumInput
+            label="深夜割増（％・0で無効）"
+            value={Math.round(prefs.nightSurchargeBps / 100)}
+            onChange={(pct) => setPrefs({ ...prefs, nightSurchargeBps: Math.min(10000, Math.max(0, pct) * 100) })}
+          />
+          <NumInput
+            label="深夜帯定額（円）"
+            value={prefs.nightSurchargeFlatYen}
+            onChange={(nightSurchargeFlatYen) => setPrefs({ ...prefs, nightSurchargeFlatYen })}
+          />
+          <NumInput
+            label="深夜定額2（円）"
+            value={prefs.lateNightFlatYen}
+            onChange={(lateNightFlatYen) => setPrefs({ ...prefs, lateNightFlatYen })}
+          />
+          <NumInput
+            label="早朝定額1（円）"
+            value={prefs.earlyMorningFlatYen}
+            onChange={(earlyMorningFlatYen) => setPrefs({ ...prefs, earlyMorningFlatYen })}
+          />
+          <NumInput
+            label="早朝定額2（円）"
+            value={prefs.earlyRushFlatYen}
+            onChange={(earlyRushFlatYen) => setPrefs({ ...prefs, earlyRushFlatYen })}
+          />
+          <NumInput
+            label="左ハンドル割増（％・0で無効）"
+            value={Math.round(prefs.leftHandSurchargeBps / 100)}
+            onChange={(pct) => setPrefs({ ...prefs, leftHandSurchargeBps: Math.min(10000, Math.max(0, pct) * 100) })}
+          />
         </fieldset>
       )}
 

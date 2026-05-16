@@ -7,6 +7,7 @@ import {
   computeMainFareYenFromPrefs,
   mergeLegSurchargesJson,
   tripSurchargeDefaults,
+  tripTimeSurchargeCaps,
 } from "../lib/pricing-prefs.js";
 import { coerceBusinessBasicsFromCustomJson } from "../lib/business-basics.js";
 import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
@@ -16,6 +17,7 @@ import { renderJommuKirokuboPdf } from "../lib/jommu-excel-pdf.js";
 import { userFacingJommuPdfError } from "../lib/jommu-pdf-user-error.js";
 import { loadJommuKirokuboModelForDailyReport } from "../lib/jommu-daily-report-model.js";
 import { debugSessionLog } from "../lib/debug-session-log.js";
+import { syncTariffPlanFromPricingPrefs } from "../lib/sync-tariff-from-pricing.js";
 
 function asObj(v: unknown): Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -411,6 +413,10 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     const prefs = coercePricingPrefs(asObj(settings?.customJson).pricingPrefs);
     const basics = coerceBusinessBasicsFromCustomJson(settings?.customJson);
 
+    if (prefs.features.includes("nightSurcharge")) {
+      await syncTariffPlanFromPricingPrefs(prisma, tenantId, prefs);
+    }
+
     const tariffVersions = await prisma.tariffPlanVersion.findMany({
       where: { plan: { tenantId } },
       select: {
@@ -488,6 +494,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         mainDistance: prefs.mainDistance ?? { baseFareYen: 0, includedDistanceM: 0, addEveryM: 0, addFareYen: 0 },
         mainTime: prefs.mainTime ?? { baseFareYen: 0, includedMinutes: 0, addEveryMin: 0, addFareYen: 0 },
       },
+      pricingTimeSurcharges: tripTimeSurchargeCaps(prefs),
       paymentMethods: basics.paymentMethods,
     };
   });

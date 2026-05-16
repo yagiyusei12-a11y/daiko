@@ -68,6 +68,26 @@ type TariffOpt = {
   lateNightFlatYen: number;
   earlyRushFlatYen: number;
 };
+
+type TimeSurchargeCaps = {
+  nightSurchargeBps: number;
+  nightSurchargeFlatYen: number;
+  lateNightFlatYen: number;
+  earlyMorningFlatYen: number;
+  earlyRushFlatYen: number;
+  leftHandSurchargeBps: number;
+};
+
+function mergeTimeSurchargeCaps(tariff: TariffOpt | undefined, prefs: TimeSurchargeCaps | null): TimeSurchargeCaps {
+  return {
+    nightSurchargeBps: Math.max(tariff?.nightSurchargeBps ?? 0, prefs?.nightSurchargeBps ?? 0),
+    nightSurchargeFlatYen: Math.max(tariff?.nightSurchargeFlatYen ?? 0, prefs?.nightSurchargeFlatYen ?? 0),
+    lateNightFlatYen: Math.max(tariff?.lateNightFlatYen ?? 0, prefs?.lateNightFlatYen ?? 0),
+    earlyMorningFlatYen: Math.max(tariff?.earlyMorningFlatYen ?? 0, prefs?.earlyMorningFlatYen ?? 0),
+    earlyRushFlatYen: Math.max(tariff?.earlyRushFlatYen ?? 0, prefs?.earlyRushFlatYen ?? 0),
+    leftHandSurchargeBps: Math.max(tariff?.leftHandSurchargeBps ?? 0, prefs?.leftHandSurchargeBps ?? 0),
+  };
+}
 type Defaults = { pickupYen: number; leftHandYen: number; foreignCarYen: number; cancelYen: number };
 
 /** 配車スケジュールから運行フォームへ渡すプリフィル（token で再適用を区別） */
@@ -242,6 +262,7 @@ function TripWizard({
   defaults,
   features,
   pricingForTrips,
+  pricingTimeSurcharges,
   paymentMethods,
   onSubmitted,
   sectionTitle = "運行",
@@ -255,6 +276,7 @@ function TripWizard({
   defaults: Defaults;
   features: string[];
   pricingForTrips: PricingForTrips | null;
+  pricingTimeSurcharges: TimeSurchargeCaps | null;
   paymentMethods: string[];
   onSubmitted: () => void | Promise<void>;
   sectionTitle?: string;
@@ -353,12 +375,21 @@ function TripWizard({
   const tripTotalYen = useMemo(() => fareYen + parkingAdvanceYen + ancillaryYen, [fareYen, parkingAdvanceYen, ancillaryYen]);
 
   const tariffCap = useMemo(() => tariffVersions.find((t) => t.id === tariffVersionId), [tariffVersions, tariffVersionId]);
-  const showNightPct = (tariffCap?.nightSurchargeBps ?? 0) > 0;
-  const showNightFlat = (tariffCap?.nightSurchargeFlatYen ?? 0) > 0;
-  const showLeftHandPct = (tariffCap?.leftHandSurchargeBps ?? 0) > 0;
-  const showEarlyMorningFlat = (tariffCap?.earlyMorningFlatYen ?? 0) > 0;
-  const showLateNightFlat = (tariffCap?.lateNightFlatYen ?? 0) > 0;
-  const showEarlyRushFlat = (tariffCap?.earlyRushFlatYen ?? 0) > 0;
+  const surchargeCaps = useMemo(
+    () => mergeTimeSurchargeCaps(tariffCap, pricingTimeSurcharges),
+    [tariffCap, pricingTimeSurcharges],
+  );
+  const showNightPct = surchargeCaps.nightSurchargeBps > 0;
+  const showNightFlat = surchargeCaps.nightSurchargeFlatYen > 0;
+  const showLeftHandPct = surchargeCaps.leftHandSurchargeBps > 0;
+  const showEarlyMorningFlat = surchargeCaps.earlyMorningFlatYen > 0;
+  const showLateNightFlat = surchargeCaps.lateNightFlatYen > 0;
+  const showEarlyRushFlat = surchargeCaps.earlyRushFlatYen > 0;
+
+  useEffect(() => {
+    if (tariffVersionId || tariffVersions.length !== 1) return;
+    setTariffVersionId(tariffVersions[0]!.id);
+  }, [tariffVersions, tariffVersionId]);
 
   const hasPrefsLegRows =
     features.includes("pickup") ||
@@ -701,6 +732,7 @@ export default function DailyReportDetailPage(): JSX.Element {
   const [defaults, setDefaults] = useState<Defaults | null>(null);
   const [features, setFeatures] = useState<string[]>([]);
   const [pricingForTrips, setPricingForTrips] = useState<PricingForTrips | null>(null);
+  const [pricingTimeSurcharges, setPricingTimeSurcharges] = useState<TimeSurchargeCaps | null>(null);
   const [tariffVersions, setTariffVersions] = useState<TariffOpt[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
   const [employees, setEmployees] = useState<EmpMini[]>([]);
@@ -738,6 +770,7 @@ export default function DailyReportDetailPage(): JSX.Element {
       pricingDefaults: Defaults;
       pricingFeatures: string[];
       pricingForTrips: PricingForTrips;
+      pricingTimeSurcharges: TimeSurchargeCaps;
       tariffVersions: TariffOpt[];
       employees: EmpMini[];
       vehicles: VehMini[];
@@ -751,6 +784,7 @@ export default function DailyReportDetailPage(): JSX.Element {
     setDefaults(r.data.pricingDefaults);
     setFeatures(r.data.pricingFeatures ?? []);
     setPricingForTrips(r.data.pricingForTrips ?? null);
+    setPricingTimeSurcharges(r.data.pricingTimeSurcharges ?? null);
     const tvs = r.data.tariffVersions ?? [];
     setTariffVersions(
       tvs.map((tv) => ({
@@ -1192,6 +1226,7 @@ export default function DailyReportDetailPage(): JSX.Element {
                 defaults={defaults}
                 features={features}
                 pricingForTrips={pricingForTrips}
+                pricingTimeSurcharges={pricingTimeSurcharges}
                 paymentMethods={paymentMethods}
                 sectionTitle="運行入力"
                 schedulePrefill={schedulePrefill}
@@ -1242,6 +1277,7 @@ export default function DailyReportDetailPage(): JSX.Element {
                 defaults={defaults}
                 features={features}
                 pricingForTrips={pricingForTrips}
+                pricingTimeSurcharges={pricingTimeSurcharges}
                 paymentMethods={paymentMethods}
                 sectionTitle="運行入力"
                 businessDate={report?.businessDate}

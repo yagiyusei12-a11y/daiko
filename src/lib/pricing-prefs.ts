@@ -49,9 +49,31 @@ export type PricingPrefsV1 = {
   leftHandBaseYen?: number;
   foreignCarBaseYen?: number;
   cancelBaseYen?: number;
+  /** 深夜・早朝加算（features に nightSurcharge があるとき日報・料金プランに反映） */
+  nightSurchargeBps?: number;
+  nightSurchargeFlatYen?: number;
+  lateNightFlatYen?: number;
+  earlyMorningFlatYen?: number;
+  earlyRushFlatYen?: number;
+  leftHandSurchargeBps?: number;
   specialFares: SpecialFareEntry[];
   longDistanceTiers: LongDistanceDiscountTier[];
 };
+
+export type PricingTimeSurchargeCaps = {
+  nightSurchargeBps: number;
+  nightSurchargeFlatYen: number;
+  lateNightFlatYen: number;
+  earlyMorningFlatYen: number;
+  earlyRushFlatYen: number;
+  leftHandSurchargeBps: number;
+};
+
+function numBps(v: unknown): number {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(10000, Math.floor(n));
+}
 
 function num(v: unknown, d = 0): number {
   const n = typeof v === "number" ? v : Number(v);
@@ -161,8 +183,36 @@ export function coercePricingPrefs(raw: unknown): PricingPrefsV1 {
     leftHandBaseYen: num(p.leftHandBaseYen),
     foreignCarBaseYen: num(p.foreignCarBaseYen),
     cancelBaseYen: num(p.cancelBaseYen),
+    nightSurchargeBps: numBps(p.nightSurchargeBps),
+    nightSurchargeFlatYen: num(p.nightSurchargeFlatYen),
+    lateNightFlatYen: num(p.lateNightFlatYen),
+    earlyMorningFlatYen: num(p.earlyMorningFlatYen),
+    earlyRushFlatYen: num(p.earlyRushFlatYen),
+    leftHandSurchargeBps: numBps(p.leftHandSurchargeBps),
     specialFares,
     longDistanceTiers,
+  };
+}
+
+/** 日報の付帯料金・加算フラグ用（設定の深夜加算） */
+export function tripTimeSurchargeCaps(prefs: PricingPrefsV1): PricingTimeSurchargeCaps {
+  if (!prefs.features.includes("nightSurcharge")) {
+    return {
+      nightSurchargeBps: 0,
+      nightSurchargeFlatYen: 0,
+      lateNightFlatYen: 0,
+      earlyMorningFlatYen: 0,
+      earlyRushFlatYen: 0,
+      leftHandSurchargeBps: 0,
+    };
+  }
+  return {
+    nightSurchargeBps: prefs.nightSurchargeBps ?? 0,
+    nightSurchargeFlatYen: prefs.nightSurchargeFlatYen ?? 0,
+    lateNightFlatYen: prefs.lateNightFlatYen ?? 0,
+    earlyMorningFlatYen: prefs.earlyMorningFlatYen ?? 0,
+    earlyRushFlatYen: prefs.earlyRushFlatYen ?? 0,
+    leftHandSurchargeBps: prefs.leftHandSurchargeBps ?? 0,
   };
 }
 
