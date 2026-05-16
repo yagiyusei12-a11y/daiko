@@ -8,6 +8,7 @@ import {
 } from "../lib/schedule-constants";
 import { useSavedToast } from "../saved-toast";
 import { useDeviceKind } from "../hooks/useDeviceKind";
+import MobileDayScheduleView from "../components/MobileDayScheduleView";
 import { Card, Err } from "../ui";
 
 const FLEX_HM = /^(\d{1,2}):(\d{2})$/;
@@ -73,6 +74,14 @@ function formatHmFromDayMinutes(ymd: string, iso: string): string {
 
 function snap15(n: number): number {
   return Math.round(n / 15) * 15;
+}
+
+function shiftYmd(ymd: string, deltaDays: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!Number.isFinite(y)) return ymd;
+  const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  dt.setUTCDate(dt.getUTCDate() + deltaDays);
+  return dt.toISOString().slice(0, 10);
 }
 
 function formatDayTitleJa(ymd: string): string {
@@ -593,10 +602,16 @@ export default function TodaySchedulePage(): JSX.Element {
     return `${head} ${hm}`.trim();
   }
 
-  return (
-    <Card title="運行スケジュール">
-      <p style={{ margin: "0 0 0.75rem", fontSize: "0.95rem", color: "var(--color-muted)" }}>{formatDayTitleJa(viewDate)}</p>
+  const isPhoneSchedule = deviceKind === "phone";
 
+  return (
+    <div className={isPhoneSchedule ? "schedule-mobile-page" : undefined}>
+    <Card title="運行スケジュール">
+      {!isPhoneSchedule ? (
+        <p style={{ margin: "0 0 0.75rem", fontSize: "0.95rem", color: "var(--color-muted)" }}>{formatDayTitleJa(viewDate)}</p>
+      ) : null}
+
+      {!isPhoneSchedule ? (
       <div className="settings-toolbar" style={{ flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>
         <label htmlFor="sched-view-date" className="settings-hint" style={{ margin: 0 }}>
           表示日
@@ -611,126 +626,41 @@ export default function TodaySchedulePage(): JSX.Element {
           予定登録
         </button>
       </div>
+      ) : null}
 
       <Err msg={err} />
 
       {loading ? (
-        <p className="settings-hint">読み込み中…</p>
+        <p className="settings-hint">{isPhoneSchedule ? "読み込み中…" : "読み込み中…"}</p>
       ) : data ? (
         <>
-          {onlyUnassignedDriverColumn ? (
+          {!isPhoneSchedule && onlyUnassignedDriverColumn ? (
             <p className="settings-hint" style={{ marginBottom: "0.75rem" }}>
               この日は客車の確定シフトがありません。「未予定」を選ぶと、担当者を決める前に運行予定だけ登録できます。
             </p>
           ) : null}
-          {availabilityMode === "virtual_concurrent" && data.drivers.length > 1 ? (
+          {!isPhoneSchedule && availabilityMode === "virtual_concurrent" && data.drivers.length > 1 ? (
             <p className="settings-hint" style={{ marginBottom: "0.75rem" }}>
               この日の同時上限は {data.effectiveVirtualSlots} 件です。未予定は複数列で重ならない範囲に並びます。
             </p>
           ) : null}
           {scheduleTranspose ? (
-            <div className="attend-schedule-wrap attend-schedule-wrap--transpose">
-              <div className="attend-schedule-transpose-inner">
-                <div className="attend-schedule-time-rail" style={{ width: "2.35rem", flexShrink: 0 }}>
-                  <div className="attend-schedule-corner" style={{ minHeight: scheduleHeadPx, boxSizing: "border-box" }} />
-                  <div style={{ height: scheduleGridPx, position: "relative", borderTop: "1px solid var(--color-border)" }}>
-                    {Array.from({ length: scheduleAxis.slotCount }, (_, i) => {
-                      const t = scheduleAxis.mn + i * scheduleAxis.step;
-                      const h = Math.floor(t / 60);
-                      const m = t % 60;
-                      const show = m === 0;
-                      return (
-                        <div
-                          key={i}
-                          className={`attend-schedule-tick-slot${show ? " attend-schedule-tick-slot--hour" : ""}`}
-                          style={{
-                            position: "absolute",
-                            left: 0,
-                            width: "100%",
-                            top: `${(i / scheduleAxis.slotCount) * 100}%`,
-                            height: `${100 / scheduleAxis.slotCount}%`,
-                            boxSizing: "border-box",
-                            borderBottom: "1px solid color-mix(in srgb, var(--color-border) 55%, transparent)",
-                            fontSize: "0.62rem",
-                            color: "var(--color-muted)",
-                            textAlign: "right",
-                            paddingRight: 2,
-                            lineHeight: 1,
-                          }}
-                        >
-                          {show ? `${h}` : ""}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                {data.drivers.map((row) => {
-                  const resList = reservationsByDriver.get(row.employeeId) ?? [];
-                  return (
-                    <div
-                      key={row.employeeId}
-                      className="attend-schedule-driver-col"
-                      style={{ width: "4.75rem", flexShrink: 0, borderLeft: "1px solid var(--color-border)" }}
-                    >
-                      <div
-                        className="attend-schedule-col-head"
-                        style={{
-                          minHeight: scheduleHeadPx,
-                          maxHeight: scheduleHeadPx,
-                          boxSizing: "border-box",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          textAlign: "center",
-                          padding: "0.2rem",
-                          fontSize: "0.78rem",
-                          fontWeight: 600,
-                          borderBottom: "1px solid var(--color-border)",
-                        }}
-                      >
-                        {row.name}
-                      </div>
-                      <div
-                        className="attend-schedule-track"
-                        style={{ height: scheduleGridPx, position: "relative", background: "var(--color-surface)" }}
-                      >
-                        {resList.map((rv) => {
-                          const { a, b } = effectiveMinutes(rv);
-                          const bar = scheduleBarPercentages(a, b, scheduleAxis);
-                          const label = barLabel(rv);
-                          return (
-                            <button
-                              key={rv.id}
-                              type="button"
-                              className="attend-schedule-bar attend-schedule-bar--transpose attend-schedule-bar--reservation"
-                              style={{
-                                top: `${bar.startPct}%`,
-                                height: `${bar.sizePct}%`,
-                                border: "none",
-                                padding: 0,
-                                cursor: "grab",
-                                overflow: "hidden",
-                                fontSize: "0.55rem",
-                                color: "#fff",
-                                lineHeight: 1.1,
-                                textAlign: "center",
-                              }}
-                              title={`${rv.detail.customerName} ${rv.detail.pickup}→${rv.detail.dropoff}`}
-                              onPointerDown={(e) => {
-                                const track = e.currentTarget.parentElement as HTMLDivElement;
-                                beginDrag(e, rv, track, true);
-                              }}
-                            >
-                              <span style={{ pointerEvents: "none", display: "block", padding: "0 1px" }}>{label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <MobileDayScheduleView
+              viewDate={viewDate}
+              axis={scheduleAxis}
+              reservations={data.reservations}
+              drivers={data.drivers}
+              dayChangeHour={me?.dayChangeHour ?? 28}
+              getMinutes={(rv) => {
+                const { a, b } = effectiveMinutes(rv);
+                return { startMin: a, endMin: b };
+              }}
+              onEventPointerDown={(e, rv, track) => beginDrag(e, rv, track, true)}
+              onFabClick={() => openDialog()}
+              onPrevDay={() => setViewDate((d) => shiftYmd(d, -1))}
+              onNextDay={() => setViewDate((d) => shiftYmd(d, 1))}
+              onPickDate={setViewDate}
+            />
           ) : (
             <div className="attend-schedule-wrap">
               <div className="attend-schedule-axis">
@@ -823,9 +753,11 @@ export default function TodaySchedulePage(): JSX.Element {
         </>
       ) : null}
 
+      {!isPhoneSchedule ? (
       <p className="settings-hint" style={{ marginTop: "0.75rem" }}>
         横軸は設定の営業時間（曜日別・特定日を含む）に合わせた15分刻みです。表示は運行予定のみです（確定シフトの帯は表示しません）。
       </p>
+      ) : null}
 
       {dialogOpen ? (
         <div
@@ -1052,5 +984,6 @@ export default function TodaySchedulePage(): JSX.Element {
         </div>
       ) : null}
     </Card>
+    </div>
   );
 }

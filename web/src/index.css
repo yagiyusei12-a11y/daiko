@@ -2158,3 +2158,254 @@ button.settings-danger:disabled {
 .step-wizard-summary dd {
   margin: 0.15rem 0 0;
 }
+
+/* —— スマホ向けデイリースケジュール（Googleカレンダー風） —— */
+.schedule-mobile-page {
+  margin: -0.75rem -0.75rem 0;
+}
+
+.schedule-mobile-page .card {
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.schedule-mobile-page .card-title {
+  display: none;
+}
+
+.gcal-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 7.5rem);
+  background: #fff;
+}
+
+.gcal-day-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #fff;
+  border-bottom: 1px solid var(--color-border);
+  padding: 0.5rem 0.75rem 0.65rem;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+}
+
+.gcal-day-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.gcal-day-header-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.gcal-day-month {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.gcal-day-month-label {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.gcal-day-date-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  cursor: pointer;
+}
+
+.gcal-day-nav {
+  width: 2.25rem;
+  height: 2.25rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--color-muted);
+}
+
+.gcal-day-nav:active {
+  background: color-mix(in srgb, var(--color-border) 60%, transparent);
+}
+
+.gcal-day-subhead {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  padding-left: 0.15rem;
+}
+
+.gcal-day-weekday {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.gcal-day-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.gcal-day-num--today {
+  background: #2563eb;
+  color: #fff;
+}
+
+.gcal-day-scroll {
+  flex: 1;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.gcal-day-grid {
+  position: relative;
+  display: flex;
+  min-height: 100%;
+}
+
+.gcal-day-rail {
+  position: relative;
+  flex: 0 0 3.25rem;
+  border-right: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
+.gcal-day-hour-label {
+  position: absolute;
+  right: 0.35rem;
+  transform: translateY(-0.55em);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--color-muted);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.gcal-day-canvas {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.gcal-day-hour-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+  pointer-events: none;
+}
+
+.gcal-day-now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.gcal-day-now-dot {
+  flex: 0 0 0.55rem;
+  height: 0.55rem;
+  margin-left: -0.28rem;
+  border-radius: 999px;
+  background: #dc2626;
+}
+
+.gcal-day-now-line {
+  flex: 1;
+  height: 2px;
+  background: #dc2626;
+}
+
+.gcal-day-events {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.gcal-day-event {
+  position: absolute;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid;
+  border-radius: 0.5rem;
+  text-align: left;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.gcal-day-event:active {
+  opacity: 0.92;
+}
+
+.gcal-day-event-title {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gcal-day-event-meta,
+.gcal-day-event-route {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.625rem;
+  font-weight: 500;
+  line-height: 1.2;
+  opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gcal-day-fab {
+  position: fixed;
+  right: 1rem;
+  bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  width: 3.25rem;
+  height: 3.25rem;
+  border: none;
+  border-radius: 1rem;
+  background: #e0e7ff;
+  color: #1e293b;
+  font-size: 1.75rem;
+  font-weight: 400;
+  line-height: 1;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.18);
+}
+
+.gcal-day-fab:active {
+  transform: scale(0.96);
+}
