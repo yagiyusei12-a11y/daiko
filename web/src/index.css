@@ -2314,19 +2314,6 @@ button.settings-danger:disabled {
   padding: 0.2rem 0.3rem;
 }
 
-.gcal-day-event-route {
-  white-space: normal;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  line-height: 1.2;
-}
-
-.gcal-day {
-  min-height: calc(100dvh - 8rem);
-}
-
 .app-shell--sidebar .gcal-day-fab {
   bottom: 1.25rem;
   right: 1.25rem;
@@ -2336,7 +2323,6 @@ button.settings-danger:disabled {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: calc(100dvh - 7.5rem);
   background: #fff;
 }
 
@@ -2432,8 +2418,10 @@ button.settings-danger:disabled {
 }
 
 .gcal-day-scroll {
-  flex: 1;
-  overflow: auto;
+  flex: 0 0 auto;
+  max-height: var(--gcal-scroll-max-height, 360px);
+  overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -2533,17 +2521,23 @@ button.settings-danger:disabled {
   white-space: nowrap;
 }
 
-.gcal-day-event-meta,
 .gcal-day-event-route {
   display: block;
-  margin-top: 0.1rem;
-  font-size: 0.625rem;
+  margin-top: 0.15rem;
+  font-size: 0.6875rem;
   font-weight: 500;
-  line-height: 1.2;
-  opacity: 0.9;
+  line-height: 1.25;
+  opacity: 0.92;
+  white-space: normal;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.gcal-day-events--compact .gcal-day-event-route {
+  font-size: 0.5625rem;
+  -webkit-line-clamp: 2;
 }
 
 .gcal-day-fab {

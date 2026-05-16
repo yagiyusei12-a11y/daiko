@@ -150,7 +150,6 @@ export default function TodaySchedulePage(): JSX.Element {
   const [scheduleDurationOptions, setScheduleDurationOptions] = useState<number[]>(FALLBACK_DURATION_OPTIONS);
   const [bookingDefaultEstimate, setBookingDefaultEstimate] = useState(60);
   const [tripEstimateMinutes, setTripEstimateMinutes] = useState(60);
-  const [driverEmployeeId, setDriverEmployeeId] = useState("");
   const [detailRv, setDetailRv] = useState<ReservationRow | null>(null);
   const [detailBusy, setDetailBusy] = useState(false);
   const [mStartLocal, setMStartLocal] = useState("");
@@ -290,6 +289,19 @@ export default function TodaySchedulePage(): JSX.Element {
     );
   }, [data?.drivers, availabilityMode]);
 
+  const shiftDriverCount = useMemo(() => {
+    return (data?.drivers ?? []).filter(
+      (d) =>
+        d.employeeId !== SCHEDULE_UNASSIGNED_DRIVER_ID &&
+        parseScheduleUnassignedLaneEmployeeId(d.employeeId) === null,
+    ).length;
+  }, [data?.drivers]);
+
+  const scheduleConcurrentLimit = useMemo(() => {
+    if (shiftDriverCount > 0) return shiftDriverCount;
+    return data?.effectiveVirtualSlots ?? 0;
+  }, [shiftDriverCount, data?.effectiveVirtualSlots]);
+
   function openDialog(): void {
     setCustomerName("");
     setPhone("");
@@ -301,8 +313,6 @@ export default function TodaySchedulePage(): JSX.Element {
     setTripEstimateMinutes(bookingDefaultEstimate);
     const nowRounded = new Date(Math.round(Date.now() / (15 * 60 * 1000)) * (15 * 60 * 1000));
     setStartLocal(formatUtcAsTokyoDatetimeLocal(nowRounded));
-    const first = data?.drivers[0]?.employeeId ?? "";
-    setDriverEmployeeId(first);
     setDialogOpen(true);
     setErr(null);
   }
@@ -334,7 +344,6 @@ export default function TodaySchedulePage(): JSX.Element {
       json: {
         startLocal,
         tripEstimateMinutes,
-        driverEmployeeId,
         detail: {
           customerName: customerName.trim(),
           phone: phone.trim(),
@@ -590,9 +599,10 @@ export default function TodaySchedulePage(): JSX.Element {
               この日は客車の確定シフトがありません。「未予定」を選ぶと、担当者を決める前に運行予定だけ登録できます。
             </p>
           ) : null}
-          {availabilityMode === "virtual_concurrent" && (data?.drivers.length ?? 0) > 1 ? (
+          {scheduleConcurrentLimit > 1 ? (
             <p className="settings-hint gcal-schedule-hint">
-              この日の同時上限は {data?.effectiveVirtualSlots ?? 0} 件です。未予定は複数列で重ならない範囲に並びます。
+              この日の同時上限は {scheduleConcurrentLimit} 件です。未予定は複数列で重ならない範囲に並びます。
+              {shiftDriverCount > 0 ? "（確定シフトの客車担当者数）" : "（設定マスタの同時予約上限）"}
             </p>
           ) : null}
           <GcalScheduleView
@@ -699,22 +709,8 @@ export default function TodaySchedulePage(): JSX.Element {
                   ))}
                 </select>
                 <p className="settings-hint" style={{ marginTop: 4 }}>
-                  スケジュール上の実車ブロックは「ネット予約」設定の式（掛け算／加算）で算出されます。
+                  スケジュール上の実車ブロックは「ネット予約」設定の式（掛け算／加算）で算出されます。客車担当者は未予定で登録されます。
                 </p>
-                <label htmlFor="sr-driver">
-                  客車担当者（この日のシフト）
-                  {onlyUnassignedDriverColumn ? (
-                    <span style={{ fontWeight: 400, color: "var(--color-muted)" }}> — 未確定時は「未予定」</span>
-                  ) : null}
-                </label>
-                <select id="sr-driver" value={driverEmployeeId} onChange={(e) => setDriverEmployeeId(e.target.value)}>
-                  <option value="">選択してください</option>
-                  {(data?.drivers ?? []).map((d) => (
-                    <option key={d.employeeId} value={d.employeeId}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
               </div>
             </div>
             <div className="pricing-modal-actions">

@@ -7,6 +7,7 @@ import {
   GCAL_HOUR_HEIGHT_PX,
   axisGridHeightPx,
   formatAxisTimeLabel,
+  gcalScrollViewportMaxPx,
   hourTicks,
   minutesToTopPx,
   type ScheduleAxis,
@@ -126,6 +127,7 @@ export default function GcalScheduleView({
   const weekDates = useMemo(() => weekDatesContaining(viewDate), [viewDate]);
   const todayYmd = currentBusinessYmd(dayChangeHour);
   const gridHeightPx = axisGridHeightPx(axis, GCAL_HOUR_HEIGHT_PX);
+  const scrollMaxPx = gcalScrollViewportMaxPx();
   const ticks = hourTicks(axis);
 
   const dayReservations = reservationsByDate[viewDate] ?? [];
@@ -154,7 +156,10 @@ export default function GcalScheduleView({
   const dayNum = Number(viewDate.split("-")[2]) || 1;
 
   return (
-    <div className="gcal-day">
+    <div
+      className="gcal-day"
+      style={{ ["--gcal-scroll-max-height" as string]: `${scrollMaxPx}px` }}
+    >
       <header className="gcal-day-header">
         <div className="gcal-day-header-row">
           <button type="button" className="gcal-day-nav" onClick={onPrev} aria-label={viewMode === "week" ? "前の週" : "前の日"}>

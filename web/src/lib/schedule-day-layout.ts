@@ -13,7 +13,18 @@ export type EventRect = {
   totalColumns: number;
 };
 
-export const GCAL_HOUR_HEIGHT_PX = 56;
+/** 1時間あたりの縦ピクセル（30分枠でも客名・ルートが読める高さ） */
+export const GCAL_HOUR_HEIGHT_PX = 120;
+
+/** スクロール領域に一度に見せる時間幅（時間） */
+export const GCAL_VIEWPORT_HOURS = 3;
+
+export function gcalScrollViewportMaxPx(
+  hourHeightPx: number = GCAL_HOUR_HEIGHT_PX,
+  viewportHours: number = GCAL_VIEWPORT_HOURS,
+): number {
+  return hourHeightPx * viewportHours;
+}
 
 function overlaps(a: TimedEvent, b: TimedEvent): boolean {
   return a.startMin < b.endMin && b.startMin < a.endMin;
@@ -85,7 +96,9 @@ export function layoutTimedEvents(
       if (hi <= lo) continue;
 
       const topPx = ((lo - axis.mn) / 60) * hourHeightPx;
-      const heightPx = Math.max(((hi - lo) / 60) * hourHeightPx, 24);
+      const durationPx = ((hi - lo) / 60) * hourHeightPx;
+      const minBlockPx = hourHeightPx * 0.45;
+      const heightPx = Math.max(durationPx, minBlockPx);
       const leftPct = gutterPct + col * (colWidth + gutterPct);
 
       result.set(e.id, {

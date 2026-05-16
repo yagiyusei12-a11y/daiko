@@ -186,11 +186,9 @@ export async function registerDispatchRoutes(app: FastifyInstance): Promise<void
       return reply.code(400).send({ error: resolved.error });
     }
 
-    if (!driverRaw) {
-      return reply.code(400).send({ error: "客車担当者を選んでください" });
-    }
-
-    const parsedDriver = scheduleDriverFieldToDb(driverRaw);
+    const parsedDriver = scheduleDriverFieldToDb(
+      driverRaw || SCHEDULE_UNASSIGNED_DRIVER_ID,
+    );
     if (
       timing.availabilityMode === "confirmed_shifts" &&
       parsedDriver.driverEmployeeId === null &&
