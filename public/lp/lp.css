@@ -326,6 +326,53 @@ a {
   font-size: 1.02rem;
 }
 
+.lp-btn--xl {
+  padding: 1.05rem 2.25rem;
+  font-size: 1.125rem;
+  width: 100%;
+  max-width: 22rem;
+}
+
+@media (min-width: 960px) {
+  .lp-btn--xl {
+    width: auto;
+    min-width: 18rem;
+  }
+}
+
+.lp-btn--campaign {
+  background: linear-gradient(135deg, #fcd34d 0%, #f97316 42%, #ef4444 100%);
+  color: #1c1917;
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 4px 0 #c2410c,
+    0 14px 36px rgba(234, 88, 12, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.lp-btn--campaign:hover {
+  color: #0f172a;
+  filter: brightness(1.05);
+  box-shadow:
+    0 4px 0 #c2410c,
+    0 18px 42px rgba(234, 88, 12, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.lp-btn--ghost {
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--lp-blue-dark);
+  border: 1px solid var(--lp-border);
+  box-shadow: none;
+}
+
+.lp-btn--ghost:hover {
+  background: #fff;
+  color: var(--lp-blue);
+  border-color: #cbd5e1;
+}
+
 .lp-btn--block {
   width: 100%;
 }
@@ -399,7 +446,7 @@ a {
 .lp-hero {
   position: relative;
   overflow: hidden;
-  padding: 2.5rem 0 5rem;
+  padding: clamp(3rem, 8vw, 5rem) 0 clamp(4rem, 10vw, 6rem);
 }
 
 .lp-hero-bg {
@@ -438,13 +485,79 @@ a {
   }
 }
 
+/* Release campaign ribbon */
+.lp-campaign {
+  margin: 0 0 1.5rem;
+}
+
+.lp-campaign-eyebrow {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  color: #b45309;
+}
+
+.lp-campaign-ribbon {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  padding: 0.85rem 1.25rem;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 18%, #fbbf24 40%, #f97316 72%, #ef4444 100%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    0 10px 32px rgba(234, 88, 12, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  max-width: 100%;
+}
+
+.lp-campaign-before {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #78350f;
+}
+
+.lp-campaign-before s {
+  font-size: 1.05rem;
+  font-weight: 800;
+  opacity: 0.85;
+}
+
+.lp-campaign-before small {
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 0.1rem;
+}
+
+.lp-campaign-highlight {
+  font-family: var(--lp-display);
+  font-size: clamp(1.35rem, 4vw, 1.85rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #7f1d1d;
+  line-height: 1.15;
+}
+
+.lp-campaign-highlight em {
+  font-style: normal;
+  font-size: 1.15em;
+  color: #fff;
+  background: linear-gradient(180deg, #dc2626, #991b1b);
+  padding: 0.05em 0.35em;
+  border-radius: 0.35rem;
+  box-shadow: 0 2px 8px rgba(127, 29, 29, 0.35);
+}
+
 .lp-hero h1 {
   font-family: var(--lp-display);
   font-size: clamp(1.85rem, 5.5vw, 2.85rem);
   font-weight: 800;
   line-height: 1.2;
   letter-spacing: -0.04em;
-  margin: 0 0 1.25rem;
+  margin: 0 0 1rem;
 }
 
 .lp-hero-line {
@@ -458,11 +571,26 @@ a {
   color: transparent;
 }
 
+.lp-hero-benefit {
+  font-size: clamp(1.05rem, 2.5vw, 1.2rem);
+  font-weight: 600;
+  line-height: 1.65;
+  color: #334155;
+  margin: 0 0 1rem;
+  max-width: 36rem;
+}
+
+.lp-hero-benefit strong {
+  color: var(--lp-blue-dark);
+  font-weight: 800;
+}
+
 .lp-hero-lead {
   font-size: 1.05rem;
   color: var(--lp-muted);
-  margin: 0 0 1.75rem;
+  margin: 0 0 2rem;
   max-width: 34rem;
+  line-height: 1.8;
 }
 
 @media (min-width: 960px) {
@@ -472,16 +600,49 @@ a {
   }
 }
 
-.lp-hero-actions {
+.lp-hero-cta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  justify-content: center;
-  margin-bottom: 1.5rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 2rem;
 }
 
 @media (min-width: 960px) {
-  .lp-hero-actions {
+  .lp-hero-cta {
+    align-items: flex-start;
+  }
+}
+
+.lp-hero-cta-notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  justify-content: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--lp-muted);
+}
+
+@media (min-width: 960px) {
+  .lp-hero-cta-notes {
+    justify-content: flex-start;
+  }
+}
+
+.lp-hero-cta-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  justify-content: center;
+  margin-top: 0.35rem;
+}
+
+@media (min-width: 960px) {
+  .lp-hero-cta-secondary {
     justify-content: flex-start;
   }
 }
@@ -510,6 +671,92 @@ a {
   border: 1px solid var(--lp-border);
   border-radius: 999px;
   color: var(--lp-muted);
+}
+
+/* Hero pains (below fold) */
+.lp-pains-hero {
+  padding: clamp(3rem, 7vw, 4.5rem) 0;
+  background: var(--lp-surface);
+  border-top: 1px solid var(--lp-border);
+  border-bottom: 1px solid var(--lp-border);
+}
+
+.lp-pains-hero-inner {
+  max-width: 40rem;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.lp-pains-hero-title {
+  font-family: var(--lp-display);
+  font-size: clamp(1.35rem, 3.5vw, 1.75rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin: 0 0 1.75rem;
+  color: var(--lp-text);
+}
+
+.lp-pains-hero-list {
+  list-style: none;
+  margin: 0 0 2rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  text-align: left;
+}
+
+.lp-pains-hero-list li {
+  position: relative;
+  padding: 1rem 1.15rem 1rem 2.85rem;
+  background: var(--lp-bg);
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.6;
+  color: #334155;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
+}
+
+.lp-pains-hero-list li::before {
+  content: "";
+  position: absolute;
+  left: 1rem;
+  top: 1.15rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background-color: #16a34a;
+  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.35);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M3.5 8.5L6.5 11.5L12.5 4.5' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 0.75rem;
+}
+
+.lp-pains-hero-resolve {
+  margin: 0;
+  font-size: clamp(1.1rem, 2.5vw, 1.35rem);
+  font-weight: 600;
+  color: var(--lp-muted);
+  line-height: 1.5;
+}
+
+.lp-pains-hero-resolve-label {
+  display: block;
+  font-size: 0.95em;
+  margin-bottom: 0.15rem;
+}
+
+.lp-pains-hero-resolve strong {
+  font-family: var(--lp-display);
+  font-size: 1.15em;
+  font-weight: 800;
+  background: linear-gradient(90deg, var(--lp-blue), #3b82f6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 /* Hero mock UI */

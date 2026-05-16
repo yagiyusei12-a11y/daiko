@@ -73,18 +73,33 @@ const html = `<!DOCTYPE html>
         <${d} class="lp-hero-bg" aria-hidden="true"></${d}>
         <${d} class="lp-wrap lp-hero-inner">
           <${d} class="lp-hero-copy">
+            <${d} class="lp-campaign" role="note">
+              <p class="lp-campaign-eyebrow">リリース記念！今だけ初期メンバー限定</p>
+              <${d} class="lp-campaign-ribbon">
+                <span class="lp-campaign-before">通常月額 <s>4,980円</s><small>(税抜)</small> が</span>
+                <span class="lp-campaign-highlight">今なら <em>0円</em>！</span>
+              </${d}>
+            </${d}>
             <p class="lp-kicker">運転代行業向けクラウド</p>
             <h1>
               <span class="lp-hero-line">配車も、日報も、給与計算も。</span>
               <span class="lp-hero-line lp-hero-line--accent">運転代行のすべてを、</span>
               <span class="lp-hero-line">このシステム一つで。</span>
             </h1>
+            <p class="lp-hero-benefit">面倒な運転代行の日常業務を自動化し、あなたのビジネスの<strong>売上UP</strong>と<strong>時間創出</strong>に貢献します</p>
             <p class="lp-hero-lead">
               電話予約に追われる日々から卒業。ネット予約連携からペーパーレスな業務管理まで、次世代の店舗オペレーションをひとつに。
             </p>
-            <${d} class="lp-hero-actions">
-              <a class="lp-btn lp-btn--primary lp-btn--lg" href="/app/demo">デモで試す（ログイン不要）</a>
-              <a class="lp-btn lp-btn--white lp-btn--lg" href="#contact">資料・導入のご相談</a>
+            <${d} class="lp-hero-cta">
+              <a class="lp-btn lp-btn--campaign lp-btn--xl" href="/app/register">今すぐ無料で始める</a>
+              <ul class="lp-hero-cta-notes" aria-label="ご利用の安心ポイント">
+                <li>※クレジットカード登録不要</li>
+                <li>※初期費用なし</li>
+              </ul>
+              <${d} class="lp-hero-cta-secondary">
+                <a class="lp-btn lp-btn--white lp-btn--lg" href="/app/demo">ログイン不要のデモを見る</a>
+                <a class="lp-btn lp-btn--ghost lp-btn--lg" href="#contact">導入のご相談</a>
+              </${d}>
             </${d}>
             <ul class="lp-hero-tags">
               <li>専用アプリ不要</li>
@@ -125,6 +140,18 @@ const html = `<!DOCTYPE html>
               <span class="lp-mock-badge">酒気帯びなし</span>
             </${d}>
           </${d}>
+        </${d}>
+      </section>
+
+      <section class="lp-pains-hero" id="pains">
+        <${d} class="lp-wrap lp-pains-hero-inner">
+          <h2 class="lp-pains-hero-title">こんなお悩みありませんか？</h2>
+          <ul class="lp-pains-hero-list">
+            <li>電話予約と現場入力が分断され、繁忙時にオペレーションが回らない</li>
+            <li>深夜帯の時刻や事業日のズレで、日報・給与・売上が合わなくなる</li>
+            <li>書類・届出の作成に時間がかかり、接客や配車の本業に集中できない</li>
+          </ul>
+          <p class="lp-pains-hero-resolve"><span class="lp-pains-hero-resolve-label">Daikoなら、</span><strong>これらをすべて解決</strong>できます</p>
         </${d}>
       </section>
 
