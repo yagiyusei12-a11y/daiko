@@ -2,12 +2,55 @@
  * プラットフォーム管理者向け API（全テナント・LP問い合わせ）
  */
 import type { FastifyInstance } from "fastify";
-import type { PlanTier } from "@prisma/client";
+import type { MarketingInquiry, MarketingInquiryReply, PlanTier } from "@prisma/client";
+import { jwtUser } from "../auth/pre.js";
 import { requirePlatformAdmin } from "../auth/platform-pre.js";
+import { buildPlainMail, sendMail } from "../lib/mail.js";
+import {
+  defaultInquiryReplySubject,
+  getInquiryAutoReplyTemplate,
+  PLATFORM_SETTING_KEYS,
+  upsertPlatformSetting,
+} from "../lib/platform-settings.js";
 import { prisma } from "../db.js";
 
 const INQUIRY_STATUSES = new Set(["OPEN", "IN_PROGRESS", "CLOSED"]);
 const PLAN_TIERS = new Set<PlanTier>(["FREE", "STANDARD", "PREMIUM"]);
+const REPLY_BODY_MAX = 20_000;
+
+type InquiryRow = MarketingInquiry & { replies?: MarketingInquiryReply[] };
+
+function serializeInquiry(row: InquiryRow, opts?: { includeReplies?: boolean }) {
+  const base = {
+    id: row.id,
+    companyName: row.companyName,
+    contactName: row.contactName,
+    email: row.email,
+    phone: row.phone,
+    message: row.message,
+    status: row.status,
+    adminNotes: row.adminNotes,
+    emailNotifiedAt: row.emailNotifiedAt?.toISOString() ?? null,
+    lastRepliedAt: row.lastRepliedAt?.toISOString() ?? null,
+    clientIp: row.clientIp ?? null,
+    userAgent: row.userAgent ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+  if (opts?.includeReplies && row.replies) {
+    return {
+      ...base,
+      replies: row.replies.map((r) => ({
+        id: r.id,
+        subject: r.subject,
+        bodyText: r.bodyText,
+        sentAt: r.sentAt.toISOString(),
+        sentByEmail: r.sentByEmail,
+      })),
+    };
+  }
+  return base;
+}
 
 function parsePage(q: unknown, def = 1): number {
   const n = Number(q);
@@ -43,19 +86,7 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
       ]);
 
       return {
-        items: rows.map((r) => ({
-          id: r.id,
-          companyName: r.companyName,
-          contactName: r.contactName,
-          email: r.email,
-          phone: r.phone,
-          message: r.message,
-          status: r.status,
-          adminNotes: r.adminNotes,
-          emailNotifiedAt: r.emailNotifiedAt?.toISOString() ?? null,
-          createdAt: r.createdAt.toISOString(),
-          updatedAt: r.updatedAt.toISOString(),
-        })),
+        items: rows.map((r) => serializeInquiry(r)),
         page,
         limit,
         total,
@@ -65,25 +96,12 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
   );
 
   app.get<{ Params: { id: string } }>("/inquiries/:id", async (req, reply) => {
-    const row = await prisma.marketingInquiry.findUnique({ where: { id: req.params.id } });
+    const row = await prisma.marketingInquiry.findUnique({
+      where: { id: req.params.id },
+      include: { replies: { orderBy: { sentAt: "desc" } } },
+    });
     if (!row) return reply.code(404).send({ error: "not found" });
-    return {
-      inquiry: {
-        id: row.id,
-        companyName: row.companyName,
-        contactName: row.contactName,
-        email: row.email,
-        phone: row.phone,
-        message: row.message,
-        status: row.status,
-        adminNotes: row.adminNotes,
-        emailNotifiedAt: row.emailNotifiedAt?.toISOString() ?? null,
-        clientIp: row.clientIp,
-        userAgent: row.userAgent,
-        createdAt: row.createdAt.toISOString(),
-        updatedAt: row.updatedAt.toISOString(),
-      },
-    };
+    return { inquiry: serializeInquiry(row, { includeReplies: true }) };
   });
 
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>(
@@ -113,15 +131,100 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
       });
 
       return {
-        inquiry: {
-          id: row.id,
-          status: row.status,
-          adminNotes: row.adminNotes,
-          updatedAt: row.updatedAt.toISOString(),
-        },
+        inquiry: serializeInquiry(row),
       };
     },
   );
+
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    "/inquiries/:id/reply",
+    async (req, reply) => {
+      const existing = await prisma.marketingInquiry.findUnique({ where: { id: req.params.id } });
+      if (!existing) return reply.code(404).send({ error: "not found" });
+
+      const body = req.body || {};
+      let subject = String(body.subject ?? "").trim();
+      const bodyText = String(body.bodyText ?? "").trim();
+      if (!bodyText) return reply.code(400).send({ error: "本文を入力してください" });
+      if (bodyText.length > REPLY_BODY_MAX) {
+        return reply.code(400).send({ error: "本文が長すぎます" });
+      }
+      if (!subject) subject = defaultInquiryReplySubject(existing.companyName);
+      if (subject.length > 200) {
+        return reply.code(400).send({ error: "件名が長すぎます" });
+      }
+
+      const admin = jwtUser(req);
+      const mail = buildPlainMail(subject, bodyText);
+      let sent = false;
+      try {
+        const result = await sendMail({
+          to: existing.email,
+          subject: mail.subject,
+          text: mail.text,
+          html: mail.html,
+        });
+        if (!result.sent) {
+          return reply.code(503).send({ error: "メールを送信できませんでした（SMTP未設定）" });
+        }
+        sent = true;
+      } catch (err) {
+        req.log.error({ err, inquiryId: existing.id }, "inquiry admin reply mail failed");
+        return reply.code(502).send({ error: "メール送信に失敗しました" });
+      }
+
+      if (!sent) return reply.code(503).send({ error: "メールを送信できませんでした" });
+
+      const now = new Date();
+      const row = await prisma.$transaction(async (tx) => {
+        await tx.marketingInquiryReply.create({
+          data: {
+            inquiryId: existing.id,
+            subject,
+            bodyText,
+            sentByEmail: admin.email,
+            sentAt: now,
+          },
+        });
+        return tx.marketingInquiry.update({
+          where: { id: existing.id },
+          data: { status: "CLOSED", lastRepliedAt: now },
+          include: { replies: { orderBy: { sentAt: "desc" } } },
+        });
+      });
+
+      return { inquiry: serializeInquiry(row, { includeReplies: true }) };
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>("/inquiries/:id", async (req, reply) => {
+    const existing = await prisma.marketingInquiry.findUnique({ where: { id: req.params.id } });
+    if (!existing) return reply.code(404).send({ error: "not found" });
+    await prisma.marketingInquiry.delete({ where: { id: req.params.id } });
+    return { ok: true };
+  });
+
+  app.get("/settings/inquiry-auto-reply", async () => {
+    const tpl = await getInquiryAutoReplyTemplate();
+    return { subject: tpl.subject, body: tpl.body };
+  });
+
+  app.put<{ Body: Record<string, unknown> }>("/settings/inquiry-auto-reply", async (req, reply) => {
+    const body = req.body || {};
+    const subject = String(body.subject ?? "").trim();
+    const mailBody = String(body.body ?? "").trim();
+    if (!subject) return reply.code(400).send({ error: "件名を入力してください" });
+    if (!mailBody) return reply.code(400).send({ error: "本文を入力してください" });
+    if (subject.length > 200) return reply.code(400).send({ error: "件名が長すぎます" });
+    if (mailBody.length > REPLY_BODY_MAX) return reply.code(400).send({ error: "本文が長すぎます" });
+
+    const admin = jwtUser(req);
+    await Promise.all([
+      upsertPlatformSetting(PLATFORM_SETTING_KEYS.inquiryAutoReplySubject, subject, admin.email),
+      upsertPlatformSetting(PLATFORM_SETTING_KEYS.inquiryAutoReplyBody, mailBody, admin.email),
+    ]);
+    return { subject, body: mailBody };
+  });
 
   app.get<{ Querystring: { q?: string; page?: string; limit?: string } }>("/tenants", async (req) => {
     const page = parsePage(req.query.page);

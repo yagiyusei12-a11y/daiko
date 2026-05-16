@@ -16,6 +16,7 @@ import EmployeeInvitePage from "./pages/EmployeeInvitePage";
 import DemoShowcasePage from "./pages/DemoShowcasePage";
 import PlatformShell from "./layout/PlatformShell";
 import PlatformInquiriesPage from "./pages/platform/PlatformInquiriesPage";
+import PlatformSettingsPage from "./pages/platform/PlatformSettingsPage";
 import PlatformTenantsPage from "./pages/platform/PlatformTenantsPage";
 
 export default function App(): JSX.Element {
@@ -27,6 +28,7 @@ export default function App(): JSX.Element {
       <Route path="/platform" element={<PlatformShell />}>
         <Route index element={<Navigate to="/platform/inquiries" replace />} />
         <Route path="inquiries" element={<PlatformInquiriesPage />} />
+        <Route path="settings" element={<PlatformSettingsPage />} />
         <Route path="tenants" element={<PlatformTenantsPage />} />
       </Route>
       <Route path="/sample" element={<Navigate to="/demo" replace />} />

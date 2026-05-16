@@ -2,6 +2,11 @@
  * SMTP メール送信（問い合わせ通知など）
  * DAIKO_SMTP_HOST が未設定のときはログのみ（開発用）
  */
+import {
+  applyInquiryTemplate,
+  getInquiryAutoReplyTemplate,
+  type InquiryTemplateVars,
+} from "./platform-settings.js";
 
 export type SendMailInput = {
   to: string | string[];
@@ -72,6 +77,24 @@ export async function sendMail(input: SendMailInput): Promise<{ sent: boolean; r
   return { sent: true };
 }
 
+export function plainTextToHtml(text: string): string {
+  const escaped = text.replace(/</g, "&lt;");
+  return `<pre style="font-family:sans-serif;font-size:14px;line-height:1.6;white-space:pre-wrap;margin:0">${escaped}</pre>`;
+}
+
+export async function buildInquiryAutoReplyMail(
+  vars: InquiryTemplateVars,
+): Promise<{ subject: string; text: string; html: string }> {
+  const tpl = await getInquiryAutoReplyTemplate();
+  const subject = applyInquiryTemplate(tpl.subject, vars);
+  const text = applyInquiryTemplate(tpl.body, vars);
+  return { subject, text, html: plainTextToHtml(text) };
+}
+
+export function buildPlainMail(subject: string, text: string): { subject: string; text: string; html: string } {
+  return { subject, text, html: plainTextToHtml(text) };
+}
+
 export function formatInquiryMailBody(p: {
   companyName: string;
   contactName: string;
@@ -102,37 +125,5 @@ export function formatInquiryMailBody(p: {
   const html = `<pre style="font-family:sans-serif;font-size:14px;line-height:1.6">${lines
     .map((l) => l.replace(/</g, "&lt;"))
     .join("\n")}</pre>`;
-  return { subject, text, html };
-}
-
-export function formatInquiryAutoReplyMailBody(p: {
-  contactName: string;
-  companyName: string;
-}): { subject: string; text: string; html: string } {
-  const subject = "【Daiko】お問い合わせを受け付けました";
-  const lines = [
-    `${p.contactName} 様`,
-    "",
-    "この度は Daiko へお問い合わせいただき、誠にありがとうございます。",
-    "以下の内容でお問い合わせを受け付けました。",
-    "",
-    `店舗・会社名: ${p.companyName}`,
-    "",
-    "担当者より順次ご連絡いたしますので、今しばらくお待ちください。",
-    "※ 本メールは送信専用です。返信いただいてもお答えできない場合があります。",
-    "",
-    "――――――――――――――――――",
-    "Daiko（代行管理システム）",
-  ];
-  const text = lines.join("\n");
-  const html = `<div style="font-family:sans-serif;font-size:14px;line-height:1.8;color:#333">
-<p>${p.contactName.replace(/</g, "&lt;")} 様</p>
-<p>この度は Daiko へお問い合わせいただき、誠にありがとうございます。<br>以下の内容でお問い合わせを受け付けました。</p>
-<p><strong>店舗・会社名:</strong> ${p.companyName.replace(/</g, "&lt;")}</p>
-<p>担当者より順次ご連絡いたしますので、今しばらくお待ちください。</p>
-<p style="font-size:12px;color:#666">※ 本メールは送信専用です。返信いただいてもお答えできない場合があります。</p>
-<hr style="border:none;border-top:1px solid #ddd;margin:24px 0">
-<p style="font-size:12px;color:#888">Daiko（代行管理システム）</p>
-</div>`;
   return { subject, text, html };
 }

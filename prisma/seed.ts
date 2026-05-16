@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { NINE_DOC_TEMPLATE_SEEDS } from "./nine-doc-templates-seed.js";
+import { seedPlatformSettingsDefaults } from "../src/lib/platform-settings.js";
 
 const prisma = new PrismaClient();
 
@@ -35,6 +36,9 @@ async function main() {
     update: { label: "酒気帯び確認（簡易スタブ）" },
   });
   console.log("daiko seed: document template ok");
+
+  await seedPlatformSettingsDefaults();
+  console.log("daiko seed: platform settings ok");
 }
 
 main()

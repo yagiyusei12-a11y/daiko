@@ -34,6 +34,7 @@ export default function PlatformShell(): JSX.Element {
             <NavLink to="/platform/inquiries" end>
               お問い合わせ
             </NavLink>
+            <NavLink to="/platform/settings">システム設定</NavLink>
             <NavLink to="/platform/tenants">テナント</NavLink>
           </nav>
           <div className="platform-header-actions">

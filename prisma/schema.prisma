@@ -863,6 +863,14 @@ model LegalChangeNotice {
   @@index([tenantId, createdAt])
 }
 
+/// プラットフォーム全体の設定（キー・値。テナント非紐付け）
+model PlatformSetting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
 /// 紹介LPからのお問い合わせ（マーケティング用・テナント非紐付け）
 model MarketingInquiry {
   id              String    @id @default(cuid())
@@ -874,13 +882,29 @@ model MarketingInquiry {
   status          String    @default("OPEN")
   adminNotes      String?   @db.Text
   emailNotifiedAt DateTime?
+  lastRepliedAt   DateTime?
   clientIp        String?
   userAgent       String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  replies MarketingInquiryReply[]
+
   @@index([createdAt])
   @@index([status, createdAt])
+}
+
+/// LP問い合わせへの管理者返信履歴
+model MarketingInquiryReply {
+  id          String   @id @default(cuid())
+  inquiryId   String
+  inquiry     MarketingInquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  subject     String
+  bodyText    String   @db.Text
+  sentAt      DateTime @default(now())
+  sentByEmail String
+
+  @@index([inquiryId, sentAt])
 }
 
 /// 従業員自己登録用ワンタイムURL
