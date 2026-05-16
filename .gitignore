@@ -3,6 +3,7 @@ dist/
 public/app/
 .env
 .env.deploy
+scripts/.vps-platform-env.snippet
 prisma/dev.db
 prisma/dev.db-journal
 uploads/

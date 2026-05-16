@@ -3,7 +3,12 @@
  */
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { prisma } from "../db.js";
-import { formatInquiryMailBody, inquiryNotifyRecipients, sendMail } from "../lib/mail.js";
+import {
+  formatInquiryAutoReplyMailBody,
+  formatInquiryMailBody,
+  inquiryNotifyRecipients,
+  sendMail,
+} from "../lib/mail.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -79,23 +84,25 @@ export async function registerPublicInquiryRoutes(app: FastifyInstance): Promise
       },
     });
 
+    const adminMail = formatInquiryMailBody({
+      id: row.id,
+      companyName,
+      contactName,
+      email,
+      phone,
+      message,
+      createdAt: row.createdAt,
+    });
+    const autoReplyMail = formatInquiryAutoReplyMailBody({ contactName, companyName });
+
     const recipients = inquiryNotifyRecipients();
     if (recipients.length > 0) {
-      const mail = formatInquiryMailBody({
-        id: row.id,
-        companyName,
-        contactName,
-        email,
-        phone,
-        message,
-        createdAt: row.createdAt,
-      });
       try {
         const result = await sendMail({
           to: recipients,
-          subject: mail.subject,
-          text: mail.text,
-          html: mail.html,
+          subject: adminMail.subject,
+          text: adminMail.text,
+          html: adminMail.html,
         });
         if (result.sent) {
           await prisma.marketingInquiry.update({
@@ -106,6 +113,17 @@ export async function registerPublicInquiryRoutes(app: FastifyInstance): Promise
       } catch (err) {
         req.log.error({ err, inquiryId: row.id }, "inquiry notify mail failed");
       }
+    }
+
+    try {
+      await sendMail({
+        to: email,
+        subject: autoReplyMail.subject,
+        text: autoReplyMail.text,
+        html: autoReplyMail.html,
+      });
+    } catch (err) {
+      req.log.error({ err, inquiryId: row.id, to: email }, "inquiry auto-reply mail failed");
     }
 
     return { ok: true };

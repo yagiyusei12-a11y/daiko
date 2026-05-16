@@ -21,7 +21,8 @@ function smtpConfig(): {
   const host = process.env.DAIKO_SMTP_HOST?.trim();
   if (!host) return null;
   const port = Number(process.env.DAIKO_SMTP_PORT ?? 587);
-  const secure = process.env.DAIKO_SMTP_SECURE === "1" || port === 465;
+  const secureFlag = (process.env.DAIKO_SMTP_SECURE ?? "").trim().toLowerCase();
+  const secure = secureFlag === "1" || secureFlag === "true" || secureFlag === "yes" || port === 465;
   const user = process.env.DAIKO_SMTP_USER?.trim() || undefined;
   const pass = process.env.DAIKO_SMTP_PASS?.trim() || undefined;
   const from = process.env.DAIKO_SMTP_FROM?.trim() || user || "noreply@daiko.local";
@@ -101,5 +102,37 @@ export function formatInquiryMailBody(p: {
   const html = `<pre style="font-family:sans-serif;font-size:14px;line-height:1.6">${lines
     .map((l) => l.replace(/</g, "&lt;"))
     .join("\n")}</pre>`;
+  return { subject, text, html };
+}
+
+export function formatInquiryAutoReplyMailBody(p: {
+  contactName: string;
+  companyName: string;
+}): { subject: string; text: string; html: string } {
+  const subject = "【Daiko】お問い合わせを受け付けました";
+  const lines = [
+    `${p.contactName} 様`,
+    "",
+    "この度は Daiko へお問い合わせいただき、誠にありがとうございます。",
+    "以下の内容でお問い合わせを受け付けました。",
+    "",
+    `店舗・会社名: ${p.companyName}`,
+    "",
+    "担当者より順次ご連絡いたしますので、今しばらくお待ちください。",
+    "※ 本メールは送信専用です。返信いただいてもお答えできない場合があります。",
+    "",
+    "――――――――――――――――――",
+    "Daiko（代行管理システム）",
+  ];
+  const text = lines.join("\n");
+  const html = `<div style="font-family:sans-serif;font-size:14px;line-height:1.8;color:#333">
+<p>${p.contactName.replace(/</g, "&lt;")} 様</p>
+<p>この度は Daiko へお問い合わせいただき、誠にありがとうございます。<br>以下の内容でお問い合わせを受け付けました。</p>
+<p><strong>店舗・会社名:</strong> ${p.companyName.replace(/</g, "&lt;")}</p>
+<p>担当者より順次ご連絡いたしますので、今しばらくお待ちください。</p>
+<p style="font-size:12px;color:#666">※ 本メールは送信専用です。返信いただいてもお答えできない場合があります。</p>
+<hr style="border:none;border-top:1px solid #ddd;margin:24px 0">
+<p style="font-size:12px;color:#888">Daiko（代行管理システム）</p>
+</div>`;
   return { subject, text, html };
 }

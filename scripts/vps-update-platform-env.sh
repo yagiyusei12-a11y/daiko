@@ -11,18 +11,26 @@ grep -v '^DAIKO_PLATFORM_ADMIN_EMAILS=' "$ENV_FILE" \
   | grep -v '^# --- platform admin' \
   > "${ENV_FILE}.tmp"
 mv "${ENV_FILE}.tmp" "$ENV_FILE"
-cat >>"$ENV_FILE" <<'EOF'
+# 同ディレクトリの .vps-platform-env.snippet があればそれを使う（vps-apply-platform-env.ps1 が生成）
+SNIPPET="$(dirname "$0")/.vps-platform-env.snippet"
+if [ -f "$SNIPPET" ]; then
+  echo "" >>"$ENV_FILE"
+  echo "# --- platform admin & inquiry mail ---" >>"$ENV_FILE"
+  sed 's/\xEF\xBB\xBF//g' "$SNIPPET" >>"$ENV_FILE"
+else
+  cat >>"$ENV_FILE" <<'EOF'
 
 # --- platform admin & inquiry mail ---
 DAIKO_PLATFORM_ADMIN_EMAILS="yagi@harunoyukoto.com"
 DAIKO_INQUIRY_NOTIFY_TO="yagi@harunoyukoto.com"
-DAIKO_SMTP_HOST="your_smtp_host"
-DAIKO_SMTP_PORT=587
-DAIKO_SMTP_SECURE=0
-DAIKO_SMTP_USER="your_smtp_user"
-DAIKO_SMTP_PASS="your_smtp_password"
+DAIKO_SMTP_HOST="mail.harunoyukoto.com"
+DAIKO_SMTP_PORT=465
+DAIKO_SMTP_SECURE=1
+DAIKO_SMTP_USER="yagi@harunoyukoto.com"
+DAIKO_SMTP_PASS=""
 DAIKO_SMTP_FROM="yagi@harunoyukoto.com"
 EOF
+fi
 echo "updated $ENV_FILE (backup: ${ENV_FILE}.bak.${STAMP})"
 sudo systemctl restart daiko-app
 sleep 2
