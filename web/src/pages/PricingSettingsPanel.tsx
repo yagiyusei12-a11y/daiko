@@ -10,7 +10,7 @@ const PRICING_FEATURE_OPTS: { id: string; label: string }[] = [
   { id: "specialFare", label: "特別料金" },
   { id: "longDistanceDiscount", label: "長距離割引" },
   { id: "cancel", label: "キャンセル" },
-  { id: "nightSurcharge", label: "深夜・早朝加算" },
+
 ];
 
 type DistanceBand = {
@@ -55,12 +55,6 @@ type PricingPrefsV1 = {
   leftHandBaseYen: number;
   foreignCarBaseYen: number;
   cancelBaseYen: number;
-  nightSurchargeBps: number;
-  nightSurchargeFlatYen: number;
-  lateNightFlatYen: number;
-  earlyMorningFlatYen: number;
-  earlyRushFlatYen: number;
-  leftHandSurchargeBps: number;
   specialFares: SpecialFareEntry[];
   longDistanceTiers: LongDistanceDiscountTier[];
 };
@@ -123,12 +117,6 @@ function defaultPrefs(): PricingPrefsV1 {
     leftHandBaseYen: 0,
     foreignCarBaseYen: 0,
     cancelBaseYen: 0,
-    nightSurchargeBps: 0,
-    nightSurchargeFlatYen: 0,
-    lateNightFlatYen: 0,
-    earlyMorningFlatYen: 0,
-    earlyRushFlatYen: 0,
-    leftHandSurchargeBps: 0,
     specialFares: [],
     longDistanceTiers: [],
   };
@@ -157,12 +145,6 @@ function asPrefs(v: unknown): PricingPrefsV1 {
     leftHandBaseYen: Number(p.leftHandBaseYen) || 0,
     foreignCarBaseYen: Number(p.foreignCarBaseYen) || 0,
     cancelBaseYen: Number(p.cancelBaseYen) || 0,
-    nightSurchargeBps: Math.min(10000, Math.max(0, Math.floor(Number(p.nightSurchargeBps) || 0))),
-    nightSurchargeFlatYen: Math.max(0, Math.floor(Number(p.nightSurchargeFlatYen) || 0)),
-    lateNightFlatYen: Math.max(0, Math.floor(Number(p.lateNightFlatYen) || 0)),
-    earlyMorningFlatYen: Math.max(0, Math.floor(Number(p.earlyMorningFlatYen) || 0)),
-    earlyRushFlatYen: Math.max(0, Math.floor(Number(p.earlyRushFlatYen) || 0)),
-    leftHandSurchargeBps: Math.min(10000, Math.max(0, Math.floor(Number(p.leftHandSurchargeBps) || 0))),
     specialFares: sf
       .filter((x) => x && typeof x === "object" && String((x as Record<string, unknown>).name || "").trim())
       .map((x) => ({
@@ -388,30 +370,7 @@ export default function PricingSettingsPanel({ setErr, busy, setBusy }: Props): 
     const r = await apiFetch("/settings/pricing", { method: "PUT", json: { pricingPrefs: prefs } });
     setBusy(false);
     if (!r.ok) setErr(r.error);
-    else {
-      // #region agent log
-      fetch("http://127.0.0.1:7838/ingest/f37b4987-1b77-43d9-b411-9367fa4c8525", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "57fb34" },
-        body: JSON.stringify({
-          sessionId: "57fb34",
-          location: "PricingSettingsPanel.tsx:save",
-          message: "pricing settings saved (client)",
-          data: {
-            regime: prefs.regime,
-            features: prefs.features,
-            mainDistanceBaseYen: prefs.mainDistance?.baseFareYen ?? 0,
-            mainTimeBaseYen: prefs.mainTime?.baseFareYen ?? 0,
-            pickupBaseYen: prefs.pickupBaseYen ?? 0,
-            specialFareCount: prefs.specialFares.length,
-          },
-          timestamp: Date.now(),
-          hypothesisId: "H4-H5",
-        }),
-      }).catch(() => {});
-      // #endregion
-      flashSaved();
-    }
+    else flashSaved();
   }
 
   const openNewSpecial = (): void => {
@@ -573,45 +532,6 @@ export default function PricingSettingsPanel({ setErr, busy, setBusy }: Props): 
         </fieldset>
       )}
 
-      {prefs.features.includes("nightSurcharge") && (
-        <fieldset className="settings-fieldset">
-          <legend>深夜・早朝加算（料金プラン）</legend>
-          <p className="settings-hint">
-            保存すると日報の「料金プラン（版）」に反映され、運行の付帯料金で深夜割増などを選べるようになります。割増率は運賃に対する％（例: 20 → 20％）。
-          </p>
-          <NumInput
-            label="深夜割増（％・0で無効）"
-            value={Math.round(prefs.nightSurchargeBps / 100)}
-            onChange={(pct) => setPrefs({ ...prefs, nightSurchargeBps: Math.min(10000, Math.max(0, pct) * 100) })}
-          />
-          <NumInput
-            label="深夜帯定額（円）"
-            value={prefs.nightSurchargeFlatYen}
-            onChange={(nightSurchargeFlatYen) => setPrefs({ ...prefs, nightSurchargeFlatYen })}
-          />
-          <NumInput
-            label="深夜定額2（円）"
-            value={prefs.lateNightFlatYen}
-            onChange={(lateNightFlatYen) => setPrefs({ ...prefs, lateNightFlatYen })}
-          />
-          <NumInput
-            label="早朝定額1（円）"
-            value={prefs.earlyMorningFlatYen}
-            onChange={(earlyMorningFlatYen) => setPrefs({ ...prefs, earlyMorningFlatYen })}
-          />
-          <NumInput
-            label="早朝定額2（円）"
-            value={prefs.earlyRushFlatYen}
-            onChange={(earlyRushFlatYen) => setPrefs({ ...prefs, earlyRushFlatYen })}
-          />
-          <NumInput
-            label="左ハンドル割増（％・0で無効）"
-            value={Math.round(prefs.leftHandSurchargeBps / 100)}
-            onChange={(pct) => setPrefs({ ...prefs, leftHandSurchargeBps: Math.min(10000, Math.max(0, pct) * 100) })}
-          />
-        </fieldset>
-      )}
-
       {prefs.features.includes("longDistanceDiscount") && (
         <div className="settings-special-fare">
           <p className="settings-hint">
@@ -641,6 +561,9 @@ export default function PricingSettingsPanel({ setErr, busy, setBusy }: Props): 
 
       {prefs.features.includes("specialFare") && (
         <div className="settings-special-fare">
+          <p className="settings-hint">
+            登録した特別料金は保存後、日報の運行入力「特別料金（料金プラン）」の選択肢に表示されます。
+          </p>
           <div className="settings-toolbar">
             <button type="button" disabled={!prefs.regime} onClick={openNewSpecial} title={!prefs.regime ? "先に料金体制を選んでください" : undefined}>
               特別料金を追加

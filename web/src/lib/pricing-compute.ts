@@ -61,3 +61,28 @@ export function computeMainFareYenFromPrefs(
   }
   return total;
 }
+
+export type SpecialFarePlan = {
+  id: string;
+  label: string;
+  specialFareId: string;
+  regime: "distance" | "time" | "both";
+  distance: DistanceBand;
+  time: TimeBand;
+  extraFlatYen: number;
+};
+
+export function computeFareFromSpecialFare(
+  sf: Pick<SpecialFarePlan, "regime" | "distance" | "time" | "extraFlatYen">,
+  distanceM: number,
+  travelMinutes: number,
+): number {
+  let total = Math.max(0, sf.extraFlatYen);
+  if (sf.regime === "distance" || sf.regime === "both") {
+    total += fareFromDistanceBand(sf.distance, distanceM);
+  }
+  if (sf.regime === "time" || sf.regime === "both") {
+    total += fareFromTimeBand(sf.time, travelMinutes);
+  }
+  return total;
+}

@@ -5,7 +5,11 @@ import { Card, Err } from "../ui";
 import { useSavedToast } from "../saved-toast";
 import { reverseGeocodeTownJa } from "../lib/nominatim";
 import { useAuth, formatFlexDatetime } from "../auth";
-import { computeMainFareYenFromPrefs, type PricingForTrips } from "../lib/pricing-compute";
+import {
+  computeFareFromSpecialFare,
+  computeMainFareYenFromPrefs,
+  type PricingForTrips,
+} from "../lib/pricing-compute";
 
 type EmpMini = { id: string; familyName: string; givenName: string };
 type VehMini = { id: string; label: string; plate: string | null; currentOdometer?: number | null };
@@ -61,33 +65,13 @@ type TariffOpt = {
   label: string;
   planId: string;
   version: number;
-  nightSurchargeBps: number;
-  nightSurchargeFlatYen: number;
-  leftHandSurchargeBps: number;
-  earlyMorningFlatYen: number;
-  lateNightFlatYen: number;
-  earlyRushFlatYen: number;
+  specialFareId?: string;
+  regime?: "distance" | "time" | "both";
+  distance?: { baseFareYen: number; includedDistanceM: number; addEveryM: number; addFareYen: number };
+  time?: { baseFareYen: number; includedMinutes: number; addEveryMin: number; addFareYen: number };
+  extraFlatYen?: number;
 };
 
-type TimeSurchargeCaps = {
-  nightSurchargeBps: number;
-  nightSurchargeFlatYen: number;
-  lateNightFlatYen: number;
-  earlyMorningFlatYen: number;
-  earlyRushFlatYen: number;
-  leftHandSurchargeBps: number;
-};
-
-function mergeTimeSurchargeCaps(tariff: TariffOpt | undefined, prefs: TimeSurchargeCaps | null): TimeSurchargeCaps {
-  return {
-    nightSurchargeBps: Math.max(tariff?.nightSurchargeBps ?? 0, prefs?.nightSurchargeBps ?? 0),
-    nightSurchargeFlatYen: Math.max(tariff?.nightSurchargeFlatYen ?? 0, prefs?.nightSurchargeFlatYen ?? 0),
-    lateNightFlatYen: Math.max(tariff?.lateNightFlatYen ?? 0, prefs?.lateNightFlatYen ?? 0),
-    earlyMorningFlatYen: Math.max(tariff?.earlyMorningFlatYen ?? 0, prefs?.earlyMorningFlatYen ?? 0),
-    earlyRushFlatYen: Math.max(tariff?.earlyRushFlatYen ?? 0, prefs?.earlyRushFlatYen ?? 0),
-    leftHandSurchargeBps: Math.max(tariff?.leftHandSurchargeBps ?? 0, prefs?.leftHandSurchargeBps ?? 0),
-  };
-}
 type Defaults = { pickupYen: number; leftHandYen: number; foreignCarYen: number; cancelYen: number };
 
 /** 配車スケジュールから運行フォームへ渡すプリフィル（token で再適用を区別） */
@@ -262,7 +246,6 @@ function TripWizard({
   defaults,
   features,
   pricingForTrips,
-  pricingTimeSurcharges,
   paymentMethods,
   onSubmitted,
   sectionTitle = "運行",
@@ -276,7 +259,6 @@ function TripWizard({
   defaults: Defaults;
   features: string[];
   pricingForTrips: PricingForTrips | null;
-  pricingTimeSurcharges: TimeSurchargeCaps | null;
   paymentMethods: string[];
   onSubmitted: () => void | Promise<void>;
   sectionTitle?: string;
@@ -360,10 +342,28 @@ function TripWizard({
   const distanceKmAuto = useMemo(() => Math.max(0, tripEndKm - tripStartKm), [tripEndKm, tripStartKm]);
   const travelMinutesAuto = useMemo(() => travelMinutesBetween(departedLocal, arrivedLocal), [departedLocal, arrivedLocal]);
   const distanceMAuto = useMemo(() => Math.max(0, Math.round(distanceKmAuto * 1000)), [distanceKmAuto]);
+  const selectedSpecialPlan = useMemo(
+    () => tariffVersions.find((t) => t.id === tariffVersionId),
+    [tariffVersions, tariffVersionId],
+  );
   const suggestedFareYen = useMemo(() => {
-    if (!pricingForTrips?.regime) return null;
-    return computeMainFareYenFromPrefs(pricingForTrips, distanceMAuto, travelMinutesAuto ?? 0);
-  }, [pricingForTrips, distanceMAuto, travelMinutesAuto]);
+    if (selectedSpecialPlan?.specialFareId && selectedSpecialPlan.distance && selectedSpecialPlan.time) {
+      return computeFareFromSpecialFare(
+        {
+          regime: selectedSpecialPlan.regime ?? "distance",
+          distance: selectedSpecialPlan.distance,
+          time: selectedSpecialPlan.time,
+          extraFlatYen: selectedSpecialPlan.extraFlatYen ?? 0,
+        },
+        distanceMAuto,
+        travelMinutesAuto ?? 0,
+      );
+    }
+    if (pricingForTrips?.regime) {
+      return computeMainFareYenFromPrefs(pricingForTrips, distanceMAuto, travelMinutesAuto ?? 0);
+    }
+    return null;
+  }, [selectedSpecialPlan, pricingForTrips, distanceMAuto, travelMinutesAuto]);
   const ancillaryYen = useMemo(() => {
     let s = 0;
     if (features.includes("pickup") && pickup.apply) s += Math.max(0, Math.floor(pickup.yen));
@@ -373,18 +373,6 @@ function TripWizard({
     return s;
   }, [features, pickup, leftHand, foreignCar, cancel]);
   const tripTotalYen = useMemo(() => fareYen + parkingAdvanceYen + ancillaryYen, [fareYen, parkingAdvanceYen, ancillaryYen]);
-
-  const tariffCap = useMemo(() => tariffVersions.find((t) => t.id === tariffVersionId), [tariffVersions, tariffVersionId]);
-  const surchargeCaps = useMemo(
-    () => mergeTimeSurchargeCaps(tariffCap, pricingTimeSurcharges),
-    [tariffCap, pricingTimeSurcharges],
-  );
-  const showNightPct = surchargeCaps.nightSurchargeBps > 0;
-  const showNightFlat = surchargeCaps.nightSurchargeFlatYen > 0;
-  const showLeftHandPct = surchargeCaps.leftHandSurchargeBps > 0;
-  const showEarlyMorningFlat = surchargeCaps.earlyMorningFlatYen > 0;
-  const showLateNightFlat = surchargeCaps.lateNightFlatYen > 0;
-  const showEarlyRushFlat = surchargeCaps.earlyRushFlatYen > 0;
 
   useEffect(() => {
     if (tariffVersionId || tariffVersions.length !== 1) return;
@@ -396,9 +384,6 @@ function TripWizard({
     features.includes("leftHand") ||
     features.includes("foreignCar") ||
     features.includes("cancel");
-  const hasTariffFlagRows =
-    showNightPct || showNightFlat || showLeftHandPct || showEarlyMorningFlat || showLateNightFlat || showEarlyRushFlat;
-  const showSurchargeDetails = hasPrefsLegRows || hasTariffFlagRows;
 
   function toggle(
     cur: { apply: boolean; yen: number },
@@ -448,12 +433,6 @@ function TripWizard({
         departedAt: departedAt.toISOString(),
         arrivedAt: arrivedAt.toISOString(),
         tariffVersionId: tariffVersionId.trim() || null,
-        applyNightSurcharge: showNightPct ? applyNightSurcharge : false,
-        applyNightSurchargeFlat: showNightFlat ? applyNightSurchargeFlat : false,
-        applyLeftHandSurcharge: showLeftHandPct ? applyLeftHandSurcharge : false,
-        applyEarlyMorningFlatYen: showEarlyMorningFlat ? applyEarlyMorningFlatYen : false,
-        applyLateNightFlatYen: showLateNightFlat ? applyLateNightFlatYen : false,
-        applyEarlyRushFlatYen: showEarlyRushFlat ? applyEarlyRushFlatYen : false,
         legSurchargesJson,
       },
     });
@@ -563,35 +542,43 @@ function TripWizard({
         <p className="settings-hint" style={{ marginTop: 0 }}>
           到着時刻 − 開始時刻から自動表示（参考値・DBには保存しません）。
         </p>
-        <label>料金プラン（版）</label>
+        <label>特別料金（料金プラン）</label>
         <select value={tariffVersionId} onChange={(e) => setTariffVersionId(e.target.value)}>
-          <option value="">未選択</option>
+          <option value="">未選択（メイン料金のみ）</option>
           {tariffVersions.map((tv) => (
             <option key={tv.id} value={tv.id}>
               {tv.label}
             </option>
           ))}
         </select>
-        {tariffVersions.length === 0 ? (
-          <p className="settings-hint" style={{ marginTop: 0 }}>
-            深夜・早朝などの加算フラグ用です。運賃の距離/時間計算は「設定 → 料金」の体制を使います。
-          </p>
+        {features.includes("specialFare") ? (
+          tariffVersions.length === 0 ? (
+            <p className="settings-hint" style={{ marginTop: 0 }}>
+              「設定 → 料金」で「特別料金」にチェックを入れ、「特別料金を追加」で登録して保存してください。
+            </p>
+          ) : (
+            <p className="settings-hint" style={{ marginTop: 0 }}>
+              設定で登録した特別料金です。選択するとその料金表で運賃の目安を計算します。
+            </p>
+          )
         ) : (
           <p className="settings-hint" style={{ marginTop: 0 }}>
-            加算フラグ（深夜％など）に使います。運賃本体は下の「設定料金を反映」で設定の距離/時間制から入れられます。
+            「設定 → 料金」の取扱い項目で「特別料金」を有効にすると、ここに選択肢が出ます。
           </p>
         )}
         <label>運賃（円）</label>
         <input type="number" min={0} value={fareYen} onChange={(e) => setFareYen(Math.max(0, Math.floor(Number(e.target.value) || 0)))} />
-        {pricingForTrips?.regime && suggestedFareYen != null ? (
+        {suggestedFareYen != null ? (
           <div className="settings-toolbar" style={{ gap: "0.5rem", marginTop: "0.25rem" }}>
             <span className="settings-hint" style={{ margin: 0 }}>
-              設定料金の目安: ¥{suggestedFareYen.toLocaleString("ja-JP")}
-              {pricingForTrips.regime === "both"
-                ? "（距離＋時間）"
-                : pricingForTrips.regime === "distance"
-                  ? "（距離制）"
-                  : "（時間制）"}
+              運賃の目安: ¥{suggestedFareYen.toLocaleString("ja-JP")}
+              {selectedSpecialPlan?.specialFareId
+                ? `（特別料金: ${selectedSpecialPlan.label}）`
+                : pricingForTrips?.regime === "both"
+                  ? "（メイン・距離＋時間）"
+                  : pricingForTrips?.regime === "distance"
+                    ? "（メイン・距離制）"
+                    : "（メイン・時間制）"}
             </span>
             <button
               type="button"
@@ -599,13 +586,9 @@ function TripWizard({
               disabled={busy || suggestedFareYen <= 0}
               onClick={() => setFareYen(suggestedFareYen)}
             >
-              設定料金を反映
+              目安を運賃に反映
             </button>
           </div>
-        ) : !pricingForTrips?.regime ? (
-          <p className="settings-hint" style={{ marginTop: 0 }}>
-            「設定 → 料金」で距離制・時間制などを選ぶと、走行距離・時間から運賃の目安を出せます。
-          </p>
         ) : null}
         <label>駐車場料金（立替金・円）</label>
         <input
@@ -643,9 +626,9 @@ function TripWizard({
           合計（運賃＋駐車場料金＋付帯料金）: ¥{tripTotalYen.toLocaleString("ja-JP")}
         </p>
 
-        {showSurchargeDetails ? (
+        {hasPrefsLegRows ? (
           <details className="settings-fieldset" style={{ marginTop: "0.5rem" }}>
-            <summary style={{ cursor: "pointer", fontWeight: 600 }}>付帯料金・加算フラグ</summary>
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>付帯料金</summary>
             <div className="settings-form" style={{ marginTop: "0.5rem" }}>
               {features.includes("pickup") ? (
                 <>
@@ -681,36 +664,6 @@ function TripWizard({
                   <NumRow label="キャンセル（円）" value={cancel.yen} onChange={(yen) => setCancel({ ...cancel, yen })} disabled={!cancel.apply} />
                 </>
               ) : null}
-              {showNightPct ? (
-                <label className="settings-check">
-                  <input type="checkbox" checked={applyNightSurcharge} onChange={(e) => setApplyNightSurcharge(e.target.checked)} /> 深夜割増（率）
-                </label>
-              ) : null}
-              {showNightFlat ? (
-                <label className="settings-check">
-                  <input type="checkbox" checked={applyNightSurchargeFlat} onChange={(e) => setApplyNightSurchargeFlat(e.target.checked)} /> 深夜帯定額
-                </label>
-              ) : null}
-              {showLeftHandPct ? (
-                <label className="settings-check">
-                  <input type="checkbox" checked={applyLeftHandSurcharge} onChange={(e) => setApplyLeftHandSurcharge(e.target.checked)} /> 左ハンドル（率）
-                </label>
-              ) : null}
-              {showEarlyMorningFlat ? (
-                <label className="settings-check">
-                  <input type="checkbox" checked={applyEarlyMorningFlatYen} onChange={(e) => setApplyEarlyMorningFlatYen(e.target.checked)} /> 早朝定額1
-                </label>
-              ) : null}
-              {showLateNightFlat ? (
-                <label className="settings-check">
-                  <input type="checkbox" checked={applyLateNightFlatYen} onChange={(e) => setApplyLateNightFlatYen(e.target.checked)} /> 深夜定額2
-                </label>
-              ) : null}
-              {showEarlyRushFlat ? (
-                <label className="settings-check">
-                  <input type="checkbox" checked={applyEarlyRushFlatYen} onChange={(e) => setApplyEarlyRushFlatYen(e.target.checked)} /> 早朝定額2
-                </label>
-              ) : null}
             </div>
           </details>
         ) : null}
@@ -732,7 +685,6 @@ export default function DailyReportDetailPage(): JSX.Element {
   const [defaults, setDefaults] = useState<Defaults | null>(null);
   const [features, setFeatures] = useState<string[]>([]);
   const [pricingForTrips, setPricingForTrips] = useState<PricingForTrips | null>(null);
-  const [pricingTimeSurcharges, setPricingTimeSurcharges] = useState<TimeSurchargeCaps | null>(null);
   const [tariffVersions, setTariffVersions] = useState<TariffOpt[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
   const [employees, setEmployees] = useState<EmpMini[]>([]);
@@ -770,7 +722,6 @@ export default function DailyReportDetailPage(): JSX.Element {
       pricingDefaults: Defaults;
       pricingFeatures: string[];
       pricingForTrips: PricingForTrips;
-      pricingTimeSurcharges: TimeSurchargeCaps;
       tariffVersions: TariffOpt[];
       employees: EmpMini[];
       vehicles: VehMini[];
@@ -784,7 +735,6 @@ export default function DailyReportDetailPage(): JSX.Element {
     setDefaults(r.data.pricingDefaults);
     setFeatures(r.data.pricingFeatures ?? []);
     setPricingForTrips(r.data.pricingForTrips ?? null);
-    setPricingTimeSurcharges(r.data.pricingTimeSurcharges ?? null);
     const tvs = r.data.tariffVersions ?? [];
     setTariffVersions(
       tvs.map((tv) => ({
@@ -792,39 +742,16 @@ export default function DailyReportDetailPage(): JSX.Element {
         label: tv.label,
         planId: tv.planId,
         version: tv.version,
-        nightSurchargeBps: Number(tv.nightSurchargeBps) || 0,
-        nightSurchargeFlatYen: Number(tv.nightSurchargeFlatYen) || 0,
-        leftHandSurchargeBps: Number(tv.leftHandSurchargeBps) || 0,
-        earlyMorningFlatYen: Number(tv.earlyMorningFlatYen) || 0,
-        lateNightFlatYen: Number(tv.lateNightFlatYen) || 0,
-        earlyRushFlatYen: Number(tv.earlyRushFlatYen) || 0,
+        specialFareId: tv.specialFareId,
+        regime: tv.regime,
+        distance: tv.distance,
+        time: tv.time,
+        extraFlatYen: tv.extraFlatYen,
       })),
     );
     setEmployees(r.data.employees ?? []);
     setVehicles(r.data.vehicles ?? []);
     setPaymentMethods(r.data.paymentMethods ?? []);
-    // #region agent log
-    fetch("http://127.0.0.1:7838/ingest/f37b4987-1b77-43d9-b411-9367fa4c8525", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "57fb34" },
-      body: JSON.stringify({
-        sessionId: "57fb34",
-        location: "DailyReportDetailPage.tsx:load",
-        message: "daily report pricing linkage (client)",
-        data: {
-          reportId,
-          pricingFeatures: r.data.pricingFeatures ?? [],
-          pricingDefaults: r.data.pricingDefaults,
-          pricingRegime: r.data.pricingForTrips?.regime ?? "",
-          tariffVersionCount: (r.data.tariffVersions ?? []).length,
-          tripCount: r.data.report?.trips?.length ?? 0,
-          tripFares: (r.data.report?.trips ?? []).map((t: { fareYen: number }) => t.fareYen),
-        },
-        timestamp: Date.now(),
-        hypothesisId: "H1-H3",
-      }),
-    }).catch(() => {});
-    // #endregion
     const rep = r.data.report;
     setPartnerId(rep.partnerEmployeeId ?? "");
     setEscortVehicleId(rep.escortVehicleId ?? "");
@@ -1226,7 +1153,6 @@ export default function DailyReportDetailPage(): JSX.Element {
                 defaults={defaults}
                 features={features}
                 pricingForTrips={pricingForTrips}
-                pricingTimeSurcharges={pricingTimeSurcharges}
                 paymentMethods={paymentMethods}
                 sectionTitle="運行入力"
                 schedulePrefill={schedulePrefill}
@@ -1277,7 +1203,6 @@ export default function DailyReportDetailPage(): JSX.Element {
                 defaults={defaults}
                 features={features}
                 pricingForTrips={pricingForTrips}
-                pricingTimeSurcharges={pricingTimeSurcharges}
                 paymentMethods={paymentMethods}
                 sectionTitle="運行入力"
                 businessDate={report?.businessDate}

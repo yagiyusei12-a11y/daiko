@@ -2,13 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Prisma } from "@prisma/client";
 import { authenticate, jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
-import {
-  coercePricingPrefs,
-  computeMainFareYenFromPrefs,
-  mergeLegSurchargesJson,
-  tripSurchargeDefaults,
-  tripTimeSurchargeCaps,
-} from "../lib/pricing-prefs.js";
+import { coercePricingPrefs, mergeLegSurchargesJson, tripSurchargeDefaults } from "../lib/pricing-prefs.js";
 import { coerceBusinessBasicsFromCustomJson } from "../lib/business-basics.js";
 import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
 import { hasSecondClassDriverLicense } from "../lib/employee-license.js";
@@ -16,8 +10,7 @@ import { isChromiumConfiguredForPdf } from "../lib/html-to-pdf.js";
 import { renderJommuKirokuboPdf } from "../lib/jommu-excel-pdf.js";
 import { userFacingJommuPdfError } from "../lib/jommu-pdf-user-error.js";
 import { loadJommuKirokuboModelForDailyReport } from "../lib/jommu-daily-report-model.js";
-import { debugSessionLog } from "../lib/debug-session-log.js";
-import { syncTariffPlanFromPricingPrefs } from "../lib/sync-tariff-from-pricing.js";
+import { listSpecialFareTariffVersions } from "../lib/sync-tariff-from-special-fares.js";
 
 function asObj(v: unknown): Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -413,26 +406,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     const prefs = coercePricingPrefs(asObj(settings?.customJson).pricingPrefs);
     const basics = coerceBusinessBasicsFromCustomJson(settings?.customJson);
 
-    if (prefs.features.includes("nightSurcharge")) {
-      await syncTariffPlanFromPricingPrefs(prisma, tenantId, prefs);
-    }
-
-    const tariffVersions = await prisma.tariffPlanVersion.findMany({
-      where: { plan: { tenantId } },
-      select: {
-        id: true,
-        version: true,
-        validTo: true,
-        nightSurchargeBps: true,
-        nightSurchargeFlatYen: true,
-        leftHandSurchargeBps: true,
-        earlyMorningFlatYen: true,
-        lateNightFlatYen: true,
-        earlyRushFlatYen: true,
-        plan: { select: { id: true, name: true } },
-      },
-      orderBy: [{ plan: { name: "asc" } }, { version: "desc" }],
-    });
+    const specialFarePlans = await listSpecialFareTariffVersions(prisma, tenantId, prefs);
 
     const employees = await prisma.employee.findMany({
       where: { tenantId, status: "ACTIVE" },
@@ -445,47 +419,26 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       orderBy: { label: "asc" },
     });
 
-    // #region agent log
-    debugSessionLog(
-      "daily-reports.ts:GET/:id",
-      "pricing vs tariff linkage snapshot",
-      {
-        reportId: id,
-        regime: prefs.regime,
-        featureCount: prefs.features.length,
-        features: prefs.features,
-        mainDistanceBaseYen: prefs.mainDistance?.baseFareYen ?? 0,
-        mainTimeBaseYen: prefs.mainTime?.baseFareYen ?? 0,
-        pickupBaseYen: prefs.pickupBaseYen ?? 0,
-        specialFareCount: prefs.specialFares.length,
-        tariffVersionCount: tariffVersions.length,
-        tripCount: report.trips.length,
-        tripsFareYen: report.trips.map((t) => t.fareYen),
-        tripsWithTariff: report.trips.filter((t) => t.tariffVersionId).length,
-        sampleSuggestedFare:
-          report.trips.length > 0
-            ? computeMainFareYenFromPrefs(prefs, report.trips[0]!.distanceM, 0)
-            : null,
-      },
-      "H1-H3",
-    );
-    // #endregion
-
     return {
       report,
       employees,
       vehicles,
-      tariffVersions: tariffVersions.map((tv) => ({
-        id: tv.id,
-        label: `${tv.plan.name}（v${tv.version}）${tv.validTo ? " ※終了版" : ""}`,
-        planId: tv.plan.id,
-        version: tv.version,
-        nightSurchargeBps: tv.nightSurchargeBps,
-        nightSurchargeFlatYen: tv.nightSurchargeFlatYen,
-        leftHandSurchargeBps: tv.leftHandSurchargeBps,
-        earlyMorningFlatYen: tv.earlyMorningFlatYen,
-        lateNightFlatYen: tv.lateNightFlatYen,
-        earlyRushFlatYen: tv.earlyRushFlatYen,
+      tariffVersions: specialFarePlans.map((sf) => ({
+        id: sf.id,
+        label: sf.label,
+        planId: sf.specialFareId,
+        version: 1,
+        specialFareId: sf.specialFareId,
+        regime: sf.regime,
+        distance: sf.distance,
+        time: sf.time,
+        extraFlatYen: sf.extraFlatYen,
+        nightSurchargeBps: 0,
+        nightSurchargeFlatYen: 0,
+        leftHandSurchargeBps: 0,
+        earlyMorningFlatYen: 0,
+        lateNightFlatYen: 0,
+        earlyRushFlatYen: 0,
       })),
       pricingDefaults: tripSurchargeDefaults(prefs),
       pricingFeatures: prefs.features,
@@ -494,7 +447,6 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         mainDistance: prefs.mainDistance ?? { baseFareYen: 0, includedDistanceM: 0, addEveryM: 0, addFareYen: 0 },
         mainTime: prefs.mainTime ?? { baseFareYen: 0, includedMinutes: 0, addEveryMin: 0, addFareYen: 0 },
       },
-      pricingTimeSurcharges: tripTimeSurchargeCaps(prefs),
       paymentMethods: basics.paymentMethods,
     };
   });

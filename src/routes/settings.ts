@@ -13,8 +13,7 @@ import {
 } from "../lib/business-basics.js";
 import { coerceTillFromCustomJson, mergeTillIntoCustomJson, parseTillPut } from "../lib/till-settings.js";
 import { coercePricingPrefs, mergePricingPrefsUpdate } from "../lib/pricing-prefs.js";
-import { debugSessionLog } from "../lib/debug-session-log.js";
-import { syncTariffPlanFromPricingPrefs } from "../lib/sync-tariff-from-pricing.js";
+import { syncTariffPlansFromSpecialFares } from "../lib/sync-tariff-from-special-fares.js";
 import { coerceSalaryPrefs, mergeSalaryPrefsPut } from "../lib/salary-prefs.js";
 import {
   coerceOnlineBookingFromCustomJson,
@@ -765,21 +764,6 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const s = await prisma.tenantSettings.findUnique({ where: { tenantId } });
     const cj = asObj(s?.customJson);
     const prefs = coercePricingPrefs(cj.pricingPrefs);
-    // #region agent log
-    debugSessionLog(
-      "settings.ts:GET/pricing",
-      "settings pricing loaded",
-      {
-        regime: prefs.regime,
-        features: prefs.features,
-        mainDistanceBaseYen: prefs.mainDistance?.baseFareYen ?? 0,
-        mainTimeBaseYen: prefs.mainTime?.baseFareYen ?? 0,
-        pickupBaseYen: prefs.pickupBaseYen ?? 0,
-        specialFareCount: prefs.specialFares.length,
-      },
-      "H4-H5",
-    );
-    // #endregion
     return {
       regime: prefs.regime,
       features: prefs.features,
@@ -808,23 +792,8 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
       },
       update: { customJson: nextCustom as Prisma.InputJsonValue },
     });
-    const synced = await syncTariffPlanFromPricingPrefs(prisma, tenantId, nextPrefs);
-    // #region agent log
-    debugSessionLog(
-      "settings.ts:PUT/pricing",
-      "settings pricing saved",
-      {
-        regime: nextPrefs.regime,
-        features: nextPrefs.features,
-        mainDistanceBaseYen: nextPrefs.mainDistance?.baseFareYen ?? 0,
-        nightSurchargeBps: nextPrefs.nightSurchargeBps ?? 0,
-        nightSurchargeFlatYen: nextPrefs.nightSurchargeFlatYen ?? 0,
-        syncedTariffVersionId: synced.versionId,
-      },
-      "night-tariff",
-    );
-    // #endregion
-    return { ok: true, tariffVersionId: synced.versionId };
+    const specialFareTariffLinks = await syncTariffPlansFromSpecialFares(prisma, tenantId, nextPrefs);
+    return { ok: true, specialFareTariffLinks };
   });
 
   app.get("/salary-prefs", async (req) => {
