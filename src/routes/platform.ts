@@ -9,6 +9,7 @@ import { buildPlainMail, sendMail } from "../lib/mail.js";
 import {
   defaultInquiryReplySubject,
   getInquiryAutoReplyTemplate,
+  INQUIRY_AUTO_REPLY_PLACEHOLDERS,
   PLATFORM_SETTING_KEYS,
   upsertPlatformSetting,
 } from "../lib/platform-settings.js";
@@ -206,7 +207,15 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
 
   app.get("/settings/inquiry-auto-reply", async () => {
     const tpl = await getInquiryAutoReplyTemplate();
-    return { subject: tpl.subject, body: tpl.body };
+    return {
+      subject: tpl.subject,
+      body: tpl.body,
+      placeholders: INQUIRY_AUTO_REPLY_PLACEHOLDERS.map((p) => ({
+        tag: p.tag,
+        label: p.label,
+        description: p.description,
+      })),
+    };
   });
 
   app.put<{ Body: Record<string, unknown> }>("/settings/inquiry-auto-reply", async (req, reply) => {

@@ -2,22 +2,34 @@ import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../../api";
 import { Err } from "../../ui";
 
+type PlaceholderInfo = {
+  tag: string;
+  label: string;
+  description: string;
+};
+
 export default function PlatformSettingsPage(): JSX.Element {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [placeholders, setPlaceholders] = useState<PlaceholderInfo[]>([]);
 
   const load = useCallback(async () => {
     setErr(null);
-    const r = await apiFetch<{ subject: string; body: string }>("/platform/settings/inquiry-auto-reply");
+    const r = await apiFetch<{
+      subject: string;
+      body: string;
+      placeholders: PlaceholderInfo[];
+    }>("/platform/settings/inquiry-auto-reply");
     if (!r.ok) {
       setErr(r.error);
       return;
     }
     setSubject(r.data.subject);
     setBody(r.data.body);
+    setPlaceholders(r.data.placeholders);
   }, []);
 
   useEffect(() => {
@@ -77,10 +89,18 @@ export default function PlatformSettingsPage(): JSX.Element {
             }}
           />
         </div>
-        <p className="platform-hint">
-          利用可能なプレースホルダ: <code>{"{{contactName}}"}</code>（お名前）、{" "}
-          <code>{"{{companyName}}"}</code>（店舗・会社名）
-        </p>
+        <div className="platform-placeholders">
+          <p className="platform-placeholders-title">利用可能なプレースホルダ（件名・本文のどちらでも利用可）</p>
+          <ul>
+            {placeholders.map((p) => (
+              <li key={p.tag}>
+                <code>{p.tag}</code>
+                <span className="platform-placeholders-label">{p.label}</span>
+                <span className="platform-placeholders-desc">{p.description}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
         <div className="platform-actions">
           <button type="button" className="platform-btn platform-btn--primary" disabled={busy} onClick={() => void save()}>
             保存

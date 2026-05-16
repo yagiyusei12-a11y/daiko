@@ -4,6 +4,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { prisma } from "../db.js";
 import { buildInquiryAutoReplyMail, formatInquiryMailBody, inquiryNotifyRecipients, sendMail } from "../lib/mail.js";
+import { buildInquiryTemplateVars } from "../lib/platform-settings.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -88,7 +89,17 @@ export async function registerPublicInquiryRoutes(app: FastifyInstance): Promise
       message,
       createdAt: row.createdAt,
     });
-    const autoReplyMail = await buildInquiryAutoReplyMail({ contactName, companyName });
+    const autoReplyMail = await buildInquiryAutoReplyMail(
+      buildInquiryTemplateVars({
+        contactName,
+        companyName,
+        email,
+        phone,
+        message,
+        inquiryId: row.id,
+        createdAt: row.createdAt,
+      }),
+    );
 
     const recipients = inquiryNotifyRecipients();
     if (recipients.length > 0) {
