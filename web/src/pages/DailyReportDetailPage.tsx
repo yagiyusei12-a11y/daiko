@@ -5,6 +5,7 @@ import { Card, Err } from "../ui";
 import { useSavedToast } from "../saved-toast";
 import { reverseGeocodeTownJa } from "../lib/nominatim";
 import { useAuth, formatFlexDatetime } from "../auth";
+import { computeMainFareYenFromPrefs, type PricingForTrips } from "../lib/pricing-compute";
 
 type EmpMini = { id: string; familyName: string; givenName: string };
 type VehMini = { id: string; label: string; plate: string | null; currentOdometer?: number | null };
@@ -240,6 +241,7 @@ function TripWizard({
   tariffVersions,
   defaults,
   features,
+  pricingForTrips,
   paymentMethods,
   onSubmitted,
   sectionTitle = "運行",
@@ -252,6 +254,7 @@ function TripWizard({
   tariffVersions: TariffOpt[];
   defaults: Defaults;
   features: string[];
+  pricingForTrips: PricingForTrips | null;
   paymentMethods: string[];
   onSubmitted: () => void | Promise<void>;
   sectionTitle?: string;
@@ -334,6 +337,11 @@ function TripWizard({
 
   const distanceKmAuto = useMemo(() => Math.max(0, tripEndKm - tripStartKm), [tripEndKm, tripStartKm]);
   const travelMinutesAuto = useMemo(() => travelMinutesBetween(departedLocal, arrivedLocal), [departedLocal, arrivedLocal]);
+  const distanceMAuto = useMemo(() => Math.max(0, Math.round(distanceKmAuto * 1000)), [distanceKmAuto]);
+  const suggestedFareYen = useMemo(() => {
+    if (!pricingForTrips?.regime) return null;
+    return computeMainFareYenFromPrefs(pricingForTrips, distanceMAuto, travelMinutesAuto ?? 0);
+  }, [pricingForTrips, distanceMAuto, travelMinutesAuto]);
   const ancillaryYen = useMemo(() => {
     let s = 0;
     if (features.includes("pickup") && pickup.apply) s += Math.max(0, Math.floor(pickup.yen));
@@ -533,8 +541,41 @@ function TripWizard({
             </option>
           ))}
         </select>
+        {tariffVersions.length === 0 ? (
+          <p className="settings-hint" style={{ marginTop: 0 }}>
+            深夜・早朝などの加算フラグ用です。運賃の距離/時間計算は「設定 → 料金」の体制を使います。
+          </p>
+        ) : (
+          <p className="settings-hint" style={{ marginTop: 0 }}>
+            加算フラグ（深夜％など）に使います。運賃本体は下の「設定料金を反映」で設定の距離/時間制から入れられます。
+          </p>
+        )}
         <label>運賃（円）</label>
         <input type="number" min={0} value={fareYen} onChange={(e) => setFareYen(Math.max(0, Math.floor(Number(e.target.value) || 0)))} />
+        {pricingForTrips?.regime && suggestedFareYen != null ? (
+          <div className="settings-toolbar" style={{ gap: "0.5rem", marginTop: "0.25rem" }}>
+            <span className="settings-hint" style={{ margin: 0 }}>
+              設定料金の目安: ¥{suggestedFareYen.toLocaleString("ja-JP")}
+              {pricingForTrips.regime === "both"
+                ? "（距離＋時間）"
+                : pricingForTrips.regime === "distance"
+                  ? "（距離制）"
+                  : "（時間制）"}
+            </span>
+            <button
+              type="button"
+              className="settings-secondary"
+              disabled={busy || suggestedFareYen <= 0}
+              onClick={() => setFareYen(suggestedFareYen)}
+            >
+              設定料金を反映
+            </button>
+          </div>
+        ) : !pricingForTrips?.regime ? (
+          <p className="settings-hint" style={{ marginTop: 0 }}>
+            「設定 → 料金」で距離制・時間制などを選ぶと、走行距離・時間から運賃の目安を出せます。
+          </p>
+        ) : null}
         <label>駐車場料金（立替金・円）</label>
         <input
           type="number"
@@ -659,6 +700,7 @@ export default function DailyReportDetailPage(): JSX.Element {
   const [report, setReport] = useState<ReportDetail | null>(null);
   const [defaults, setDefaults] = useState<Defaults | null>(null);
   const [features, setFeatures] = useState<string[]>([]);
+  const [pricingForTrips, setPricingForTrips] = useState<PricingForTrips | null>(null);
   const [tariffVersions, setTariffVersions] = useState<TariffOpt[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
   const [employees, setEmployees] = useState<EmpMini[]>([]);
@@ -695,6 +737,7 @@ export default function DailyReportDetailPage(): JSX.Element {
       report: ReportDetail;
       pricingDefaults: Defaults;
       pricingFeatures: string[];
+      pricingForTrips: PricingForTrips;
       tariffVersions: TariffOpt[];
       employees: EmpMini[];
       vehicles: VehMini[];
@@ -707,6 +750,7 @@ export default function DailyReportDetailPage(): JSX.Element {
     setReport(r.data.report);
     setDefaults(r.data.pricingDefaults);
     setFeatures(r.data.pricingFeatures ?? []);
+    setPricingForTrips(r.data.pricingForTrips ?? null);
     const tvs = r.data.tariffVersions ?? [];
     setTariffVersions(
       tvs.map((tv) => ({
@@ -725,6 +769,28 @@ export default function DailyReportDetailPage(): JSX.Element {
     setEmployees(r.data.employees ?? []);
     setVehicles(r.data.vehicles ?? []);
     setPaymentMethods(r.data.paymentMethods ?? []);
+    // #region agent log
+    fetch("http://127.0.0.1:7838/ingest/f37b4987-1b77-43d9-b411-9367fa4c8525", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "57fb34" },
+      body: JSON.stringify({
+        sessionId: "57fb34",
+        location: "DailyReportDetailPage.tsx:load",
+        message: "daily report pricing linkage (client)",
+        data: {
+          reportId,
+          pricingFeatures: r.data.pricingFeatures ?? [],
+          pricingDefaults: r.data.pricingDefaults,
+          pricingRegime: r.data.pricingForTrips?.regime ?? "",
+          tariffVersionCount: (r.data.tariffVersions ?? []).length,
+          tripCount: r.data.report?.trips?.length ?? 0,
+          tripFares: (r.data.report?.trips ?? []).map((t: { fareYen: number }) => t.fareYen),
+        },
+        timestamp: Date.now(),
+        hypothesisId: "H1-H3",
+      }),
+    }).catch(() => {});
+    // #endregion
     const rep = r.data.report;
     setPartnerId(rep.partnerEmployeeId ?? "");
     setEscortVehicleId(rep.escortVehicleId ?? "");
@@ -1125,6 +1191,7 @@ export default function DailyReportDetailPage(): JSX.Element {
                 tariffVersions={tariffVersions}
                 defaults={defaults}
                 features={features}
+                pricingForTrips={pricingForTrips}
                 paymentMethods={paymentMethods}
                 sectionTitle="運行入力"
                 schedulePrefill={schedulePrefill}
@@ -1174,6 +1241,7 @@ export default function DailyReportDetailPage(): JSX.Element {
                 tariffVersions={tariffVersions}
                 defaults={defaults}
                 features={features}
+                pricingForTrips={pricingForTrips}
                 paymentMethods={paymentMethods}
                 sectionTitle="運行入力"
                 businessDate={report?.businessDate}

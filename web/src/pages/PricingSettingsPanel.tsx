@@ -369,7 +369,30 @@ export default function PricingSettingsPanel({ setErr, busy, setBusy }: Props): 
     const r = await apiFetch("/settings/pricing", { method: "PUT", json: { pricingPrefs: prefs } });
     setBusy(false);
     if (!r.ok) setErr(r.error);
-    else flashSaved();
+    else {
+      // #region agent log
+      fetch("http://127.0.0.1:7838/ingest/f37b4987-1b77-43d9-b411-9367fa4c8525", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "57fb34" },
+        body: JSON.stringify({
+          sessionId: "57fb34",
+          location: "PricingSettingsPanel.tsx:save",
+          message: "pricing settings saved (client)",
+          data: {
+            regime: prefs.regime,
+            features: prefs.features,
+            mainDistanceBaseYen: prefs.mainDistance?.baseFareYen ?? 0,
+            mainTimeBaseYen: prefs.mainTime?.baseFareYen ?? 0,
+            pickupBaseYen: prefs.pickupBaseYen ?? 0,
+            specialFareCount: prefs.specialFares.length,
+          },
+          timestamp: Date.now(),
+          hypothesisId: "H4-H5",
+        }),
+      }).catch(() => {});
+      // #endregion
+      flashSaved();
+    }
   }
 
   const openNewSpecial = (): void => {

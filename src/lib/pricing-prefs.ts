@@ -183,6 +183,51 @@ export function mergePricingPrefsUpdate(
   };
 }
 
+/** 距離制バンドから運賃（円） */
+export function fareFromDistanceBand(band: DistanceBand, distanceM: number): number {
+  const dist = Math.max(0, Math.floor(distanceM));
+  if (dist <= 0) return 0;
+  const included = Math.max(0, band.includedDistanceM);
+  let fare = Math.max(0, band.baseFareYen);
+  if (dist <= included) return fare;
+  const step = Math.max(0, band.addEveryM);
+  if (step <= 0) return fare;
+  const over = dist - included;
+  const steps = Math.ceil(over / step);
+  return fare + steps * Math.max(0, band.addFareYen);
+}
+
+/** 時間制バンドから運賃（円） */
+export function fareFromTimeBand(band: TimeBand, travelMinutes: number): number {
+  const mins = Math.max(0, Math.floor(travelMinutes));
+  if (mins <= 0) return 0;
+  const included = Math.max(0, band.includedMinutes);
+  let fare = Math.max(0, band.baseFareYen);
+  if (mins <= included) return fare;
+  const step = Math.max(0, band.addEveryMin);
+  if (step <= 0) return fare;
+  const over = mins - included;
+  const steps = Math.ceil(over / step);
+  return fare + steps * Math.max(0, band.addFareYen);
+}
+
+/** 設定（料金タブ）のメイン距離/時間制から運賃を算出。体制未選択時は null */
+export function computeMainFareYenFromPrefs(
+  prefs: PricingPrefsV1,
+  distanceM: number,
+  travelMinutes: number,
+): number | null {
+  if (!prefs.regime) return null;
+  let total = 0;
+  if (prefs.regime === "distance" || prefs.regime === "both") {
+    total += fareFromDistanceBand(prefs.mainDistance ?? emptyDistanceBand(), distanceM);
+  }
+  if (prefs.regime === "time" || prefs.regime === "both") {
+    total += fareFromTimeBand(prefs.mainTime ?? emptyTimeBand(), travelMinutes);
+  }
+  return total;
+}
+
 /** 日報の付帯料金デフォルト（チェック時にクライアントが使う） */
 export function tripSurchargeDefaults(prefs: PricingPrefsV1): {
   pickupYen: number;

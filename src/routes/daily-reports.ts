@@ -2,7 +2,12 @@ import type { FastifyInstance } from "fastify";
 import type { Prisma } from "@prisma/client";
 import { authenticate, jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
-import { coercePricingPrefs, mergeLegSurchargesJson, tripSurchargeDefaults } from "../lib/pricing-prefs.js";
+import {
+  coercePricingPrefs,
+  computeMainFareYenFromPrefs,
+  mergeLegSurchargesJson,
+  tripSurchargeDefaults,
+} from "../lib/pricing-prefs.js";
 import { coerceBusinessBasicsFromCustomJson } from "../lib/business-basics.js";
 import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
 import { hasSecondClassDriverLicense } from "../lib/employee-license.js";
@@ -10,6 +15,7 @@ import { isChromiumConfiguredForPdf } from "../lib/html-to-pdf.js";
 import { renderJommuKirokuboPdf } from "../lib/jommu-excel-pdf.js";
 import { userFacingJommuPdfError } from "../lib/jommu-pdf-user-error.js";
 import { loadJommuKirokuboModelForDailyReport } from "../lib/jommu-daily-report-model.js";
+import { debugSessionLog } from "../lib/debug-session-log.js";
 
 function asObj(v: unknown): Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -433,6 +439,32 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       orderBy: { label: "asc" },
     });
 
+    // #region agent log
+    debugSessionLog(
+      "daily-reports.ts:GET/:id",
+      "pricing vs tariff linkage snapshot",
+      {
+        reportId: id,
+        regime: prefs.regime,
+        featureCount: prefs.features.length,
+        features: prefs.features,
+        mainDistanceBaseYen: prefs.mainDistance?.baseFareYen ?? 0,
+        mainTimeBaseYen: prefs.mainTime?.baseFareYen ?? 0,
+        pickupBaseYen: prefs.pickupBaseYen ?? 0,
+        specialFareCount: prefs.specialFares.length,
+        tariffVersionCount: tariffVersions.length,
+        tripCount: report.trips.length,
+        tripsFareYen: report.trips.map((t) => t.fareYen),
+        tripsWithTariff: report.trips.filter((t) => t.tariffVersionId).length,
+        sampleSuggestedFare:
+          report.trips.length > 0
+            ? computeMainFareYenFromPrefs(prefs, report.trips[0]!.distanceM, 0)
+            : null,
+      },
+      "H1-H3",
+    );
+    // #endregion
+
     return {
       report,
       employees,
@@ -451,6 +483,11 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
       })),
       pricingDefaults: tripSurchargeDefaults(prefs),
       pricingFeatures: prefs.features,
+      pricingForTrips: {
+        regime: prefs.regime,
+        mainDistance: prefs.mainDistance ?? { baseFareYen: 0, includedDistanceM: 0, addEveryM: 0, addFareYen: 0 },
+        mainTime: prefs.mainTime ?? { baseFareYen: 0, includedMinutes: 0, addEveryMin: 0, addFareYen: 0 },
+      },
       paymentMethods: basics.paymentMethods,
     };
   });
