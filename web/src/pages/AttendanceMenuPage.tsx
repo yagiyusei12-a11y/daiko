@@ -4,6 +4,13 @@ import { useAuth, isFullNavMe, isStaffShiftOnlyMe } from "../auth";
 import { useSavedToast } from "../saved-toast";
 import { Card, Err, Tabs, type TabDef } from "../ui";
 import { filterSubTabsForMe } from "../lib/staff-menu-client";
+import { FlexTimeInput } from "../components/FlexTimeInput";
+import {
+  flexHmToMinutes,
+  formatFlexTimeOnBlur,
+  isValidFlexHm,
+  normalizeShiftDaySlot,
+} from "../lib/flex-time-input";
 import { timecardButtonAvailability } from "../lib/timecard-punch-order";
 
 type EmployeeRow = {
@@ -118,27 +125,9 @@ type AllDateShiftRow = {
   duties: string[];
 };
 
-/** 0:00〜48:59（例: 翌4時 = 28:00） */
-const FLEX_HM = /^(\d{1,2}):(\d{2})$/;
-
-function isValidFlexHm(s: string): boolean {
-  const m = FLEX_HM.exec(s.trim());
-  if (!m) return false;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  return h >= 0 && h <= 48 && min >= 0 && min <= 59;
-}
-
-function flexHmToMinutes(s: string): number {
-  const m = FLEX_HM.exec(s.trim());
-  if (!m) return NaN;
-  return Number(m[1]) * 60 + Number(m[2]);
-}
-
 function validateDaysForSave(days: Record<string, ShiftDaySlot>): string | null {
   for (const [date, slot] of Object.entries(days)) {
-    const st = slot.start.trim();
-    const en = slot.end.trim();
+    const { start: st, end: en } = normalizeShiftDaySlot(slot);
     if (!st && !en) continue;
     if (!st || !en) return `${date}: 開始・終了の両方を入力してください。`;
     if (!isValidFlexHm(st) || !isValidFlexHm(en)) {
@@ -149,8 +138,8 @@ function validateDaysForSave(days: Record<string, ShiftDaySlot>): string | null 
 }
 
 function validateOneDaySlot(date: string, start: string, end: string): string | null {
-  const st = start.trim();
-  const en = end.trim();
+  const st = formatFlexTimeOnBlur(start);
+  const en = formatFlexTimeOnBlur(end);
   if (!st || !en) return `${date}: 開始・終了の両方を入力してください。`;
   if (!isValidFlexHm(st) || !isValidFlexHm(en)) {
     return `${date}: 時刻は 0:00〜48:59 の「時:分」で入力してください（例 9:00、28:00）。`;
@@ -282,9 +271,10 @@ function ShiftApplyDialog({
 
   function beginCopyDay(): void {
     if (!activeDay) return;
-    const slot = days[activeDay];
-    const st = slot?.start?.trim() ?? "";
-    const en = slot?.end?.trim() ?? "";
+    const slot = normalizeShiftDaySlot(days[activeDay] ?? { start: "", end: "" });
+    updateActiveSlot(slot);
+    const st = slot.start.trim();
+    const en = slot.end.trim();
     if (!isValidFlexHm(st) || !isValidFlexHm(en)) {
       setErr("コピー元の日で、開始・終了を正しい時刻で入力してください（例 9:00、28:00）。");
       return;
@@ -336,13 +326,17 @@ function ShiftApplyDialog({
   }
 
   async function saveApplication(): Promise<void> {
-    const msg = validateDaysForSave(days);
+    const normalizedDays = Object.fromEntries(
+      Object.entries(days).map(([k, v]) => [k, normalizeShiftDaySlot(v)]),
+    );
+    setDays(normalizedDays);
+    const msg = validateDaysForSave(normalizedDays);
     if (msg) {
       setErr(msg);
       return;
     }
     const cleaned: Record<string, ShiftDaySlot> = {};
-    for (const [k, v] of Object.entries(days)) {
+    for (const [k, v] of Object.entries(normalizedDays)) {
       const st = v.start.trim();
       const en = v.end.trim();
       if (st && en) cleaned[k] = { start: st, end: en };
@@ -442,23 +436,17 @@ function ShiftApplyDialog({
                 {activeDay ? `選択中: ${activeDay}` : "日付をタップしてください。"}
               </p>
               <label>開始（例 9:00、28:00）</label>
-              <input
-                type="text"
-                className="attend-shift-time-field"
-                autoComplete="off"
+              <FlexTimeInput
                 placeholder="9:00"
                 value={slot.start}
-                onChange={(e) => updateActiveSlot({ start: e.target.value })}
+                onChange={(start) => updateActiveSlot({ start })}
                 disabled={!activeDay}
               />
               <label>終了（例 18:00、36:00）</label>
-              <input
-                type="text"
-                className="attend-shift-time-field"
-                autoComplete="off"
+              <FlexTimeInput
                 placeholder="18:00"
                 value={slot.end}
-                onChange={(e) => updateActiveSlot({ end: e.target.value })}
+                onChange={(end) => updateActiveSlot({ end })}
                 disabled={!activeDay}
               />
               <p className="settings-hint">24時を超える場合は 25:00、28:00 のように入力できます（0:00〜48:59）。</p>
@@ -930,13 +918,17 @@ export default function AttendanceMenuPage(): JSX.Element {
 
   async function saveListDraft(): Promise<void> {
     if (!selectedEmployeeId) return;
-    const msg = validateDaysForSave(listDraft);
+    const normalizedDraft = Object.fromEntries(
+      Object.entries(listDraft).map(([k, v]) => [k, normalizeShiftDaySlot(v)]),
+    );
+    setListDraft(normalizedDraft);
+    const msg = validateDaysForSave(normalizedDraft);
     if (msg) {
       setErr(msg);
       return;
     }
     const out: Record<string, ShiftDaySlot> = {};
-    for (const [date, slot] of Object.entries(listDraft)) {
+    for (const [date, slot] of Object.entries(normalizedDraft)) {
       if (!date.startsWith(`${monthAppYm}-`)) continue;
       const st = slot.start.trim();
       const en = slot.end.trim();
@@ -1011,6 +1003,13 @@ export default function AttendanceMenuPage(): JSX.Element {
     if (!adjustDialogDate) return;
     const row = adjustUiRows.find((x) => x.employeeId === employeeId);
     if (!row) return;
+    const { start, end } = normalizeShiftDaySlot({ start: row.applyStart, end: row.applyEnd });
+    patchAdjustUiRow(employeeId, { applyStart: start, applyEnd: end });
+    const msg = validateOneDaySlot(adjustDialogDate, start, end);
+    if (msg) {
+      setErr(msg);
+      return;
+    }
     setAdjustRowBusy(employeeId);
     setErr(null);
     const r = await apiFetch("/attendance/shift-applications/day", {
@@ -1018,8 +1017,8 @@ export default function AttendanceMenuPage(): JSX.Element {
       json: {
         employeeId,
         businessDate: adjustDialogDate,
-        start: row.applyStart.trim(),
-        end: row.applyEnd.trim(),
+        start: start.trim(),
+        end: end.trim(),
       },
     });
     setAdjustRowBusy(null);
@@ -1035,7 +1034,12 @@ export default function AttendanceMenuPage(): JSX.Element {
     if (!adjustDialogDate) return;
     const row = adjustUiRows.find((x) => x.employeeId === employeeId);
     if (!row) return;
-    const msg = validateOneDaySlot(adjustDialogDate, row.confStart, row.confEnd);
+    const { start: confStart, end: confEnd } = normalizeShiftDaySlot({
+      start: row.confStart,
+      end: row.confEnd,
+    });
+    patchAdjustUiRow(employeeId, { confStart, confEnd });
+    const msg = validateOneDaySlot(adjustDialogDate, confStart, confEnd);
     if (msg) {
       setErr(msg);
       return;
@@ -1047,8 +1051,8 @@ export default function AttendanceMenuPage(): JSX.Element {
       json: {
         employeeId,
         businessDate: adjustDialogDate,
-        startTime: row.confStart.trim(),
-        endTime: row.confEnd.trim(),
+        startTime: confStart.trim(),
+        endTime: confEnd.trim(),
         duties: row.duties,
       },
     });
@@ -1341,20 +1345,16 @@ export default function AttendanceMenuPage(): JSX.Element {
                   {listRows.map(([date, t]) => (
                     <li key={date} className="settings-sf-row attend-shift-list-row">
                       <span className="settings-sf-name">{date}</span>
-                      <input
-                        type="text"
-                        className="attend-shift-time-field"
+                      <FlexTimeInput
                         aria-label={`${date} 開始`}
                         value={t.start}
-                        onChange={(e) => updateListDraft(date, { start: e.target.value })}
+                        onChange={(start) => updateListDraft(date, { start })}
                       />
                       <span className="settings-sf-meta">～</span>
-                      <input
-                        type="text"
-                        className="attend-shift-time-field"
+                      <FlexTimeInput
                         aria-label={`${date} 終了`}
                         value={t.end}
-                        onChange={(e) => updateListDraft(date, { end: e.target.value })}
+                        onChange={(end) => updateListDraft(date, { end })}
                       />
                     </li>
                   ))}
@@ -1858,19 +1858,17 @@ export default function AttendanceMenuPage(): JSX.Element {
                             {row.familyName} {row.givenName}
                           </td>
                           <td>
-                            <input
-                              className="attend-shift-time-field"
+                            <FlexTimeInput
                               aria-label={`${row.familyName} 申請開始`}
                               value={row.applyStart}
-                              onChange={(e) => patchAdjustUiRow(row.employeeId, { applyStart: e.target.value })}
+                              onChange={(applyStart) => patchAdjustUiRow(row.employeeId, { applyStart })}
                             />
                           </td>
                           <td>
-                            <input
-                              className="attend-shift-time-field"
+                            <FlexTimeInput
                               aria-label={`${row.familyName} 申請終了`}
                               value={row.applyEnd}
-                              onChange={(e) => patchAdjustUiRow(row.employeeId, { applyEnd: e.target.value })}
+                              onChange={(applyEnd) => patchAdjustUiRow(row.employeeId, { applyEnd })}
                             />
                           </td>
                           <td>
@@ -1884,19 +1882,17 @@ export default function AttendanceMenuPage(): JSX.Element {
                             </button>
                           </td>
                           <td>
-                            <input
-                              className="attend-shift-time-field"
+                            <FlexTimeInput
                               aria-label={`${row.familyName} 確定開始`}
                               value={row.confStart}
-                              onChange={(e) => patchAdjustUiRow(row.employeeId, { confStart: e.target.value })}
+                              onChange={(confStart) => patchAdjustUiRow(row.employeeId, { confStart })}
                             />
                           </td>
                           <td>
-                            <input
-                              className="attend-shift-time-field"
+                            <FlexTimeInput
                               aria-label={`${row.familyName} 確定終了`}
                               value={row.confEnd}
-                              onChange={(e) => patchAdjustUiRow(row.employeeId, { confEnd: e.target.value })}
+                              onChange={(confEnd) => patchAdjustUiRow(row.employeeId, { confEnd })}
                             />
                           </td>
                           <td>

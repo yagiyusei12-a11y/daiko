@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../api";
+import { FlexTimeInput } from "../components/FlexTimeInput";
+import { formatFlexTimeOnBlur } from "../lib/flex-time-input";
 import { useSavedToast } from "../saved-toast";
 import { Err } from "../ui";
 
@@ -107,6 +109,8 @@ export default function OnlineBookingSettingsPanel({
       setLocalErr("目安時間の選択肢を1つ以上チェックしてください");
       return;
     }
+    const closeHm = formatFlexTimeOnBlur(onlineLatestCloseHm);
+    setOnlineLatestCloseHm(closeHm);
     setBusy(true);
     setLocalErr(null);
     setErr(null);
@@ -117,7 +121,7 @@ export default function OnlineBookingSettingsPanel({
         message,
         durationOptions,
         daysAhead,
-        onlineLatestCloseHm: onlineLatestCloseHm.trim() || null,
+        onlineLatestCloseHm: closeHm.trim() || null,
         reservationTiming: {
           defaultTripEstimateMinutes: rt.defaultTripEstimateMinutes,
           blockedTimeMode: rt.blockedTimeMode,
@@ -273,12 +277,11 @@ export default function OnlineBookingSettingsPanel({
       </p>
 
       <label style={{ marginTop: "0.75rem" }}>ネット予約の終了時刻（28時間表記・任意）</label>
-      <input
-        type="text"
+      <FlexTimeInput
         placeholder="例: 26:00（空欄＝営業時間の終わりまで枠を表示）"
         style={{ maxWidth: "22rem" }}
         value={onlineLatestCloseHm}
-        onChange={(e) => setOnlineLatestCloseHm(e.target.value)}
+        onChange={setOnlineLatestCloseHm}
       />
       <p className="settings-hint" style={{ marginTop: 0 }}>
         営業が28時まででも、ここを26:00にするとゲスト予約の空きは26時までしか出ません（LIFF・ゲスト予約の両方）。

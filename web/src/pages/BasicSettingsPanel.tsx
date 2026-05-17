@@ -8,6 +8,8 @@ import {
   staffVisDraftFromApi,
   type StaffVisDraft,
 } from "../lib/staff-menu-client";
+import { FlexTimeInput } from "../components/FlexTimeInput";
+import { normalizeOpenCloseSlot } from "../lib/flex-time-input";
 import { useSavedToast } from "../saved-toast";
 import { Err } from "../ui";
 
@@ -161,6 +163,18 @@ function formatRegularHoliday(r: RegularHolidayEntry): string {
   return `毎月 ${r.day}日`;
 }
 
+function normalizeHoursSlotList(slots: BusinessHoursSlot[]): BusinessHoursSlot[] {
+  return slots.map((s) => ({ ...s, ...normalizeOpenCloseSlot(s) }));
+}
+
+function normalizeHoursMap(m: Record<string, BusinessHoursSlot[]>): Record<string, BusinessHoursSlot[]> {
+  const out: Record<string, BusinessHoursSlot[]> = {};
+  for (const [k, v] of Object.entries(m)) {
+    out[k] = normalizeHoursSlotList(v);
+  }
+  return out;
+}
+
 function HoursSlotList({
   slots,
   onChange,
@@ -179,23 +193,19 @@ function HoursSlotList({
           {slots.map((row, idx) => (
             <li key={row.id} className="settings-sf-row settings-basic-hours-row">
               <span className="settings-sf-name">枠 {idx + 1}</span>
-              <input
-                type="text"
-                className="attend-shift-time-field"
+              <FlexTimeInput
                 aria-label={`枠${idx + 1} 開始`}
                 value={row.open}
-                onChange={(e) =>
-                  onChange(slots.map((x) => (x.id === row.id ? { ...x, open: e.target.value } : x)))
+                onChange={(open) =>
+                  onChange(slots.map((x) => (x.id === row.id ? { ...x, open } : x)))
                 }
               />
               <span className="settings-sf-meta">～</span>
-              <input
-                type="text"
-                className="attend-shift-time-field"
+              <FlexTimeInput
                 aria-label={`枠${idx + 1} 終了`}
                 value={row.close}
-                onChange={(e) =>
-                  onChange(slots.map((x) => (x.id === row.id ? { ...x, close: e.target.value } : x)))
+                onChange={(close) =>
+                  onChange(slots.map((x) => (x.id === row.id ? { ...x, close } : x)))
                 }
               />
               <button type="button" className="settings-secondary" onClick={() => onChange(slots.filter((x) => x.id !== row.id))}>
@@ -296,12 +306,16 @@ export default function BasicSettingsPanel({ setErr, busy, setBusy }: Props): JS
       setLocalErr("日付変更時間は 24〜30 の範囲で入力してください（例: 28 = 28:00）。");
       return;
     }
+    const businessHours = normalizeHoursSlotList(draft.businessHours);
+    const businessHoursByWeekday = normalizeHoursMap(draft.businessHoursByWeekday);
+    const businessHoursByDate = normalizeHoursMap(draft.businessHoursByDate);
+    setDraft({ ...draft, businessHours, businessHoursByWeekday, businessHoursByDate });
     const r = await apiFetch("/settings/basics", {
       method: "PUT",
       json: {
-        businessHours: draft.businessHours,
-        businessHoursByWeekday: draft.businessHoursByWeekday,
-        businessHoursByDate: draft.businessHoursByDate,
+        businessHours,
+        businessHoursByWeekday,
+        businessHoursByDate,
         paymentMethods: draft.paymentMethods,
         regularHolidays: draft.regularHolidays,
         temporaryClosureDates: draft.temporaryClosureDates,
