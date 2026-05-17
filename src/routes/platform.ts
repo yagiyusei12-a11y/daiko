@@ -2,7 +2,13 @@
  * プラットフォーム管理者向け API（全テナント・LP問い合わせ）
  */
 import type { FastifyInstance } from "fastify";
-import type { MarketingInquiry, MarketingInquiryReply, PlanTier } from "@prisma/client";
+import type {
+  MarketingInquiry,
+  MarketingInquiryReply,
+  PlanTier,
+  Tenant,
+  TenantBillingStatus,
+} from "@prisma/client";
 import { jwtUser } from "../auth/pre.js";
 import { requirePlatformAdmin } from "../auth/platform-pre.js";
 import { buildPlainMail, sendMail } from "../lib/mail.js";
@@ -18,7 +24,37 @@ import { registerPlatformLicenseRoutes } from "./platform-license.js";
 
 const INQUIRY_STATUSES = new Set(["OPEN", "IN_PROGRESS", "CLOSED"]);
 const PLAN_TIERS = new Set<PlanTier>(["FREE", "STANDARD", "PREMIUM"]);
+const BILLING_STATUSES = new Set<TenantBillingStatus>([
+  "TRIALING",
+  "ACTIVE",
+  "PAST_DUE",
+  "CANCELED",
+  "EXPIRED",
+  "LICENSE_ONLY",
+]);
 const REPLY_BODY_MAX = 20_000;
+
+function serializeTenantBilling(t: Pick<Tenant, "billingStatus" | "paidThroughAt" | "trialEndsAt" | "billingUpdatedAt" | "stripeCustomerId">) {
+  return {
+    billingStatus: t.billingStatus,
+    paidThroughAt: t.paidThroughAt?.toISOString() ?? null,
+    trialEndsAt: t.trialEndsAt?.toISOString() ?? null,
+    billingUpdatedAt: t.billingUpdatedAt.toISOString(),
+    stripeCustomerId: t.stripeCustomerId,
+  };
+}
+
+function parseOptionalIsoDateTime(raw: unknown, field: string): Date | null | "skip" {
+  if (raw === undefined) return "skip";
+  if (raw === null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error(`invalid ${field}`);
+  }
+  return d;
+}
 
 type InquiryRow = MarketingInquiry & { replies?: MarketingInquiryReply[] };
 
@@ -282,6 +318,7 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
         userCount: t._count.users,
         employeeCount: t._count.employees,
         dailyReportCount: t._count.dailyReports,
+        ...serializeTenantBilling(t),
       })),
       page,
       limit,
@@ -339,9 +376,59 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
           vehicles: t._count.vehicles,
           dailyReports: t._count.dailyReports,
         },
+        ...serializeTenantBilling(t),
       },
     };
   });
+
+  app.put<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    "/tenants/:id/billing",
+    async (req, reply) => {
+      const tenant = await prisma.tenant.findUnique({ where: { id: req.params.id } });
+      if (!tenant) return reply.code(404).send({ error: "not found" });
+
+      const body = req.body || {};
+      const update: {
+        billingStatus?: TenantBillingStatus;
+        paidThroughAt?: Date | null;
+        trialEndsAt?: Date | null;
+        billingUpdatedAt: Date;
+      } = { billingUpdatedAt: new Date() };
+
+      if (body.billingStatus !== undefined) {
+        const status = String(body.billingStatus).trim().toUpperCase() as TenantBillingStatus;
+        if (!BILLING_STATUSES.has(status)) {
+          return reply.code(400).send({ error: "invalid billingStatus" });
+        }
+        update.billingStatus = status;
+      }
+
+      try {
+        const paidThrough = parseOptionalIsoDateTime(body.paidThroughAt, "paidThroughAt");
+        if (paidThrough !== "skip") update.paidThroughAt = paidThrough;
+
+        const trialEnds = parseOptionalIsoDateTime(body.trialEndsAt, "trialEndsAt");
+        if (trialEnds !== "skip") update.trialEndsAt = trialEnds;
+      } catch {
+        return reply.code(400).send({ error: "paidThroughAt and trialEndsAt must be ISO date strings or null" });
+      }
+
+      if (
+        update.billingStatus === undefined &&
+        update.paidThroughAt === undefined &&
+        update.trialEndsAt === undefined
+      ) {
+        return reply.code(400).send({ error: "no billing fields to update" });
+      }
+
+      const updated = await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: update,
+      });
+
+      return { tenant: { id: updated.id, ...serializeTenantBilling(updated) } };
+    },
+  );
 
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>(
     "/tenants/:id",

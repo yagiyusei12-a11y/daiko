@@ -2,6 +2,25 @@ import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../../api";
 import { Err } from "../../ui";
 
+const BILLING_STATUS_OPTIONS = [
+  "TRIALING",
+  "ACTIVE",
+  "PAST_DUE",
+  "CANCELED",
+  "EXPIRED",
+  "LICENSE_ONLY",
+] as const;
+
+type BillingStatus = (typeof BILLING_STATUS_OPTIONS)[number];
+
+type TenantBillingFields = {
+  billingStatus: BillingStatus;
+  paidThroughAt: string | null;
+  trialEndsAt: string | null;
+  billingUpdatedAt?: string;
+  stripeCustomerId?: string | null;
+};
+
 type TenantRow = {
   id: string;
   name: string;
@@ -14,7 +33,7 @@ type TenantRow = {
   userCount: number;
   employeeCount: number;
   dailyReportCount: number;
-};
+} & TenantBillingFields;
 
 type TenantDetail = {
   id: string;
@@ -31,12 +50,29 @@ type TenantDetail = {
   subscriptions: { planTier: string; validFrom: string }[];
   users: { id: string; email: string; displayName: string | null }[];
   counts: { employees: number; vehicles: number; dailyReports: number };
-};
+} & TenantBillingFields;
 
-function formatDt(iso: string): string {
+function formatDt(iso: string | null): string {
+  if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+}
+
+function toDatetimeLocalValue(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fromDatetimeLocalValue(value: string): string | null {
+  const v = value.trim();
+  if (!v) return null;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
 }
 
 export default function PlatformTenantsPage(): JSX.Element {
@@ -53,6 +89,10 @@ export default function PlatformTenantsPage(): JSX.Element {
   const [editTradeName, setEditTradeName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editPlan, setEditPlan] = useState("FREE");
+  const [editBillingStatus, setEditBillingStatus] = useState<BillingStatus>("TRIALING");
+  const [editPaidThrough, setEditPaidThrough] = useState("");
+  const [editTrialEnds, setEditTrialEnds] = useState("");
+  const [billingBusy, setBillingBusy] = useState(false);
 
   const loadList = useCallback(async () => {
     setErr(null);
@@ -79,6 +119,9 @@ export default function PlatformTenantsPage(): JSX.Element {
     setEditTradeName(t.settings?.legalTradeName ?? t.name);
     setEditPhone(t.settings?.legalPhone ?? "");
     setEditPlan(t.subscriptions[0]?.planTier ?? "FREE");
+    setEditBillingStatus(t.billingStatus ?? "TRIALING");
+    setEditPaidThrough(toDatetimeLocalValue(t.paidThroughAt));
+    setEditTrialEnds(toDatetimeLocalValue(t.trialEndsAt));
   }, []);
 
   useEffect(() => {
@@ -112,11 +155,32 @@ export default function PlatformTenantsPage(): JSX.Element {
     await loadDetail(selectedId);
   }
 
+  async function saveBilling(): Promise<void> {
+    if (!selectedId) return;
+    setBillingBusy(true);
+    setErr(null);
+    const r = await apiFetch<{ tenant: TenantBillingFields }>(`/platform/tenants/${selectedId}/billing`, {
+      method: "PUT",
+      json: {
+        billingStatus: editBillingStatus,
+        paidThroughAt: fromDatetimeLocalValue(editPaidThrough),
+        trialEndsAt: fromDatetimeLocalValue(editTrialEnds),
+      },
+    });
+    setBillingBusy(false);
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    await loadList();
+    await loadDetail(selectedId);
+  }
+
   return (
     <div>
       <header className="platform-page-head">
         <h1>テナント管理</h1>
-        <p>登録店舗の一覧・プラン・基本情報の確認と更新（スラッグは変更できません）</p>
+        <p>登録店舗の一覧・課金状態・プラン・基本情報の確認と更新（スラッグは変更できません）</p>
       </header>
 
       {err ? <Err msg={err} /> : null}
@@ -152,6 +216,8 @@ export default function PlatformTenantsPage(): JSX.Element {
             <tr>
               <th>店舗名</th>
               <th>スラッグ</th>
+              <th>課金</th>
+              <th>利用期限</th>
               <th>プラン</th>
               <th>ユーザー</th>
               <th>従業員</th>
@@ -171,6 +237,12 @@ export default function PlatformTenantsPage(): JSX.Element {
                 <td>
                   <code>{row.slug}</code>
                 </td>
+                <td>
+                  <span className={`platform-billing-badge platform-billing-badge--${row.billingStatus.toLowerCase()}`}>
+                    {row.billingStatus}
+                  </span>
+                </td>
+                <td>{formatDt(row.paidThroughAt)}</td>
                 <td>{row.planTier}</td>
                 <td>{row.userCount}</td>
                 <td>{row.employeeCount}</td>
@@ -180,7 +252,7 @@ export default function PlatformTenantsPage(): JSX.Element {
             ))}
             {items.length === 0 ? (
               <tr>
-                <td colSpan={7}>テナントがありません</td>
+                <td colSpan={9}>テナントがありません</td>
               </tr>
             ) : null}
           </tbody>
@@ -215,6 +287,94 @@ export default function PlatformTenantsPage(): JSX.Element {
           <p>
             スラッグ: <code>{detail.slug}</code> · タイムゾーン: {detail.timezone}
           </p>
+
+          <h3 className="platform-detail-subhead">課金・利用期限</h3>
+          <p className="platform-detail-hint">
+            現在: {detail.billingStatus} · 利用期限 {formatDt(detail.paidThroughAt)} · トライアル終了{" "}
+            {formatDt(detail.trialEndsAt)}
+            {detail.billingUpdatedAt ? ` · 更新 ${formatDt(detail.billingUpdatedAt)}` : ""}
+          </p>
+          <div className="platform-grid-2">
+            <div className="platform-field">
+              <label>課金ステータス（billingStatus）</label>
+              <select
+                value={editBillingStatus}
+                onChange={(e) => setEditBillingStatus(e.target.value as BillingStatus)}
+              >
+                {BILLING_STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="platform-field">
+              <label>利用期限（paidThroughAt）</label>
+              <input
+                type="datetime-local"
+                value={editPaidThrough}
+                onChange={(e) => setEditPaidThrough(e.target.value)}
+              />
+              <button
+                type="button"
+                className="platform-btn platform-btn--ghost platform-btn--xs"
+                onClick={() => setEditPaidThrough("")}
+              >
+                クリア
+              </button>
+            </div>
+            <div className="platform-field">
+              <label>トライアル終了（trialEndsAt）</label>
+              <input
+                type="datetime-local"
+                value={editTrialEnds}
+                onChange={(e) => setEditTrialEnds(e.target.value)}
+              />
+              <button
+                type="button"
+                className="platform-btn platform-btn--ghost platform-btn--xs"
+                onClick={() => setEditTrialEnds("")}
+              >
+                クリア
+              </button>
+            </div>
+          </div>
+          <div className="platform-actions platform-actions--compact">
+            <button
+              type="button"
+              className="platform-btn platform-btn--primary"
+              disabled={billingBusy}
+              onClick={() => void saveBilling()}
+            >
+              {billingBusy ? "保存中…" : "課金情報を保存"}
+            </button>
+            <button
+              type="button"
+              className="platform-btn platform-btn--ghost"
+              disabled={billingBusy}
+              onClick={() => {
+                setEditBillingStatus("EXPIRED");
+                setEditPaidThrough("");
+              }}
+            >
+              期限切れにする
+            </button>
+            <button
+              type="button"
+              className="platform-btn platform-btn--ghost"
+              disabled={billingBusy}
+              onClick={() => {
+                const d = new Date();
+                d.setFullYear(d.getFullYear() + 1);
+                setEditBillingStatus("ACTIVE");
+                setEditPaidThrough(toDatetimeLocalValue(d.toISOString()));
+              }}
+            >
+              有料化（1年）
+            </button>
+          </div>
+
+          <h3 className="platform-detail-subhead">基本情報</h3>
           <div className="platform-grid-2">
             <div className="platform-field">
               <label>表示名（テナント名）</label>
