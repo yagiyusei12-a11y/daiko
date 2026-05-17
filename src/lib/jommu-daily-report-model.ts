@@ -95,7 +95,7 @@ export async function loadJommuKirokuboModelForDailyReport(
   const escortVehiclePlate = report.escortVehicle?.plate?.trim() ?? "";
   const companyCarRegNo = escortVehiclePlate || escortVehicleLabel;
 
-  const accompanyingCrewName = report.partnerEmployee
+  const reportPartnerName = report.partnerEmployee
     ? `${report.partnerEmployee.familyName} ${report.partnerEmployee.givenName}`.trim()
     : "";
 
@@ -105,6 +105,7 @@ export async function loadJommuKirokuboModelForDailyReport(
     sumDistanceM += t.distanceM;
     const fare = t.fareOverrideYen != null ? t.fareOverrideYen : t.fareYen;
     sumFare += fare;
+    const tripCompanion = t.accompanyingCrewName?.trim() || reportPartnerName;
     return {
       clientName: t.clientName || "",
       charterVehicleNo: t.charterVehicleNo?.trim() || "",
@@ -115,10 +116,14 @@ export async function loadJommuKirokuboModelForDailyReport(
       arrivedHm: hmTokyo(t.arrivedAt),
       distanceKm: formatKmFromMeters(t.distanceM),
       fareYen: fare.toLocaleString("ja-JP"),
+      accompanyingCrewName: tripCompanion,
     };
   });
 
   const [y, m, d] = report.businessDate.split("-");
+  const accompanyingCrewName =
+    tripRows.map((r) => r.accompanyingCrewName.trim()).find(Boolean) ?? reportPartnerName;
+
   return {
     businessDateYmd: report.businessDate,
     yParts: { y: y ?? "", m: m ?? "", d: d ?? "" },

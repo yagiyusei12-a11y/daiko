@@ -663,6 +663,9 @@ model TripLeg {
   /// 迎車・左ハンドル・外車・キャンセル等（設定の基本額をデフォルト表示）
   legSurchargesJson Json @default("{}")
 
+  /// 運行登録時点の同伴乗務員名（日報のペア設定のスナップショット）
+  accompanyingCrewName String @default("")
+
   @@index([dailyReportId])
 }
 

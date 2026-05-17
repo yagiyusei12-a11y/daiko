@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Prisma } from "@prisma/client";
 import { authenticateAndBilling } from "../auth/protected-pre.js";
 import { jwtUser } from "../auth/pre.js";
+import { accompanyingCrewNameForDailyReport } from "../lib/daily-report-partner.js";
 import { prisma } from "../db.js";
 import { coercePricingPrefs, mergeLegSurchargesJson, tripSurchargeDefaults } from "../lib/pricing-prefs.js";
 import { coerceBusinessBasicsFromCustomJson } from "../lib/business-basics.js";
@@ -458,6 +459,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
     const dr = await prisma.dailyReport.findFirst({ where: { id: rid, tenantId } });
     if (!dr) return reply.code(404).send({ error: "not found" });
     const now = new Date();
+    const accompanyingCrewName = await accompanyingCrewNameForDailyReport(rid);
     const leg = await prisma.tripLeg.create({
       data: {
         dailyReportId: rid,
@@ -471,6 +473,7 @@ export async function registerDailyReportRoutes(app: FastifyInstance): Promise<v
         tripPaymentMethod: "CASH",
         tripReceiptIssued: false,
         legSurchargesJson: {},
+        accompanyingCrewName,
       },
     });
     return { id: leg.id };

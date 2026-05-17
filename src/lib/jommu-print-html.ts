@@ -77,7 +77,7 @@ function rowShowsVehicleAndCompanion(trip: JommuTripRow): boolean {
 function buildRecordRow(m: JommuKirokuboModel, i: number): string {
   const n = i + 1;
   const trip = m.trips[i];
-  const companion = e(m.accompanyingCrewName.trim());
+  const companion = e((trip?.accompanyingCrewName ?? m.accompanyingCrewName).trim());
 
   if (!trip) {
     return `<tr>

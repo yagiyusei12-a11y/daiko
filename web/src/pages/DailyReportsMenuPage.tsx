@@ -166,7 +166,7 @@ export default function DailyReportsMenuPage(): JSX.Element {
             </h2>
             <div className="attend-shift-dialog-scroll">
               <p className="settings-hint">
-                作成後に日報詳細で勤務セッション（ペア・随伴車・ODO）と運行を入力します。ここで先にペア等を入れても構いません。
+                作成後に日報詳細で勤務セッション（ペア・随伴車・ODO）と運行を入力します。運行を追加するたびに、その時点のペア名が乗務記録簿の同伴乗務員名として記録されます。
               </p>
               <div className="settings-form">
                 <label htmlFor="dr-create-date">事業日</label>

@@ -8,6 +8,8 @@ export type JommuTripRow = {
   arrivedHm: string;
   distanceKm: string;
   fareYen: string;
+  /** 運行登録時点の同伴乗務員名 */
+  accompanyingCrewName: string;
 };
 
 export type JommuKirokuboModel = {
