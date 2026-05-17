@@ -76,7 +76,7 @@ const html = `<!DOCTYPE html>
             <${d} class="lp-campaign" role="note">
               <p class="lp-campaign-eyebrow">リリース記念！今だけ初期メンバー限定</p>
               <${d} class="lp-campaign-ribbon">
-                <span class="lp-campaign-before">通常月額 <s>4,980円</s><small>(税抜)</small> が</span>
+                <span class="lp-campaign-before">通常月額 <s>5,478円（税込）</s><small>（税抜4,980円）</small> が</span>
                 <span class="lp-campaign-highlight">今なら <em>0円</em>！</span>
               </${d}>
             </${d}>
@@ -376,6 +376,9 @@ const html = `<!DOCTYPE html>
       <${d} class="lp-wrap lp-footer-inner">
         <a class="lp-logo lp-logo--footer" href="/">Daiko</a>
         <nav class="lp-footer-nav" aria-label="フッターリンク">
+          <a href="/legal/tokushoho">特定商取引法に基づく表記</a>
+          <a href="/legal/privacy">プライバシーポリシー</a>
+          <a href="/legal/terms">利用規約</a>
           <a href="/app/">デモ</a>
           <a href="/app/login">ログイン</a>
           <a href="/app/register">新規登録</a>

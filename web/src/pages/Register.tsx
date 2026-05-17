@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
+import { AuthLegalFooter } from "../components/AuthLegalFooter";
 import { Card, Err } from "../ui";
 
 const SLUG_OK = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -15,11 +16,16 @@ export default function Register(): JSX.Element {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [representativeAdmin, setRepresentativeAdmin] = useState(true);
+  const [termsAgreed, setTermsAgreed] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     setErr(null);
+    if (!termsAgreed) {
+      setErr("利用規約およびプライバシーポリシーへの同意が必要です。");
+      return;
+    }
     const s = slug.trim().toLowerCase();
     if (!SLUG_OK.test(s)) {
       setErr("店舗IDは英小文字・数字・ハイフンのみ。先頭・末尾にハイフンは付けないでください。");
@@ -33,6 +39,7 @@ export default function Register(): JSX.Element {
       familyName: familyName.trim(),
       givenName: givenName.trim(),
       representativeAdmin,
+      termsAgreed: true,
     });
     if (er) setErr(er);
     else nav("/", { replace: true });
@@ -74,13 +81,34 @@ export default function Register(): JSX.Element {
           <label>ログイン用メールアドレス</label>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
           <label>パスワード（8文字以上）</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+          <label className="auth-terms-check">
+            <input
+              type="checkbox"
+              checked={termsAgreed}
+              onChange={(e) => setTermsAgreed(e.target.checked)}
+              required
+            />
+            <span>
+              <a href="/legal/terms" target="_blank" rel="noopener noreferrer">
+                利用規約
+              </a>
+              および
+              <a href="/legal/privacy" target="_blank" rel="noopener noreferrer">
+                プライバシーポリシー
+              </a>
+              に同意する
+            </span>
+          </label>
           <Err msg={err} />
-          <button type="submit">登録してログイン</button>
+          <button type="submit" disabled={!termsAgreed}>
+            登録してログイン
+          </button>
         </form>
         <p className="auth-footer">
           <Link to="/login">ログインへ</Link>
         </p>
+        <AuthLegalFooter />
       </Card>
     </div>
   );

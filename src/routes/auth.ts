@@ -22,6 +22,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       familyName?: string;
       givenName?: string;
       representativeAdmin?: boolean;
+      termsAgreed?: boolean;
     };
   }>("/auth/register", async (req, reply) => {
     const tenantName = String(req.body?.tenantName || "").trim();
@@ -36,6 +37,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     let givenName = String(req.body?.givenName || "").trim();
     const legacyDisplay = String(req.body?.displayName || "").trim();
     const representativeAdmin = Boolean(req.body?.representativeAdmin);
+    const termsAgreed = Boolean(req.body?.termsAgreed);
+    if (!termsAgreed) {
+      return reply.code(400).send({ error: "利用規約およびプライバシーポリシーへの同意が必要です" });
+    }
     if (!familyName && !givenName && legacyDisplay) {
       const parts = legacyDisplay.split(/\s+/).filter(Boolean);
       familyName = parts[0] ?? "";

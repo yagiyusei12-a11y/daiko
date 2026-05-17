@@ -99,6 +99,17 @@ await app.register(fastifyStatic, {
   decorateReply: false,
 });
 
+const legalPages: Record<string, string> = {
+  "/legal/tokushoho": "legal/tokushoho.html",
+  "/legal/privacy": "legal/privacy.html",
+  "/legal/terms": "legal/terms.html",
+};
+for (const [route, file] of Object.entries(legalPages)) {
+  app.get(route, async (_, reply) => {
+    return reply.type("text/html; charset=utf-8").sendFile(file, lpStaticRoot);
+  });
+}
+
 const v1 = "/api/v1";
 await app.register(registerAuthRoutes, { prefix: v1 });
 await app.register(registerBillingWebhook, { prefix: `${v1}/billing` });

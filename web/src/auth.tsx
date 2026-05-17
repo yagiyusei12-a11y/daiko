@@ -111,6 +111,7 @@ type AuthCtx = {
     familyName: string;
     givenName: string;
     representativeAdmin: boolean;
+    termsAgreed: boolean;
   }) => Promise<string | undefined>;
   logout: () => void;
   can: (perm: string) => boolean;
@@ -170,6 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       familyName: string;
       givenName: string;
       representativeAdmin: boolean;
+      termsAgreed: boolean;
     }) => {
       const r = await apiFetch<{ accessToken: string; refreshToken: string }>("/auth/register", {
         method: "POST",

@@ -12,6 +12,7 @@ import {
   type RedeemLicenseResponse,
   type TenantBillingStatus,
 } from "../lib/billing";
+import { AuthLegalFooter } from "../components/AuthLegalFooter";
 import { Card } from "../ui";
 
 function useBillingToast(): { message: string | null; flash: (text: string) => void } {
@@ -223,6 +224,8 @@ export default function BillingPage(): JSX.Element {
           {toast}
         </div>
       ) : null}
+
+      <AuthLegalFooter />
     </div>
   );
 }

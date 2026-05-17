@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
+import { AuthLegalFooter } from "../components/AuthLegalFooter";
 import { Card, Err } from "../ui";
 
 export default function Login(): JSX.Element {
@@ -37,6 +38,7 @@ export default function Login(): JSX.Element {
           <Link to="/register">新規テナント登録</Link>
           <Link to="/platform/inquiries">プラットフォーム管理</Link>
         </div>
+        <AuthLegalFooter />
       </Card>
     </div>
   );
