@@ -163,8 +163,16 @@ export async function seedDemoTenant(prisma: PrismaClient): Promise<DemoSeedPayl
   };
 
   await prisma.$transaction(async (tx) => {
+    const demoPaidThrough = new Date("2099-12-31T23:59:59.000Z");
     const tenant = await tx.tenant.create({
-      data: { name: DEMO_TENANT_NAME, slug: DEMO_TENANT_SLUG, timezone: "Asia/Tokyo" },
+      data: {
+        name: DEMO_TENANT_NAME,
+        slug: DEMO_TENANT_SLUG,
+        timezone: "Asia/Tokyo",
+        billingStatus: "ACTIVE",
+        paidThroughAt: demoPaidThrough,
+        trialEndsAt: demoPaidThrough,
+      },
     });
     payload.tenantId = tenant.id;
 
@@ -188,7 +196,14 @@ export async function seedDemoTenant(prisma: PrismaClient): Promise<DemoSeedPayl
     });
 
     await tx.subscription.create({
-      data: { tenantId: tenant.id, planTier: "FREE", validFrom: new Date() },
+      data: {
+        tenantId: tenant.id,
+        planTier: "STANDARD",
+        source: "PLATFORM_ADMIN",
+        status: "ACTIVE",
+        validFrom: new Date(),
+        validTo: demoPaidThrough,
+      },
     });
 
     const demoRole = await tx.role.create({

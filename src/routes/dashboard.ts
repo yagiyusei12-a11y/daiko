@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { authenticate, jwtUser } from "../auth/pre.js";
+import { authenticateAndBilling } from "../auth/protected-pre.js";
+import { jwtUser } from "../auth/pre.js";
 import { loadUserAccess } from "../lib/permissions.js";
 import { prisma } from "../db.js";
 
@@ -18,7 +19,7 @@ function legFare(fareYen: number, fareOverrideYen: number | null): number {
 }
 
 export async function registerDashboardRoutes(app: FastifyInstance): Promise<void> {
-  app.addHook("preHandler", authenticate);
+  app.addHook("preHandler", authenticateAndBilling);
 
   app.get("/summary", async (req) => {
     const { tenantId, sub: userId } = jwtUser(req);

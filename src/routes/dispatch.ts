@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Prisma } from "@prisma/client";
-import { authenticate, jwtUser } from "../auth/pre.js";
+import { authenticateAndBilling } from "../auth/protected-pre.js";
+import { jwtUser } from "../auth/pre.js";
 import {
   coerceBusinessBasicsFromCustomJson,
   resolveBusinessHoursForYmd,
@@ -73,7 +74,7 @@ function unassignedVirtualDriverRows(effectiveSlots: number): DriverRow[] {
 }
 
 export async function registerDispatchRoutes(app: FastifyInstance): Promise<void> {
-  app.addHook("preHandler", authenticate);
+  app.addHook("preHandler", authenticateAndBilling);
 
   app.get<{ Querystring: { date?: string } }>("/schedule", async (req, reply) => {
     const { tenantId, sub: userId } = jwtUser(req);

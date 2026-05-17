@@ -36,6 +36,7 @@ export default function PlatformShell(): JSX.Element {
             </NavLink>
             <NavLink to="/platform/settings">システム設定</NavLink>
             <NavLink to="/platform/tenants">テナント</NavLink>
+            <NavLink to="/platform/licenses">ライセンス</NavLink>
           </nav>
           <div className="platform-header-actions">
             <span className="platform-user">{me.email}</span>

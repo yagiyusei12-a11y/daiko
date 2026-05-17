@@ -17,6 +17,8 @@ import PlatformShell from "./layout/PlatformShell";
 import PlatformInquiriesPage from "./pages/platform/PlatformInquiriesPage";
 import PlatformSettingsPage from "./pages/platform/PlatformSettingsPage";
 import PlatformTenantsPage from "./pages/platform/PlatformTenantsPage";
+import PlatformLicensesPage from "./pages/platform/PlatformLicensesPage";
+import BillingPage from "./pages/BillingPage";
 
 export default function App(): JSX.Element {
   return (
@@ -29,10 +31,12 @@ export default function App(): JSX.Element {
         <Route path="inquiries" element={<PlatformInquiriesPage />} />
         <Route path="settings" element={<PlatformSettingsPage />} />
         <Route path="tenants" element={<PlatformTenantsPage />} />
+        <Route path="licenses" element={<PlatformLicensesPage />} />
       </Route>
       <Route path="/sample" element={<Navigate to="/" replace />} />
       <Route path="/book/:slug" element={<GuestBookingPage />} />
       <Route path="/invite/:token" element={<EmployeeInvitePage />} />
+      <Route path="/billing" element={<BillingPage />} />
       <Route element={<Shell />}>
         <Route index element={<TodaySchedulePage />} />
         <Route path="complaints" element={<ComplaintsPage />} />

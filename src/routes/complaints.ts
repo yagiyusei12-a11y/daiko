@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { ComplaintLedger, Employee, Prisma } from "@prisma/client";
-import { authenticate, jwtUser } from "../auth/pre.js";
+import { authenticateAndBilling } from "../auth/protected-pre.js";
+import { jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
 
 const MAX_LIST = 500;
@@ -67,7 +68,7 @@ function trimField(s: unknown, max: number): string {
 }
 
 export async function registerComplaintsRoutes(app: FastifyInstance): Promise<void> {
-  app.addHook("preHandler", authenticate);
+  app.addHook("preHandler", authenticateAndBilling);
 
   const include = {
     driverEmployee: { select: empSelect },

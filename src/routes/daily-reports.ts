@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Prisma } from "@prisma/client";
-import { authenticate, jwtUser } from "../auth/pre.js";
+import { authenticateAndBilling } from "../auth/protected-pre.js";
+import { jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
 import { coercePricingPrefs, mergeLegSurchargesJson, tripSurchargeDefaults } from "../lib/pricing-prefs.js";
 import { coerceBusinessBasicsFromCustomJson } from "../lib/business-basics.js";
@@ -29,7 +30,7 @@ function parseViaStopsJsonBody(v: unknown): { ok: true; stops: string[] } | { ok
 }
 
 export async function registerDailyReportRoutes(app: FastifyInstance): Promise<void> {
-  app.addHook("preHandler", authenticate);
+  app.addHook("preHandler", authenticateAndBilling);
 
   app.get<{ Querystring: { businessDate?: string } }>("/daily-reports", async (req) => {
     const { tenantId } = jwtUser(req);

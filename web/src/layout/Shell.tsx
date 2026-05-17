@@ -62,6 +62,7 @@ export default function Shell(): JSX.Element {
     );
   }
   if (!me) return <Navigate to="/login" replace />;
+  if (me.canAccessApp === false) return <Navigate to="/billing" replace />;
 
   const navLinks = (
     <>

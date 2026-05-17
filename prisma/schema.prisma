@@ -13,6 +13,28 @@ enum PlanTier {
   PREMIUM
 }
 
+enum TenantBillingStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+  LICENSE_ONLY
+}
+
+enum SubscriptionSource {
+  TRIAL
+  STRIPE
+  LICENSE_KEY
+  PLATFORM_ADMIN
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  EXPIRED
+}
+
 enum CompensationType {
   HOURLY_ONLY
   COMMISSION_ONLY
@@ -60,6 +82,14 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// 無料トライアル終了（登録時に createdAt + 14日）
+  trialEndsAt      DateTime?
+  stripeCustomerId String?              @unique
+  billingStatus    TenantBillingStatus  @default(TRIALING)
+  /// この日時までアプリ利用可（トライアル・Stripe・ライセンスの上限）
+  paidThroughAt    DateTime?
+  billingUpdatedAt DateTime             @default(now())
+
   settings            TenantSettings?
   subscriptions       Subscription[]
   users               User[]
@@ -89,6 +119,7 @@ model Tenant {
   lineChannels        TenantLineChannel[]
   instructionRecords  InstructionRecord[]
   employeeInviteTokens EmployeeInviteToken[]
+  licenseKeyRedemptions LicenseKey[]       @relation("LicenseKeyRedemptions")
 }
 
 /// デモ用サンプル投入のバッチ（payload に作成した主キー一覧を保持し、削除時に利用）
@@ -163,9 +194,19 @@ model Subscription {
   tenantId  String
   tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   planTier  PlanTier
+  source    SubscriptionSource?
+  status    SubscriptionStatus?
   validFrom DateTime  @default(now())
   validTo   DateTime?
+  stripeSubscriptionId String?
+  stripePriceId        String?
+  licenseKeyId         String?
+  licenseKey           LicenseKey? @relation(fields: [licenseKeyId], references: [id], onDelete: SetNull)
+  metadata  Json      @default("{}")
   createdAt DateTime  @default(now())
+
+  @@index([tenantId, validFrom])
+  @@index([stripeSubscriptionId])
 }
 
 model Role {
@@ -861,6 +902,40 @@ model LegalChangeNotice {
   updatedAt      DateTime @updatedAt
 
   @@index([tenantId, createdAt])
+}
+
+/// 楽天等で販売するライセンスキー（テナント横断）
+model LicenseKey {
+  id             String    @id @default(cuid())
+  keyHash        String    @unique
+  keyPrefix      String?
+  validDays      Int
+  expiresAt      DateTime?
+  isRevoked      Boolean   @default(false)
+  revokedAt      DateTime?
+  usedAt         DateTime?
+  usedByTenantId String?
+  usedByTenant   Tenant?   @relation("LicenseKeyRedemptions", fields: [usedByTenantId], references: [id], onDelete: SetNull)
+  batchLabel     String?
+  note           String?
+  createdAt      DateTime  @default(now())
+
+  subscriptions Subscription[]
+
+  @@index([usedByTenantId])
+  @@index([batchLabel])
+}
+
+/// Stripe Webhook 冪等処理
+model StripeWebhookEvent {
+  id          String    @id
+  type        String
+  processedAt DateTime?
+  payload     Json
+  error       String?   @db.Text
+  createdAt   DateTime  @default(now())
+
+  @@index([processedAt])
 }
 
 /// プラットフォーム全体の設定（キー・値。テナント非紐付け）

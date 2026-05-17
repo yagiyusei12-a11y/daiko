@@ -33,7 +33,8 @@
     "nodemailer": "^7.0.3",
     "pdf-lib": "^1.17.1",
     "prisma": "^6.19.3",
-    "puppeteer-core": "^24.43.1"
+    "puppeteer-core": "^24.43.1",
+    "stripe": "^22.1.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

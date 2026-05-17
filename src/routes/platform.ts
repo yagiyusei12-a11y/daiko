@@ -14,6 +14,7 @@ import {
   upsertPlatformSetting,
 } from "../lib/platform-settings.js";
 import { prisma } from "../db.js";
+import { registerPlatformLicenseRoutes } from "./platform-license.js";
 
 const INQUIRY_STATUSES = new Set(["OPEN", "IN_PROGRESS", "CLOSED"]);
 const PLAN_TIERS = new Set<PlanTier>(["FREE", "STANDARD", "PREMIUM"]);
@@ -66,6 +67,8 @@ function parseLimit(q: unknown, def = 30, max = 100): number {
 
 export async function registerPlatformRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", requirePlatformAdmin);
+
+  await app.register(registerPlatformLicenseRoutes);
 
   app.get<{ Querystring: { page?: string; limit?: string; status?: string } }>(
     "/inquiries",

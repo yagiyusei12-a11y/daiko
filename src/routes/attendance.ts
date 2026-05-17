@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import type { Prisma } from "@prisma/client";
 import { TimeCardPunchKind } from "@prisma/client";
-import { authenticate, jwtUser } from "../auth/pre.js";
+import { authenticateAndBilling } from "../auth/protected-pre.js";
+import { jwtUser } from "../auth/pre.js";
 import { loadUserAccess } from "../lib/permissions.js";
 import { prisma } from "../db.js";
 import { coerceBusinessBasicsFromCustomJson, type BusinessBasicsV2 } from "../lib/business-basics.js";
@@ -236,7 +237,7 @@ function slotMeaningful(slot: DaySlot | undefined): boolean {
 }
 
 export async function registerAttendanceRoutes(app: FastifyInstance): Promise<void> {
-  app.addHook("preHandler", authenticate);
+  app.addHook("preHandler", authenticateAndBilling);
 
   app.get<{ Querystring: { employeeId?: string; yearMonth?: string } }>("/shift-applications", async (req, reply) => {
     const { tenantId, sub: userId } = jwtUser(req);

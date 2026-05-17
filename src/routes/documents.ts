@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { authenticate, jwtUser } from "../auth/pre.js";
+import { authenticateAndBilling } from "../auth/protected-pre.js";
+import { jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
 import {
   buildComplaintLedgerPrintHtml,
@@ -129,7 +130,7 @@ async function sendHtmlOrPdf(
 }
 
 export async function registerDocumentsRoutes(app: FastifyInstance): Promise<void> {
-  app.addHook("preHandler", authenticate);
+  app.addHook("preHandler", authenticateAndBilling);
 
   app.post("/documents/employee-roster-print", async (req, reply) => {
     const { tenantId } = jwtUser(req);

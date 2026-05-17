@@ -1,7 +1,41 @@
+import { BILLING_REQUIRED_CODE } from "./lib/billing";
+
 const API = "/api/v1";
 
 const TOKEN_KEY = "daiko_access";
 const REFRESH_KEY = "daiko_refresh";
+
+/** React Router basename と一致 */
+const APP_BILLING_PATH = "/app/billing";
+
+function isBillingExemptUrl(url: string): boolean {
+  return url.includes("/auth/") || url.includes("/billing/");
+}
+
+function isOnBillingPage(): boolean {
+  return window.location.pathname.includes("/billing");
+}
+
+function redirectToBilling(): void {
+  if (isOnBillingPage()) return;
+  window.location.assign(APP_BILLING_PATH);
+}
+
+function isBillingRequired(status: number, body: unknown): boolean {
+  if (status === 402) return true;
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    "code" in body &&
+    (body as { code: unknown }).code === BILLING_REQUIRED_CODE
+  );
+}
+
+function handleBillingRequired(url: string, status: number, body: unknown): void {
+  if (!isBillingRequired(status, body)) return;
+  if (isBillingExemptUrl(url) || isOnBillingPage()) return;
+  redirectToBilling();
+}
 
 export function getAccessToken(): string | null {
   return sessionStorage.getItem(TOKEN_KEY);
@@ -74,6 +108,7 @@ export async function apiFetch<T>(
   }
 
   if (!res.ok) {
+    handleBillingRequired(url, res.status, body);
     const err =
       typeof body === "object" && body !== null && "error" in body
         ? String((body as { error: unknown }).error)
@@ -113,13 +148,16 @@ export async function apiFetchBlob(
 
   if (!res.ok) {
     const text = await res.text();
+    let body: unknown = null;
     let err = res.statusText;
     try {
-      const o = JSON.parse(text) as { error?: string };
+      body = JSON.parse(text) as unknown;
+      const o = body as { error?: string };
       if (o?.error) err = String(o.error);
     } catch {
       if (text && text.length < 400) err = text;
     }
+    handleBillingRequired(url, res.status, body);
     return { ok: false, status: res.status, error: err };
   }
 

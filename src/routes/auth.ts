@@ -5,16 +5,11 @@ import { userEffectivePermissionList } from "../lib/permissions.js";
 import { coerceStaffMenuVisibilityFromCustomJson } from "../lib/staff-menu-visibility-settings.js";
 import { prisma } from "../db.js";
 import { hashToken, randomRefreshToken } from "../lib/tokens.js";
+import { demoTenantEnv, isDemoTenantSession } from "../lib/demo-tenant.js";
 import { isPlatformAdminEmail } from "../lib/platform-admin.js";
+import { evaluateTenantBillingAccess, trialEndsAtFrom } from "../lib/tenant-billing.js";
 
 const REFRESH_DAYS = 30;
-
-function demoEnv(): { slug: string; email: string } | null {
-  const slug = (process.env.DAIKO_DEMO_TENANT_SLUG ?? "").trim().toLowerCase();
-  const email = (process.env.DAIKO_DEMO_USER_EMAIL ?? "").trim().toLowerCase();
-  if (!slug || !email) return null;
-  return { slug, email };
-}
 
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post<{
@@ -67,9 +62,18 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const displayName = `${familyName} ${givenName}`.trim();
+    const now = new Date();
+    const trialEnd = trialEndsAtFrom(now);
     const tenant = await prisma.$transaction(async (tx) => {
       const t = await tx.tenant.create({
-        data: { name: tenantName, slug, timezone: "Asia/Tokyo" },
+        data: {
+          name: tenantName,
+          slug,
+          timezone: "Asia/Tokyo",
+          trialEndsAt: trialEnd,
+          paidThroughAt: trialEnd,
+          billingStatus: "TRIALING",
+        },
       });
       await tx.tenantSettings.create({
         data: {
@@ -81,7 +85,14 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         },
       });
       await tx.subscription.create({
-        data: { tenantId: t.id, planTier: "FREE", validFrom: new Date() },
+        data: {
+          tenantId: t.id,
+          planTier: "STANDARD",
+          source: "TRIAL",
+          status: "ACTIVE",
+          validFrom: now,
+          validTo: trialEnd,
+        },
       });
       const ownerRole = await tx.role.create({
         data: { tenantId: t.id, name: "owner", permissions: ["*"] },
@@ -125,11 +136,11 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/auth/demo-config", async () => {
-    return { available: demoEnv() != null };
+    return { available: demoTenantEnv() != null };
   });
 
   app.post("/auth/demo", async (_req, reply) => {
-    const cfg = demoEnv();
+    const cfg = demoTenantEnv();
     if (!cfg) return reply.code(404).send({ error: "demo not configured" });
     const tenant = await prisma.tenant.findUnique({ where: { slug: cfg.slug } });
     if (!tenant) return reply.code(503).send({ error: "demo tenant not found" });
@@ -165,6 +176,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
             id: true,
             name: true,
             slug: true,
+            billingStatus: true,
+            trialEndsAt: true,
+            paidThroughAt: true,
             settings: { select: { legalTradeName: true, customJson: true, businessDayRollHour: true } },
           },
         },
@@ -180,8 +194,15 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       : (user.displayName?.trim() || user.email);
     const sm = coerceStaffMenuVisibilityFromCustomJson(user.tenant.settings?.customJson);
     const rollHour = user.tenant.settings?.businessDayRollHour ?? 4;
-    const demo = demoEnv();
-    const demoSession = Boolean(demo && user.email.toLowerCase() === demo.email && user.tenant.slug === demo.slug);
+    const demoSession = isDemoTenantSession(user.tenant.slug, user.email);
+    const billingAccess = evaluateTenantBillingAccess(
+      {
+        billingStatus: user.tenant.billingStatus,
+        paidThroughAt: user.tenant.paidThroughAt,
+        trialEndsAt: user.tenant.trialEndsAt,
+      },
+      { email: user.email, tenantSlug: user.tenant.slug },
+    );
     return {
       user: {
         id: user.id,
@@ -200,6 +221,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         dayChangeHour: rollHour + 24,
         demoSession,
         platformAdmin: isPlatformAdminEmail(user.email),
+        billingStatus: user.tenant.billingStatus,
+        trialEndsAt: user.tenant.trialEndsAt?.toISOString() ?? null,
+        paidThroughAt: user.tenant.paidThroughAt?.toISOString() ?? null,
+        canAccessApp: billingAccess.allowed,
       },
     };
   });

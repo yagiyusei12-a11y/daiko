@@ -22,6 +22,8 @@ import { registerPublicBookingRoutes } from "./routes/public-booking.js";
 import { registerEmployeeInviteRoutes } from "./routes/employee-invite.js";
 import { registerPublicInquiryRoutes } from "./routes/public-inquiry.js";
 import { registerPlatformRoutes } from "./routes/platform.js";
+import { registerBillingRoutes } from "./routes/billing.js";
+import { registerBillingWebhook } from "./routes/billing-webhook.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -98,6 +100,8 @@ await app.register(fastifyStatic, {
 
 const v1 = "/api/v1";
 await app.register(registerAuthRoutes, { prefix: v1 });
+await app.register(registerBillingWebhook, { prefix: `${v1}/billing` });
+await app.register(registerBillingRoutes, { prefix: `${v1}/billing` });
 await app.register(registerSettingsRoutes, { prefix: `${v1}/settings` });
 await app.register(registerAttendanceRoutes, { prefix: `${v1}/attendance` });
 await app.register(registerDailyReportRoutes, { prefix: v1 });

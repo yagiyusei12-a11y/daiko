@@ -32,6 +32,11 @@ export type MeUser = {
   demoSession?: boolean;
   /** DAIKO_PLATFORM_ADMIN_EMAILS に含まれるメールのとき true */
   platformAdmin?: boolean;
+  billingStatus?: string;
+  trialEndsAt?: string | null;
+  paidThroughAt?: string | null;
+  /** false のとき主要機能は利用不可（課金画面へ誘導） */
+  canAccessApp?: boolean;
 };
 
 /**

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Prisma } from "@prisma/client";
-import { authenticate, jwtUser } from "../auth/pre.js";
+import { authenticateAndBilling } from "../auth/protected-pre.js";
+import { jwtUser } from "../auth/pre.js";
 import { prisma } from "../db.js";
 import { isChromiumConfiguredForPdf, renderHtmlToPdf } from "../lib/html-to-pdf.js";
 import { buildInstructionRecordsPdfHtml } from "../lib/instruction-record-print-html.js";
@@ -40,7 +41,7 @@ async function validateRecipientAndInstructorIds(
 }
 
 export async function registerInstructionRecordsRoutes(app: FastifyInstance): Promise<void> {
-  app.addHook("preHandler", authenticate);
+  app.addHook("preHandler", authenticateAndBilling);
 
   app.post<{ Body: Record<string, unknown> }>("/export-pdf", async (req, reply) => {
     const { tenantId } = jwtUser(req);

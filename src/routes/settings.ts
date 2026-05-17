@@ -2,7 +2,8 @@ import type { FastifyInstance } from "fastify";
 import type { Prisma } from "@prisma/client";
 import { CompensationType } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { authenticate, jwtUser } from "../auth/pre.js";
+import { authenticateAndBilling } from "../auth/protected-pre.js";
+import { jwtUser } from "../auth/pre.js";
 import { JP_DRIVER_LICENSE_CLASSES_EMPLOYEE, JP_PLATE_REGION_NAMES } from "../lib/jp-constants.js";
 import { JP_LICENSE_CONDITION_OPTIONS, licenseConditionOptionsForKind } from "../lib/jp-license-conditions.js";
 import {
@@ -165,7 +166,7 @@ type ZipCloudResponse = {
 };
 
 export async function registerSettingsRoutes(app: FastifyInstance): Promise<void> {
-  app.addHook("preHandler", authenticate);
+  app.addHook("preHandler", authenticateAndBilling);
 
   app.get<{ Querystring: { zip?: string } }>("/zip-lookup", async (req, reply) => {
     const zip = String(req.query?.zip ?? "").replace(/\D/g, "");
