@@ -764,6 +764,98 @@ function NinteiCertificatePrintBlock(): JSX.Element {
   );
 }
 
+function pricingRegimeLabel(regime: string): string {
+  if (regime === "distance") return "距離制を主とする";
+  if (regime === "time") return "時間制を主とする";
+  if (regime === "both") return "距離・時間の併用";
+  return "未設定";
+}
+
+function FareTablePrintBlock(): JSX.Element {
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [printErr, setPrintErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [regime, setRegime] = useState("");
+  const [businessName, setBusinessName] = useState("");
+
+  useEffect(() => {
+    void (async () => {
+      setLoadErr(null);
+      const [pr, co] = await Promise.all([
+        apiFetch<{ regime: string; pricingPrefs?: { regime?: string } }>("/settings/pricing"),
+        apiFetch<{ tenantName: string; legalTradeName: string | null }>("/settings/company"),
+      ]);
+      if (!pr.ok) {
+        setLoadErr(pr.error);
+        return;
+      }
+      if (!co.ok) {
+        setLoadErr(co.error);
+        return;
+      }
+      const r = pr.data.regime || pr.data.pricingPrefs?.regime || "";
+      setRegime(r);
+      setBusinessName((co.data.legalTradeName?.trim() || co.data.tenantName || "").trim());
+    })();
+  }, []);
+
+  async function savePdf(): Promise<void> {
+    setPrintErr(null);
+    setBusy(true);
+    const r = await apiFetchBlob("/documents/daiko-ryokinhyo-print", {
+      method: "POST",
+      json: { outputFormat: "pdf" },
+    });
+    setBusy(false);
+    if (!r.ok) {
+      setPrintErr(r.error);
+      return;
+    }
+    downloadBrowserBlob(r.blob, r.filename ?? "daiko-ryokinhyo.pdf");
+  }
+
+  return (
+    <div className="settings-section-panel" style={{ marginTop: "0.75rem" }}>
+      <PanelHint>
+        設定の「料金」に登録した内容を、お客様向けの A4 縦・料金表として PDF 保存できます。料金の変更は設定画面で行ってください。
+      </PanelHint>
+      {loadErr ? (
+        <p className="settings-hint" style={{ color: "var(--danger, #b00020)", marginTop: "0.5rem" }}>
+          {loadErr}
+        </p>
+      ) : (
+        <div className="settings-form" style={{ marginTop: "0.75rem", maxWidth: "36rem" }}>
+          {businessName ? (
+            <p className="settings-hint" style={{ margin: 0 }}>
+              事業者名: {businessName}
+            </p>
+          ) : null}
+          <p className="settings-hint" style={{ margin: businessName ? "0.35rem 0 0" : 0 }}>
+            料金の算定方法: {pricingRegimeLabel(regime)}
+            {!regime ? (
+              <>
+                {" "}
+                — <Link to="/settings">設定 → 料金</Link> で料金体制を選択してください。
+              </>
+            ) : null}
+          </p>
+        </div>
+      )}
+      <p style={{ marginTop: "0.85rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
+        <button type="button" className="settings-primary" disabled={busy || Boolean(loadErr)} onClick={() => void savePdf()}>
+          {busy ? "生成中…" : "PDFで保存（A4縦）"}
+        </button>
+        <Link to="/settings">設定（料金）へ</Link>
+      </p>
+      {printErr ? (
+        <p className="settings-hint" style={{ color: "var(--danger, #b00020)", marginTop: "0.5rem" }}>
+          {printErr}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function YakkanPrintBlock(): JSX.Element {
   const [bodyText, setBodyText] = useState(DAIKO_STANDARD_YAKKAN_DEFAULT_BODY);
   const [printErr, setPrintErr] = useState<string | null>(null);
@@ -1328,6 +1420,11 @@ export default function DocumentsPage(): JSX.Element {
       id: "nintei",
       label: "認定証",
       children: <NinteiCertificatePrintBlock />,
+    },
+    {
+      id: "ryokinhyo",
+      label: "料金表",
+      children: <FareTablePrintBlock />,
     },
     {
       id: "yakkan",

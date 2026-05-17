@@ -33,6 +33,7 @@ export const STAFF_SUB_TAB_LABELS: Record<string, { id: string; label: string }[
     { id: "meibo", label: "従業員名簿" },
     { id: "seiyaku", label: "誓約書" },
     { id: "nintei", label: "認定証" },
+    { id: "ryokinhyo", label: "料金表" },
     { id: "yakkan", label: "約款" },
     { id: "shido", label: "指導記録簿" },
     { id: "kujo", label: "苦情処理簿" },

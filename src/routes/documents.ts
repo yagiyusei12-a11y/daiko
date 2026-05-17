@@ -16,7 +16,9 @@ import { loadJommuKirokuboModelForDailyReport } from "../lib/jommu-daily-report-
 import { buildDaikoHenkoKisaiPrintHtml, type HenkoKisaiInput, type HenkoKisaiKind } from "../lib/daiko-henko-kisai-print-html.js";
 import { buildDaikoLaw14SeiyakuPrintHtml } from "../lib/daiko-law14-seiyaku-print-html.js";
 import { buildDaikoNinteiCertificatePrintHtml } from "../lib/daiko-nintei-certificate-print-html.js";
+import { buildDaikoRyokinhyoPrintHtml } from "../lib/daiko-ryokinhyo-print-html.js";
 import { buildDaikoYakkanPrintHtml } from "../lib/daiko-yakkan-print-html.js";
+import { coercePricingPrefs } from "../lib/pricing-prefs.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_JOMMU_RANGE_DAYS = 400;
@@ -394,6 +396,35 @@ export async function registerDocumentsRoutes(app: FastifyInstance): Promise<voi
       location,
     });
     return sendHtmlOrPdf(reply, req, b, html, "daiko-nintei-certificate");
+  });
+
+  app.post("/documents/daiko-ryokinhyo-print", async (req, reply) => {
+    const { tenantId } = jwtUser(req);
+    const b = (req.body ?? {}) as Record<string, unknown>;
+
+    const tenant = await prisma.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      include: { settings: true },
+    });
+    const s = tenant.settings;
+    const cj =
+      s?.customJson && typeof s.customJson === "object" ? (s.customJson as Record<string, unknown>) : {};
+    const pricingPrefs = coercePricingPrefs(cj.pricingPrefs);
+
+    const trade = s?.legalTradeName?.trim() || tenant.name.trim();
+    const postal = (s?.legalPostalCode ?? "").replace(/\D/g, "");
+    const postalFmt = postal.length === 7 ? `〒${postal.slice(0, 3)}-${postal.slice(3)}` : (s?.legalPostalCode ?? "").trim();
+    const addressLine = [postalFmt, s?.legalPrefecture?.trim(), s?.legalStreetAddress?.trim()].filter(Boolean).join(" ");
+
+    const html = buildDaikoRyokinhyoPrintHtml({
+      company: {
+        businessName: trade,
+        addressLine,
+        phone: s?.legalPhone?.trim() || null,
+      },
+      pricingPrefs,
+    });
+    return sendHtmlOrPdf(reply, req, b, html, "daiko-ryokinhyo");
   });
 
   app.post("/documents/daiko-yakkan-print", async (req, reply) => {
