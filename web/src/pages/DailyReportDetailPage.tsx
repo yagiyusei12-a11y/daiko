@@ -104,15 +104,43 @@ type ScheduleReservationRow = {
   };
 };
 
-type SchedulePayloadMini = { date: string; reservations: ScheduleReservationRow[] };
+type SchedulePayloadMini = {
+  date: string;
+  reservations: ScheduleReservationRow[];
+  drivers?: { employeeId: string; name: string }[];
+};
 
-function formatScheduleRowLabel(row: ScheduleReservationRow): string {
+function formatScheduleRowLabel(
+  row: ScheduleReservationRow,
+  driverNameById?: Map<string, string>,
+): string {
   const t0 = new Date(row.startsAt);
   const t1 = new Date(row.endsAt);
   const hm = (d: Date) =>
     Number.isNaN(d.getTime()) ? "—" : d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
   const route = [row.detail.pickup, row.detail.dropoff].filter(Boolean).join("→");
-  return `${hm(t0)}–${hm(t1)} ${row.title}${route ? `（${route}）` : ""}`;
+  const driver =
+    row.driverEmployeeId && driverNameById?.get(row.driverEmployeeId)
+      ? driverNameById.get(row.driverEmployeeId)
+      : row.driverEmployeeId
+        ? null
+        : "未予定";
+  const who = driver ? `［${driver}］` : "";
+  return `${hm(t0)}–${hm(t1)} ${who}${row.title}${route ? `（${route}）` : ""}`;
+}
+
+/** 事業日の全予定のうち、現在時刻の1時間前より後に終わるもの */
+function scheduleReservationsForTripPick(
+  reservations: ScheduleReservationRow[],
+  nowMs = Date.now(),
+): ScheduleReservationRow[] {
+  const cutoff = nowMs - 60 * 60 * 1000;
+  return reservations
+    .filter((r) => {
+      const end = new Date(r.endsAt).getTime();
+      return !Number.isNaN(end) && end > cutoff;
+    })
+    .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
 }
 
 function viaStopsFromTrip(trip: TripLegFull): string[] {
@@ -931,10 +959,18 @@ export default function DailyReportDetailPage(): JSX.Element {
     return report.trips.filter((t) => t.id !== draftTripId);
   }, [report, draftTripId]);
 
-  const mainDriverReservations = useMemo(() => {
-    if (!schedulePayload || !report) return [];
-    return schedulePayload.reservations.filter((x) => x.driverEmployeeId === report.mainEmployeeId);
-  }, [schedulePayload, report]);
+  const schedulePickReservations = useMemo(() => {
+    if (!schedulePayload) return [];
+    return scheduleReservationsForTripPick(schedulePayload.reservations);
+  }, [schedulePayload]);
+
+  const scheduleDriverNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const d of schedulePayload?.drivers ?? []) {
+      m.set(d.employeeId, d.name);
+    }
+    return m;
+  }, [schedulePayload?.drivers]);
 
   const escortMasterOdoHint = useMemo(() => {
     if (!escortVehicleId) return null;
@@ -1243,15 +1279,19 @@ export default function DailyReportDetailPage(): JSX.Element {
             <h2 id="dr-sched-pick-title" className="pricing-modal-title">
               スケジュールから入力
             </h2>
-            <p className="settings-hint">乗務（客車担当）の予定から1件選ぶと、依頼者名・経路・車番・開始・終了時刻などが入力されます。</p>
+            <p className="settings-hint">
+              この日の運行予定（現在の1時間前以降に終わるもの）から1件選ぶと、依頼者名・経路・車番・開始・終了時刻などが入力されます。
+            </p>
             <Err msg={schedulePickErr} />
             <div className="attend-shift-dialog-scroll">
               {schedulePickLoading ? <p className="settings-hint">読み込み中…</p> : null}
-              {!schedulePickLoading && mainDriverReservations.length === 0 ? (
-                <p className="settings-hint">この日付で乗務スタッフに紐づく配車予定がありません（スケジュールで予定を登録してください）。</p>
+              {!schedulePickLoading && schedulePickReservations.length === 0 ? (
+                <p className="settings-hint">
+                  この日付で、現在の1時間前以降に終わる運行予定がありません（スケジュールで予定を登録してください）。
+                </p>
               ) : null}
               {!schedulePickLoading
-                ? mainDriverReservations.map((row) => (
+                ? schedulePickReservations.map((row) => (
                     <button
                       key={row.id}
                       type="button"
@@ -1259,7 +1299,7 @@ export default function DailyReportDetailPage(): JSX.Element {
                       style={{ textAlign: "left", width: "100%", marginBottom: "0.35rem" }}
                       onClick={() => applyReservationToPrefill(row)}
                     >
-                      {formatScheduleRowLabel(row)}
+                      {formatScheduleRowLabel(row, scheduleDriverNameById)}
                     </button>
                   ))
                 : null}
