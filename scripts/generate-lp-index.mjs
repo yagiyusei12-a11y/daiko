@@ -103,7 +103,7 @@ const html = `<!DOCTYPE html>
             </${d}>
             <ul class="lp-hero-tags">
               <li>専用アプリ不要</li>
-              <li>28時間表記対応</li>
+              <li>日またぎ対応</li>
               <li>マルチ店舗対応</li>
             </ul>
           </${d}>
@@ -147,9 +147,9 @@ const html = `<!DOCTYPE html>
         <${d} class="lp-wrap lp-pains-hero-inner">
           <h2 class="lp-pains-hero-title">こんなお悩みありませんか？</h2>
           <ul class="lp-pains-hero-list">
-            <li>電話予約と現場入力が分断され、繁忙時にオペレーションが回らない</li>
-            <li>深夜帯の時刻や事業日のズレで、日報・給与・売上が合わなくなる</li>
-            <li>書類・届出の作成に時間がかかり、接客や配車の本業に集中できない</li>
+            <li>日報を手書きで行っているから、よく間違いがある。</li>
+            <li>随伴車の増減、代行保険の更新の度に申請書類の書き方等を調べて時間がかかっている。</li>
+            <li>シフトを組んだり、給料計算に時間がかかっている。</li>
           </ul>
           <p class="lp-pains-hero-resolve"><span class="lp-pains-hero-resolve-label">Daikoなら、</span><strong>これらをすべて解決</strong>できます</p>
         </${d}>
@@ -168,7 +168,7 @@ const html = `<!DOCTYPE html>
             <${d} class="lp-strip-icon lp-strip-icon--warm" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
             </${d}>
-            <h3>28時間表記</h3>
+            <h3>日またぎ対応</h3>
             <p>事業日ロール対応</p>
           </article>
           <article class="lp-strip-item">
@@ -225,12 +225,12 @@ const html = `<!DOCTYPE html>
           <${d} class="lp-benefits-grid">
             <article class="lp-benefit-card">
               <span class="lp-benefit-num">01</span>
-              <h3>LINE・Web予約で<br />売上の取りこぼしを防ぐ</h3>
-              <p>ゲスト用専用URLやLINEから依頼。オペレーターの電話対応を減らし、繁忙時も予約を逃しません。</p>
+              <h3>Web予約で<br />売上の取りこぼしを防ぐ</h3>
+              <p>ゲスト用専用URLから依頼。オペレーターの電話対応を減らし、繁忙時も予約を逃しません。</p>
             </article>
             <article class="lp-benefit-card">
               <span class="lp-benefit-num">02</span>
-              <h3>28時間表記・<br />事業日ロール標準対応</h3>
+              <h3>日またぎ・<br />事業日ロール標準対応</h3>
               <p>「26時」表記や午前5時まで前日扱いなど、深夜業の時間管理をそのまま使えます。</p>
             </article>
             <article class="lp-benefit-card">
@@ -267,7 +267,7 @@ const html = `<!DOCTYPE html>
             <article class="lp-effect">
               <${d} class="lp-effect-icon" aria-hidden="true">📋</${d}>
               <h3>集計ミスの防止</h3>
-              <p>事業日と28時間表記で、日報・給与のズレを抑えます。</p>
+              <p>事業日と日またぎ機能で、日報・給与のズレを抑えます。</p>
             </article>
             <article class="lp-effect">
               <${d} class="lp-effect-icon" aria-hidden="true">🏪</${d}>
