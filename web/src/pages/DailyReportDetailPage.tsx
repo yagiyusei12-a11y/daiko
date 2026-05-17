@@ -380,7 +380,6 @@ function TripWizard({
     setTripEndKm(tripMeterKmFromM(trip.tripMeterEndM));
     setDepartedLocal(toDatetimeLocalValue(new Date(trip.departedAt)));
     setArrivedLocal(toDatetimeLocalValue(new Date(trip.arrivedAt)));
-    setTariffVersionId(trip.tariffVersionId ?? "");
     setPickup(readSlot(trip.legSurchargesJson, "pickup"));
     setLeftHand(readSlot(trip.legSurchargesJson, "leftHand"));
     setForeignCar(readSlot(trip.legSurchargesJson, "foreignCar"));
@@ -392,6 +391,10 @@ function TripWizard({
     setApplyLateNightFlatYen(trip.applyLateNightFlatYen);
     setApplyEarlyRushFlatYen(trip.applyEarlyRushFlatYen);
   }, [trip, paymentMethods]);
+
+  useEffect(() => {
+    setTariffVersionId(trip.tariffVersionId ?? "");
+  }, [trip.id, trip.tariffVersionId]);
 
   useEffect(() => {
     if (!schedulePrefill) return;
@@ -439,11 +442,6 @@ function TripWizard({
     return s;
   }, [features, pickup, leftHand, foreignCar, cancel]);
   const tripTotalYen = useMemo(() => fareYen + parkingAdvanceYen + ancillaryYen, [fareYen, parkingAdvanceYen, ancillaryYen]);
-
-  useEffect(() => {
-    if (tariffVersionId || tariffVersions.length !== 1) return;
-    setTariffVersionId(tariffVersions[0]!.id);
-  }, [tariffVersions, tariffVersionId]);
 
   const hasPrefsLegRows =
     features.includes("pickup") ||
