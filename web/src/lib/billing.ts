@@ -9,7 +9,7 @@ export type TenantBillingStatus =
   | "EXPIRED"
   | "LICENSE_ONLY";
 
-/** テスト用 Price ID（`web/.env` 未設定時のフォールバック。本番は VITE_* で上書き推奨） */
+/** 本番（ライブ）Price ID（`web/.env` 未設定時のフォールバック。`sk_live_*` とセットで使用） */
 const DEFAULT_STRIPE_PRICE_MONTHLY = "price_1TY5nV1DqBB8GAlPKCTbhQVw";
 const DEFAULT_STRIPE_PRICE_YEARLY = "price_1TY5nV1DqBB8GAlPwmVUqVTU";
 
