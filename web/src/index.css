@@ -1668,6 +1668,54 @@ button.settings-danger:disabled {
   max-height: min(92vh, 52rem);
 }
 
+.card-header-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: -0.15rem 0 0.65rem;
+}
+
+.trip-legs-search-panel .trip-legs-search-form {
+  max-width: 28rem;
+}
+
+.trip-legs-filter-group {
+  margin-top: 0.65rem;
+}
+
+.trip-legs-check-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.85rem;
+}
+
+.trip-legs-check {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.trip-legs-detail-dl {
+  display: grid;
+  grid-template-columns: 8.5rem 1fr;
+  gap: 0.35rem 0.75rem;
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.trip-legs-detail-dl dt {
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.trip-legs-detail-dl dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.trip-legs-list-table {
+  min-width: 44rem;
+}
+
 .trip-history-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;

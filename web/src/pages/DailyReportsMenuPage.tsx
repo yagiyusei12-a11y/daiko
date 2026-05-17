@@ -98,6 +98,11 @@ export default function DailyReportsMenuPage(): JSX.Element {
 
   return (
     <Card title="日報">
+      <div className="card-header-actions">
+        <Link to="/daily-reports/trips" className="settings-secondary" style={{ textDecoration: "none" }}>
+          運行一覧
+        </Link>
+      </div>
       <Err msg={err} />
       <div className="settings-section-panel" style={{ marginBottom: "1rem" }}>
         <div className="settings-form" style={{ maxWidth: "28rem", marginBottom: 0 }}>
