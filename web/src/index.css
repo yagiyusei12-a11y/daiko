@@ -2257,7 +2257,7 @@ button.settings-danger:disabled {
 }
 
 .trip-fare-panel .trip-fare-total {
-  margin: 0.65rem 0 0;
+  margin: 0.5rem 0 0;
   padding: 0.55rem 0.65rem;
   border-radius: var(--radius-sm);
   background: var(--color-surface, #fff);
@@ -2266,8 +2266,49 @@ button.settings-danger:disabled {
   font-size: 0.95rem;
 }
 
+.trip-fare-panel__row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem 1rem;
+  align-items: start;
+  width: 100%;
+}
+
+.trip-fare-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.trip-fare-panel__field label {
+  margin: 0;
+}
+
+.trip-fare-panel__payment {
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.trip-fare-receipt-check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.15rem 0 0;
+}
+
 .trip-fare-panel details {
   margin-top: 0.35rem;
+}
+
+@media (max-width: 520px) {
+  .trip-fare-panel__row-2 {
+    grid-template-columns: 1fr;
+  }
 }
 
 .form-actions {

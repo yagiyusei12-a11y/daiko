@@ -433,6 +433,25 @@ function TripWizard({
     }
     return null;
   }, [selectedSpecialPlan, pricingForTrips, distanceMAuto, travelMinutesAuto]);
+
+  useEffect(() => {
+    if (suggestedFareYen == null) return;
+    setFareYen(suggestedFareYen);
+  }, [suggestedFareYen]);
+
+  const suggestedFareHint =
+    suggestedFareYen != null
+      ? `運賃の目安: ¥${suggestedFareYen.toLocaleString("ja-JP")}${
+          selectedSpecialPlan?.specialFareId
+            ? `（特別料金: ${selectedSpecialPlan.label}）`
+            : pricingForTrips?.regime === "both"
+              ? "（メイン・距離＋時間）"
+              : pricingForTrips?.regime === "distance"
+                ? "（メイン・距離制）"
+                : "（メイン・時間制）"
+        }（距離・時刻・料金プランに応じて運賃欄へ自動反映）`
+      : null;
+
   const ancillaryYen = useMemo(() => {
     let s = 0;
     if (features.includes("pickup") && pickup.apply) s += Math.max(0, Math.floor(pickup.yen));
@@ -605,16 +624,27 @@ function TripWizard({
             走行距離・運賃・支払いなど、請求に関わる項目です。
           </p>
           <div className="settings-form trip-fare-panel__form">
-        <label>走行距離（km）</label>
-        <input type="text" readOnly value={formatKm(distanceKmAuto)} title="到着メーター − 開始メーター" />
-        <p className="settings-hint" style={{ marginTop: 0 }}>
-          到着メーター − 開始メーターから自動計算（保存時に記録されます）。
-        </p>
-        <label>走行時間（分）</label>
-        <input type="text" readOnly value={travelMinutesAuto != null ? String(travelMinutesAuto) : "—"} title="到着時刻 − 開始時刻" />
-        <p className="settings-hint" style={{ marginTop: 0 }}>
-          到着時刻 − 開始時刻から自動表示（参考値・DBには保存しません）。
-        </p>
+            <div className="trip-fare-panel__row-2">
+              <div className="trip-fare-panel__field">
+                <label>走行距離（km）</label>
+                <input type="text" readOnly value={formatKm(distanceKmAuto)} title="到着メーター − 開始メーター" />
+                <p className="settings-hint" style={{ marginTop: 0 }}>
+                  到着メーター − 開始メーターから自動計算（保存時に記録されます）。
+                </p>
+              </div>
+              <div className="trip-fare-panel__field">
+                <label>走行時間（分）</label>
+                <input
+                  type="text"
+                  readOnly
+                  value={travelMinutesAuto != null ? String(travelMinutesAuto) : "—"}
+                  title="到着時刻 − 開始時刻"
+                />
+                <p className="settings-hint" style={{ marginTop: 0 }}>
+                  到着時刻 − 開始時刻から自動表示（参考値・DBには保存しません）。
+                </p>
+              </div>
+            </div>
         <label>特別料金（料金プラン）</label>
         <select value={tariffVersionId} onChange={(e) => setTariffVersionId(e.target.value)}>
           <option value="">未選択（メイン料金のみ）</option>
@@ -639,68 +669,32 @@ function TripWizard({
             「設定 → 料金」の取扱い項目で「特別料金」を有効にすると、ここに選択肢が出ます。
           </p>
         )}
-        <label>運賃（円）</label>
-        <input type="number" min={0} value={fareYen} onChange={(e) => setFareYen(Math.max(0, Math.floor(Number(e.target.value) || 0)))} />
-        {suggestedFareYen != null ? (
-          <div className="settings-toolbar" style={{ gap: "0.5rem", marginTop: "0.25rem" }}>
-            <span className="settings-hint" style={{ margin: 0 }}>
-              運賃の目安: ¥{suggestedFareYen.toLocaleString("ja-JP")}
-              {selectedSpecialPlan?.specialFareId
-                ? `（特別料金: ${selectedSpecialPlan.label}）`
-                : pricingForTrips?.regime === "both"
-                  ? "（メイン・距離＋時間）"
-                  : pricingForTrips?.regime === "distance"
-                    ? "（メイン・距離制）"
-                    : "（メイン・時間制）"}
-            </span>
-            <button
-              type="button"
-              className="settings-secondary"
-              disabled={busy || suggestedFareYen <= 0}
-              onClick={() => setFareYen(suggestedFareYen)}
-            >
-              目安を運賃に反映
-            </button>
-          </div>
-        ) : null}
-        <label>駐車場料金（立替金・円）</label>
-        <input
-          type="number"
-          min={0}
-          value={parkingAdvanceYen}
-          onChange={(e) => setParkingAdvanceYen(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
-        />
-        <p className="settings-hint">売上・運賃とは別に記録されます。</p>
-        <label>支払方法</label>
-        {paymentMethods.length > 0 ? (
-          <select value={tripPaymentMethod} onChange={(e) => setTripPaymentMethod(e.target.value)}>
-            {!paymentMethods.includes(tripPaymentMethod) && tripPaymentMethod ? (
-              <option value={tripPaymentMethod}>{tripPaymentMethod}（保存値・候補に無い場合）</option>
-            ) : null}
-            {paymentMethods.map((pm) => (
-              <option key={pm} value={pm}>
-                {pm}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <>
-            <p className="settings-hint" style={{ margin: 0 }}>
-              設定の「基本情報」で支払方法（候補）を登録すると、ここから選べるようになります。
-            </p>
-            <input type="text" readOnly value={tripPaymentMethod || "—"} title="候補未登録のため表示のみ" />
-          </>
-        )}
-        <label className="settings-inline-check" style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.25rem" }}>
-          <input type="checkbox" checked={tripReceiptIssued} onChange={(e) => setTripReceiptIssued(e.target.checked)} />
-          領収書を発行した
-        </label>
-        <p className="trip-fare-total">
-          合計（運賃＋駐車場料金＋付帯料金）: ¥{tripTotalYen.toLocaleString("ja-JP")}
-        </p>
+            <div className="trip-fare-panel__row-2">
+              <div className="trip-fare-panel__field">
+                <label>運賃（円）</label>
+                <input type="number" min={0} value={fareYen} onChange={(e) => setFareYen(Math.max(0, Math.floor(Number(e.target.value) || 0)))} />
+                {suggestedFareHint ? (
+                  <p className="settings-hint" style={{ marginTop: 0 }}>
+                    {suggestedFareHint}
+                  </p>
+                ) : null}
+              </div>
+              <div className="trip-fare-panel__field">
+                <label>駐車場料金（立替金・円）</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={parkingAdvanceYen}
+                  onChange={(e) => setParkingAdvanceYen(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                />
+                <p className="settings-hint" style={{ marginTop: 0 }}>
+                  売上・運賃とは別に記録されます。
+                </p>
+              </div>
+            </div>
 
         {hasPrefsLegRows ? (
-          <details className="settings-fieldset" style={{ marginTop: "0.5rem" }}>
+          <details className="settings-fieldset trip-fare-ancillary" style={{ marginTop: "0.35rem" }}>
             <summary style={{ cursor: "pointer", fontWeight: 600 }}>付帯料金</summary>
             <div className="settings-form" style={{ marginTop: "0.5rem" }}>
               {features.includes("pickup") ? (
@@ -740,6 +734,37 @@ function TripWizard({
             </div>
           </details>
         ) : null}
+
+        <p className="trip-fare-total">
+          合計（運賃＋駐車場料金＋付帯料金）: ¥{tripTotalYen.toLocaleString("ja-JP")}
+        </p>
+
+        <div className="trip-fare-panel__payment">
+          <label>支払方法</label>
+          {paymentMethods.length > 0 ? (
+            <select value={tripPaymentMethod} onChange={(e) => setTripPaymentMethod(e.target.value)}>
+              {!paymentMethods.includes(tripPaymentMethod) && tripPaymentMethod ? (
+                <option value={tripPaymentMethod}>{tripPaymentMethod}（保存値・候補に無い場合）</option>
+              ) : null}
+              {paymentMethods.map((pm) => (
+                <option key={pm} value={pm}>
+                  {pm}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <>
+              <p className="settings-hint" style={{ margin: 0 }}>
+                設定の「基本情報」で支払方法（候補）を登録すると、ここから選べるようになります。
+              </p>
+              <input type="text" readOnly value={tripPaymentMethod || "—"} title="候補未登録のため表示のみ" />
+            </>
+          )}
+          <label className="settings-inline-check trip-fare-receipt-check">
+            <input type="checkbox" checked={tripReceiptIssued} onChange={(e) => setTripReceiptIssued(e.target.checked)} />
+            領収書を発行した
+          </label>
+        </div>
 
           </div>
         </div>
