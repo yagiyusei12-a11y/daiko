@@ -8,7 +8,10 @@ import {
 } from "../lib/schedule-constants";
 import { useSavedToast } from "../saved-toast";
 import GcalScheduleView, { type CalendarViewMode } from "../components/GcalScheduleView";
-import QuarterHourDatetimeInput, { snapQuarterHourDatetimeLocal } from "../components/QuarterHourDatetimeInput";
+import QuarterHourDatetimeInput, {
+  defaultStartLocalForScheduleBusinessDay,
+  startLocalFromIsoForBusinessDay,
+} from "../components/QuarterHourDatetimeInput";
 import { computeScheduleAxis, minutesSinceTokyoDay, tokyoMidnightUtcMs } from "../lib/schedule-axis";
 import { buildDriverColorMap } from "../lib/schedule-driver-colors";
 import {
@@ -356,8 +359,9 @@ export default function TodaySchedulePage(): JSX.Element {
     setVehicleNumber("");
     setParking("");
     setTripEstimateMinutes(bookingDefaultEstimate);
-    const nowRounded = new Date(Math.round(Date.now() / (15 * 60 * 1000)) * (15 * 60 * 1000));
-    setStartLocal(snapQuarterHourDatetimeLocal(formatUtcAsTokyoDatetimeLocal(nowRounded)));
+    setStartLocal(
+      defaultStartLocalForScheduleBusinessDay(viewDate, me?.dayChangeHour ?? 28),
+    );
     setDialogOpen(true);
     setCreateDialogSlotMsg(null);
     setErr(null);
@@ -365,7 +369,9 @@ export default function TodaySchedulePage(): JSX.Element {
 
   function openDetail(rv: ReservationRow): void {
     setDetailRv(rv);
-    setMStartLocal(snapQuarterHourDatetimeLocal(formatUtcAsTokyoDatetimeLocal(new Date(rv.startsAt))));
+    setMStartLocal(
+      startLocalFromIsoForBusinessDay(viewDate, rv.startsAt, me?.dayChangeHour ?? 28),
+    );
     const dur = Math.round((new Date(rv.endsAt).getTime() - new Date(rv.startsAt).getTime()) / 60000);
     setMDuration(scheduleDurationOptions.includes(dur) ? dur : scheduleDurationOptions[0] ?? dur);
     const dKey = reservationColumnKey(rv, availabilityMode);
@@ -592,7 +598,11 @@ export default function TodaySchedulePage(): JSX.Element {
       const base = tokyoMidnightUtcMs(d.dayYmd);
       const startIso = new Date(base + fin.a * 60000).toISOString();
       void (async () => {
-        const startLocalStr = formatUtcAsTokyoDatetimeLocal(new Date(startIso));
+        const startLocalStr = startLocalFromIsoForBusinessDay(
+          d.dayYmd,
+          startIso,
+          me?.dayChangeHour ?? 28,
+        );
         const dur = fin.b - fin.a;
         const patchBody: Record<string, unknown> = {
           startLocal: startLocalStr,
@@ -692,12 +702,16 @@ export default function TodaySchedulePage(): JSX.Element {
                 <label htmlFor="sr-phone">電話番号</label>
                 <input id="sr-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
                 <label htmlFor="sr-start">日時（開始）</label>
-                <QuarterHourDatetimeInput id="sr-start" value={startLocal} onChange={setStartLocal} />
-                {startLocal ? (
-                  <span className="settings-hint" style={{ marginTop: "-0.5rem" }}>
-                    事業日換算: {formatFlexDatetime(new Date(startLocal).toISOString(), viewDate, me?.dayChangeHour ?? 28)}
-                  </span>
-                ) : null}
+                <QuarterHourDatetimeInput
+                  id="sr-start"
+                  businessDateYmd={viewDate}
+                  dayChangeHour={me?.dayChangeHour ?? 28}
+                  value={startLocal}
+                  onChange={setStartLocal}
+                />
+                <p className="settings-hint" style={{ marginTop: "-0.25rem" }}>
+                  日付は表示中の事業日です。時刻は設定の日マタギ（{me?.dayChangeHour ?? 28}時まで）の28時間表記です（例: 26時＝翌暦日2時）。
+                </p>
                 <label htmlFor="sr-pickup">迎え先</label>
                 <input id="sr-pickup" type="text" value={pickup} onChange={(e) => setPickup(e.target.value)} />
                 <label>経由地（行を追加できます）</label>
@@ -782,12 +796,16 @@ export default function TodaySchedulePage(): JSX.Element {
             <div className="attend-shift-dialog-scroll">
               <div className="settings-form">
                 <label htmlFor="sd-start">日時（開始）</label>
-                <QuarterHourDatetimeInput id="sd-start" value={mStartLocal} onChange={setMStartLocal} />
-                {mStartLocal ? (
-                  <span className="settings-hint" style={{ marginTop: "-0.5rem" }}>
-                    事業日換算: {formatFlexDatetime(new Date(mStartLocal).toISOString(), viewDate, me?.dayChangeHour ?? 28)}
-                  </span>
-                ) : null}
+                <QuarterHourDatetimeInput
+                  id="sd-start"
+                  businessDateYmd={viewDate}
+                  dayChangeHour={me?.dayChangeHour ?? 28}
+                  value={mStartLocal}
+                  onChange={setMStartLocal}
+                />
+                <p className="settings-hint" style={{ marginTop: "-0.25rem" }}>
+                  日付は表示中の事業日です。時刻は28時間表記（{me?.dayChangeHour ?? 28}時まで）です。
+                </p>
                 <label htmlFor="sd-dur">ブロック時間（分・15分刻み）</label>
                 <select id="sd-dur" value={mDuration} onChange={(e) => setMDuration(Number(e.target.value))}>
                   {durationSelectOptions.map((m) => (

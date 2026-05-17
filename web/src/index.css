@@ -1047,6 +1047,8 @@ td {
 .quarter-hour-datetime-date {
   flex: 1 1 10rem;
   min-width: 9rem;
+  color: var(--color-muted);
+  cursor: default;
 }
 
 .quarter-hour-datetime-hour,
