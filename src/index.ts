@@ -99,6 +99,16 @@ await app.register(fastifyStatic, {
   decorateReply: false,
 });
 
+const publicAssetsRoot = join(__dirname, "../public");
+await app.register(fastifyStatic, {
+  root: join(publicAssetsRoot, "images"),
+  prefix: "/images/",
+  decorateReply: false,
+});
+app.get("/favicon.ico", async (_, reply) => {
+  return reply.sendFile("favicon.ico", publicAssetsRoot);
+});
+
 const legalPages: Record<string, string> = {
   "/legal/tokushoho": "legal/tokushoho.html",
   "/legal/privacy": "legal/privacy.html",

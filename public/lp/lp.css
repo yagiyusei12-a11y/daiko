@@ -1740,3 +1740,238 @@ a {
     margin-left: auto;
   }
 }
+
+/* Marketing: use cases, onboarding, security, FAQ, CTA microcopy */
+.lp-usecases {
+  background: var(--lp-bg);
+}
+
+.lp-usecases-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .lp-usecases-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+  }
+}
+
+.lp-usecase-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1.5rem 1.35rem;
+  background: var(--lp-surface);
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-lg);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.lp-usecase-card:hover {
+  border-color: rgba(37, 99, 235, 0.35);
+  box-shadow: var(--lp-shadow);
+}
+
+.lp-usecase-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  font-size: 1.35rem;
+  background: var(--lp-blue-soft);
+  border-radius: 0.85rem;
+}
+
+.lp-usecase-card p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--lp-text);
+}
+
+.lp-security {
+  background: linear-gradient(180deg, #f8fafc 0%, var(--lp-bg) 100%);
+}
+
+.lp-security-grid {
+  display: grid;
+  gap: 1rem;
+  max-width: 52rem;
+  margin: 0 auto;
+}
+
+@media (min-width: 640px) {
+  .lp-security-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.lp-security-card {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 1.35rem 1.25rem;
+  background: #fff;
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-lg);
+}
+
+.lp-security-icon {
+  flex-shrink: 0;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.lp-security-card p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--lp-muted);
+}
+
+.lp-faq {
+  background: var(--lp-surface);
+}
+
+.lp-faq-list {
+  max-width: 44rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.lp-faq-item {
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-lg);
+  background: var(--lp-bg);
+  overflow: hidden;
+}
+
+.lp-faq-item summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 1.1rem 1.25rem;
+  padding-right: 2.75rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--lp-text);
+  position: relative;
+}
+
+.lp-faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.lp-faq-item summary::after {
+  content: "+";
+  position: absolute;
+  right: 1.15rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.25rem;
+  font-weight: 400;
+  color: var(--lp-blue);
+  line-height: 1;
+}
+
+.lp-faq-item[open] summary::after {
+  content: "−";
+}
+
+.lp-faq-item summary:hover {
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.lp-faq-answer {
+  padding: 0 1.25rem 1.15rem;
+  border-top: 1px solid var(--lp-border);
+}
+
+.lp-faq-answer p {
+  margin: 0.85rem 0 0;
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: var(--lp-muted);
+}
+
+.lp-cta-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.lp-cta-stack--left {
+  align-items: flex-start;
+}
+
+@media (min-width: 1024px) {
+  .lp-cta-stack {
+    align-items: flex-start;
+  }
+}
+
+.lp-cta-note {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--lp-muted);
+  text-align: center;
+}
+
+.lp-cta-stack--left .lp-cta-note,
+.lp-cta-group--center .lp-cta-note {
+  text-align: center;
+}
+
+@media (min-width: 1024px) {
+  .lp-cta-stack .lp-cta-note {
+    text-align: left;
+  }
+}
+
+.lp-cta-consult {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+@media (min-width: 1024px) {
+  .lp-cta-stack .lp-cta-consult {
+    text-align: left;
+  }
+}
+
+.lp-cta-consult a {
+  font-weight: 700;
+  color: var(--lp-blue);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.lp-cta-consult a:hover {
+  color: var(--lp-blue-dark);
+}
+
+.lp-cta-group {
+  margin-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.lp-cta-group--center {
+  text-align: center;
+}
+
+.lp-cta-final {
+  background: linear-gradient(180deg, var(--lp-blue-soft) 0%, #fff 100%);
+  border-top: 1px solid var(--lp-border);
+  border-bottom: 1px solid var(--lp-border);
+}

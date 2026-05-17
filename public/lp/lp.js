@@ -34,6 +34,18 @@
     });
   }
 
+  const faqList = document.getElementById("faq-list");
+  if (faqList) {
+    faqList.querySelectorAll(".lp-faq-item").forEach(function (item) {
+      item.addEventListener("toggle", function () {
+        if (!item.open) return;
+        faqList.querySelectorAll(".lp-faq-item").forEach(function (other) {
+          if (other !== item) other.open = false;
+        });
+      });
+    });
+  }
+
   document.querySelectorAll('a[href^="#"]').forEach(function (link) {
     link.addEventListener("click", function (e) {
       const id = link.getAttribute("href");
