@@ -10,6 +10,10 @@ import { useSavedToast } from "../saved-toast";
 import GcalScheduleView, { type CalendarViewMode } from "../components/GcalScheduleView";
 import { computeScheduleAxis, minutesSinceTokyoDay, tokyoMidnightUtcMs } from "../lib/schedule-axis";
 import { buildDriverColorMap } from "../lib/schedule-driver-colors";
+import {
+  isScheduleSlotUnavailableError,
+  SCHEDULE_SLOT_UNAVAILABLE_MSG,
+} from "../lib/schedule-reservation-errors";
 import { shiftYmd, weekDatesContaining } from "../lib/schedule-week";
 import { Card, Err } from "../ui";
 
@@ -128,7 +132,16 @@ function isUnassignedDriverId(id: string): boolean {
 }
 
 export default function TodaySchedulePage(): JSX.Element {
-  const { flashSaved } = useSavedToast();
+  const { flashSaved, flashMessage } = useSavedToast();
+
+  function notifyReservationSaveError(status: number, error: string): void {
+    if (isScheduleSlotUnavailableError(status, error)) {
+      setErr(null);
+      flashMessage(SCHEDULE_SLOT_UNAVAILABLE_MSG);
+      return;
+    }
+    setErr(error);
+  }
   const { me } = useAuth();
   const [viewDate, setViewDate] = useState(() => currentBusinessYmd(me?.dayChangeHour ?? 28));
   const [calendarViewMode, setCalendarViewMode] = useState<CalendarViewMode>("day");
@@ -357,7 +370,7 @@ export default function TodaySchedulePage(): JSX.Element {
     });
     setSubmitBusy(false);
     if (!r.ok) {
-      setErr(r.error);
+      notifyReservationSaveError(r.status, r.error);
       return;
     }
     flashSaved();
@@ -389,7 +402,7 @@ export default function TodaySchedulePage(): JSX.Element {
     });
     setDetailBusy(false);
     if (!r.ok) {
-      setErr(r.error);
+      notifyReservationSaveError(r.status, r.error);
       return;
     }
     flashSaved();
@@ -557,7 +570,7 @@ export default function TodaySchedulePage(): JSX.Element {
           json: patchBody,
         });
         if (!r.ok) {
-          setErr(r.error);
+          notifyReservationSaveError(r.status, r.error);
           void load();
           return;
         }

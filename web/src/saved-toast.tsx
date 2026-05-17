@@ -2,29 +2,33 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 
 type SavedToastCtx = {
   flashSaved: () => void;
+  /** 画面下部にメッセージを約1秒表示（保存トーストと同じ見た目） */
+  flashMessage: (message: string, durationMs?: number) => void;
 };
 
 const Ctx = createContext<SavedToastCtx | null>(null);
 
 export function SavedToastProvider({ children }: { children: ReactNode }): JSX.Element {
-  const [visible, setVisible] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const tref = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const flashSaved = useCallback(() => {
+  const flashMessage = useCallback((text: string, durationMs = 1000) => {
     if (tref.current) clearTimeout(tref.current);
-    setVisible(true);
+    setMessage(text);
     tref.current = setTimeout(() => {
-      setVisible(false);
+      setMessage(null);
       tref.current = null;
-    }, 1000);
+    }, durationMs);
   }, []);
 
+  const flashSaved = useCallback(() => flashMessage("保存しました"), [flashMessage]);
+
   return (
-    <Ctx.Provider value={{ flashSaved }}>
+    <Ctx.Provider value={{ flashSaved, flashMessage }}>
       {children}
-      {visible ? (
+      {message ? (
         <div className="saved-toast" role="status" aria-live="polite">
-          保存しました
+          {message}
         </div>
       ) : null}
     </Ctx.Provider>
@@ -34,7 +38,7 @@ export function SavedToastProvider({ children }: { children: ReactNode }): JSX.E
 export function useSavedToast(): SavedToastCtx {
   const v = useContext(Ctx);
   if (!v) {
-    return { flashSaved: () => {} };
+    return { flashSaved: () => {}, flashMessage: () => {} };
   }
   return v;
 }
