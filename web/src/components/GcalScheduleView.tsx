@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef } from "react";
 import { currentBusinessYmd } from "../auth";
 import GcalDayColumn from "./GcalDayColumn";
 import type { DriverColor } from "../lib/schedule-driver-colors";
-import { SCHEDULE_UNASSIGNED_DRIVER_ID } from "../lib/schedule-constants";
 import {
   GCAL_HOUR_HEIGHT_PX,
   axisGridHeightPx,
@@ -28,8 +27,6 @@ export type GcalReservation = {
   };
 };
 
-type DriverRow = { employeeId: string; name: string };
-
 export type CalendarViewMode = "day" | "week";
 
 type Props = {
@@ -39,7 +36,6 @@ type Props = {
   axis: ScheduleAxis;
   /** 日表示: その日の予定。週表示: 日付キーごとの予定 */
   reservationsByDate: Record<string, GcalReservation[]>;
-  drivers: DriverRow[];
   driverColorMap: Map<string, DriverColor>;
   dayChangeHour: number;
   getMinutes: (rv: GcalReservation, dayYmd: string) => { startMin: number; endMin: number };
@@ -112,7 +108,6 @@ export default function GcalScheduleView({
   viewDate,
   axis,
   reservationsByDate,
-  drivers,
   driverColorMap,
   dayChangeHour,
   getMinutes,
@@ -200,23 +195,6 @@ export default function GcalScheduleView({
             </button>
           </div>
 
-          {drivers.length > 0 ? (
-            <ul className="gcal-driver-legend" aria-label="担当者の色">
-              {drivers
-                .filter((d) => d.employeeId !== SCHEDULE_UNASSIGNED_DRIVER_ID)
-                .slice(0, 8)
-                .map((d) => {
-                  const c = driverColorMap.get(d.employeeId);
-                  if (!c) return null;
-                  return (
-                    <li key={d.employeeId}>
-                      <span className="gcal-driver-swatch" style={{ background: c.bg, borderColor: c.border }} />
-                      {d.name}
-                    </li>
-                  );
-                })}
-            </ul>
-          ) : null}
         </div>
 
         {viewMode === "day" ? (

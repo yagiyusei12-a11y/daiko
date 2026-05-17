@@ -620,19 +620,6 @@ export default function TodaySchedulePage(): JSX.Element {
     e.preventDefault();
   }
 
-  const activeDrivers = useMemo(() => {
-    const rows =
-      calendarViewMode === "day"
-        ? (data?.drivers ?? [])
-        : weekDates.flatMap((d) => weekByDate[d]?.drivers ?? []);
-    const seen = new Set<string>();
-    return rows.filter((d) => {
-      if (seen.has(d.employeeId)) return false;
-      seen.add(d.employeeId);
-      return true;
-    });
-  }, [calendarViewMode, data?.drivers, weekByDate, weekDates]);
-
   return (
     <div className="schedule-gcal-page">
     <Card title="運行スケジュール">
@@ -659,7 +646,6 @@ export default function TodaySchedulePage(): JSX.Element {
             viewDate={viewDate}
             axis={scheduleAxis}
             reservationsByDate={reservationsByDate}
-            drivers={activeDrivers}
             driverColorMap={driverColorMap}
             dayChangeHour={me?.dayChangeHour ?? 28}
             getMinutes={(rv, dayYmd) => {
