@@ -76,3 +76,33 @@ export function tokyoBusinessDayRangeUtc(ymd: string, rollHour: number): { start
   const rh = Math.max(0, Math.min(6, Math.floor(rollHour)));
   return { start: base.start, end: new Date(base.end.getTime() + rh * 60 * 60 * 1000) };
 }
+
+/** 東京の暦日 yyyy-MM-dd */
+export function ymdTokyo(d = new Date()): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(d);
+}
+
+/**
+ * 日マタギ（businessDayRollHour: 翌暦日 0:00〜rollHour 未満は前事業日）を考慮した現在の事業日。
+ * rollHour=4 → 28時間表記で 28:00（翌暦 4:00）まで前日の事業日。
+ */
+export function currentBusinessYmdTokyo(rollHour: number): string {
+  const rh = Math.max(0, Math.min(6, Math.floor(rollHour)));
+  const tokyoParts = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(new Date());
+  const get = (t: string) => tokyoParts.find((p) => p.type === t)?.value ?? "00";
+  const ymd = `${get("year")}-${get("month")}-${get("day")}`;
+  const hour = Number(get("hour"));
+  if (rh > 0 && hour < rh) {
+    const prev = new Date(`${ymd}T12:00:00+09:00`);
+    prev.setDate(prev.getDate() - 1);
+    return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-${String(prev.getDate()).padStart(2, "0")}`;
+  }
+  return ymd;
+}

@@ -2,11 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { authenticateAndBilling } from "../auth/protected-pre.js";
 import { jwtUser } from "../auth/pre.js";
 import { loadUserAccess } from "../lib/permissions.js";
+import { currentBusinessYmdTokyo } from "../lib/tokyo-datetime.js";
 import { prisma } from "../db.js";
-
-function ymdTokyo(d = new Date()): string {
-  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(d);
-}
 
 function shiftCalendarYm(ym: string, delta: number): string {
   const [ys, ms] = ym.split("-").map(Number);
@@ -25,7 +22,12 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
     const { tenantId, sub: userId } = jwtUser(req);
     const access = await loadUserAccess(userId, tenantId);
 
-    const today = ymdTokyo();
+    const settings = await prisma.tenantSettings.findUnique({
+      where: { tenantId },
+      select: { businessDayRollHour: true },
+    });
+    const rollHour = settings?.businessDayRollHour ?? 4;
+    const today = currentBusinessYmdTokyo(rollHour);
     const thisYm = today.slice(0, 7);
     const prevYm = shiftCalendarYm(thisYm, -1);
 
