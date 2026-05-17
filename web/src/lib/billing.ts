@@ -9,11 +9,26 @@ export type TenantBillingStatus =
   | "EXPIRED"
   | "LICENSE_ONLY";
 
+/** テスト用 Price ID（`web/.env` 未設定時のフォールバック。本番は VITE_* で上書き推奨） */
+const DEFAULT_STRIPE_PRICE_MONTHLY = "price_1TY5nV1DqBB8GAlPKCTbhQVw";
+const DEFAULT_STRIPE_PRICE_YEARLY = "price_1TY5nV1DqBB8GAlPwmVUqVTU";
+
+function stripePriceFromEnv(value: string | undefined, fallback: string): string {
+  const v = value?.trim();
+  return v || fallback;
+}
+
 /** 月額プラン Price ID（`web/.env` の VITE_STRIPE_PRICE_MONTHLY） */
-export const STRIPE_PRICE_MONTHLY = import.meta.env.VITE_STRIPE_PRICE_MONTHLY ?? "";
+export const STRIPE_PRICE_MONTHLY = stripePriceFromEnv(
+  import.meta.env.VITE_STRIPE_PRICE_MONTHLY,
+  DEFAULT_STRIPE_PRICE_MONTHLY,
+);
 
 /** 年額プラン Price ID（`web/.env` の VITE_STRIPE_PRICE_YEARLY） */
-export const STRIPE_PRICE_YEARLY = import.meta.env.VITE_STRIPE_PRICE_YEARLY ?? "";
+export const STRIPE_PRICE_YEARLY = stripePriceFromEnv(
+  import.meta.env.VITE_STRIPE_PRICE_YEARLY,
+  DEFAULT_STRIPE_PRICE_YEARLY,
+);
 
 export type CheckoutSessionResponse = {
   url: string;
