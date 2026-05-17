@@ -120,7 +120,14 @@ export async function registerBillingRoutes(app: FastifyInstance): Promise<void>
       return { url: session.url, sessionId: session.id };
     } catch (err) {
       req.log.error({ err }, "Stripe checkout session failed");
-      return reply.code(502).send({ error: "Failed to create checkout session" });
+      const stripeMsg =
+        err && typeof err === "object" && "message" in err && typeof err.message === "string"
+          ? err.message
+          : null;
+      return reply.code(502).send({
+        error: stripeMsg ?? "Failed to create checkout session",
+        code: "CHECKOUT_SESSION_FAILED",
+      });
     }
   });
 
