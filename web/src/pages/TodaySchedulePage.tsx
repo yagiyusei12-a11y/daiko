@@ -131,13 +131,42 @@ function isUnassignedDriverId(id: string): boolean {
   return id === SCHEDULE_UNASSIGNED_DRIVER_ID || parseScheduleUnassignedLaneEmployeeId(id) !== null;
 }
 
+function DialogSlotHint({ msg }: { msg: string | null }): JSX.Element | null {
+  if (!msg) return null;
+  return (
+    <p className="sched-dialog-slot-hint" role="alert">
+      {msg}
+    </p>
+  );
+}
+
 export default function TodaySchedulePage(): JSX.Element {
   const { flashSaved, flashMessage } = useSavedToast();
+  const dialogSlotHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function notifyReservationSaveError(status: number, error: string): void {
+  function flashDialogSlotHint(setter: (msg: string | null) => void): void {
+    if (dialogSlotHintTimerRef.current) clearTimeout(dialogSlotHintTimerRef.current);
+    setter(SCHEDULE_SLOT_UNAVAILABLE_MSG);
+    dialogSlotHintTimerRef.current = setTimeout(() => {
+      setter(null);
+      dialogSlotHintTimerRef.current = null;
+    }, 1000);
+  }
+
+  function notifyReservationSaveError(
+    status: number,
+    error: string,
+    opts?: { dialog?: "create" | "detail" },
+  ): void {
     if (isScheduleSlotUnavailableError(status, error)) {
       setErr(null);
-      flashMessage(SCHEDULE_SLOT_UNAVAILABLE_MSG);
+      if (opts?.dialog === "create") {
+        flashDialogSlotHint(setCreateDialogSlotMsg);
+      } else if (opts?.dialog === "detail") {
+        flashDialogSlotHint(setDetailDialogSlotMsg);
+      } else {
+        flashMessage(SCHEDULE_SLOT_UNAVAILABLE_MSG);
+      }
       return;
     }
     setErr(error);
@@ -151,6 +180,8 @@ export default function TodaySchedulePage(): JSX.Element {
   const [err, setErr] = useState<string | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [createDialogSlotMsg, setCreateDialogSlotMsg] = useState<string | null>(null);
+  const [detailDialogSlotMsg, setDetailDialogSlotMsg] = useState<string | null>(null);
   const [submitBusy, setSubmitBusy] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
@@ -327,6 +358,7 @@ export default function TodaySchedulePage(): JSX.Element {
     const nowRounded = new Date(Math.round(Date.now() / (15 * 60 * 1000)) * (15 * 60 * 1000));
     setStartLocal(formatUtcAsTokyoDatetimeLocal(nowRounded));
     setDialogOpen(true);
+    setCreateDialogSlotMsg(null);
     setErr(null);
   }
 
@@ -345,11 +377,13 @@ export default function TodaySchedulePage(): JSX.Element {
     setMDropoff(rv.detail.dropoff);
     setMVehicleNumber(rv.detail.vehicleNumber);
     setMParking(rv.detail.parking);
+    setDetailDialogSlotMsg(null);
     setErr(null);
   }
 
   async function submitReservation(): Promise<void> {
     setSubmitBusy(true);
+    setCreateDialogSlotMsg(null);
     setErr(null);
     const via = viaStops.map((s) => s.trim()).filter(Boolean);
     const r = await apiFetch("/dispatch/reservations", {
@@ -370,7 +404,7 @@ export default function TodaySchedulePage(): JSX.Element {
     });
     setSubmitBusy(false);
     if (!r.ok) {
-      notifyReservationSaveError(r.status, r.error);
+      notifyReservationSaveError(r.status, r.error, { dialog: "create" });
       return;
     }
     flashSaved();
@@ -381,6 +415,7 @@ export default function TodaySchedulePage(): JSX.Element {
   async function saveDetailModal(): Promise<void> {
     if (!detailRv) return;
     setDetailBusy(true);
+    setDetailDialogSlotMsg(null);
     setErr(null);
     const via = mVia.map((s) => s.trim()).filter(Boolean);
     const r = await apiFetch(`/dispatch/reservations/${encodeURIComponent(detailRv.id)}`, {
@@ -402,7 +437,7 @@ export default function TodaySchedulePage(): JSX.Element {
     });
     setDetailBusy(false);
     if (!r.ok) {
-      notifyReservationSaveError(r.status, r.error);
+      notifyReservationSaveError(r.status, r.error, { dialog: "detail" });
       return;
     }
     flashSaved();
@@ -727,6 +762,7 @@ export default function TodaySchedulePage(): JSX.Element {
               </div>
             </div>
             <div className="pricing-modal-actions">
+              <DialogSlotHint msg={createDialogSlotMsg} />
               <button type="button" className="settings-primary" disabled={submitBusy} onClick={() => void submitReservation()}>
                 保存
               </button>
@@ -818,6 +854,7 @@ export default function TodaySchedulePage(): JSX.Element {
               </div>
             </div>
             <div className="pricing-modal-actions">
+              <DialogSlotHint msg={detailDialogSlotMsg} />
               <button type="button" className="settings-primary" disabled={detailBusy} onClick={() => void saveDetailModal()}>
                 保存
               </button>

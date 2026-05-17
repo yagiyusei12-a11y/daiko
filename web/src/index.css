@@ -1390,6 +1390,17 @@ button.settings-danger:disabled {
   background: var(--color-surface);
 }
 
+.sched-dialog-slot-hint {
+  flex: 1 1 100%;
+  width: 100%;
+  margin: 0 0 0.15rem;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-accent, #c2410c);
+}
+
 .saved-toast {
   position: fixed;
   left: 50%;
