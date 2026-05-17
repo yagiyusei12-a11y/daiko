@@ -1037,6 +1037,24 @@ td {
   margin-top: 0.45rem;
 }
 
+.quarter-hour-datetime {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.quarter-hour-datetime-date {
+  flex: 1 1 10rem;
+  min-width: 9rem;
+}
+
+.quarter-hour-datetime-hour,
+.quarter-hour-datetime-minute {
+  flex: 0 0 auto;
+  min-width: 4.75rem;
+}
+
 .settings-checkbox-row {
   display: flex;
   flex-wrap: wrap;
