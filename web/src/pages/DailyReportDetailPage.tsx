@@ -4,7 +4,8 @@ import { apiFetch } from "../api";
 import { Card, Err } from "../ui";
 import { useSavedToast } from "../saved-toast";
 import { reverseGeocodeTownJa } from "../lib/nominatim";
-import { useAuth, formatFlexDatetime } from "../auth";
+import { useAuth, currentBusinessYmd, formatFlexDatetime } from "../auth";
+import { minutesSinceTokyoDay } from "../lib/schedule-axis";
 import {
   computeFareFromSpecialFare,
   computeMainFareYenFromPrefs,
@@ -129,18 +130,55 @@ function formatScheduleRowLabel(
   return `${hm(t0)}–${hm(t1)} ${who}${row.title}${route ? `（${route}）` : ""}`;
 }
 
-/** 事業日の全予定のうち、現在時刻の1時間前より後に終わるもの */
+/** 東京の暦日で rollHour 未満（日マタギの翌暦日深夜帯）か */
+function isTokyoRolloverPeriod(dayChangeHour: number, nowMs = Date.now()): boolean {
+  const rollHour = dayChangeHour - 24;
+  if (rollHour <= 0) return false;
+  const hour = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Tokyo",
+      hour: "2-digit",
+      hour12: false,
+    }).format(nowMs),
+  );
+  return hour < rollHour;
+}
+
+/**
+ * 日報の「スケジュールから入力」用候補。
+ * 通常: 終了が現在の1時間前より後の予定のみ。
+ * 日マタギ深夜帯（例: 26時）: 事業日に属する予定を終了時刻に関わらず表示（24時前の予定を含む）。
+ */
 function scheduleReservationsForTripPick(
   reservations: ScheduleReservationRow[],
+  businessDateYmd: string,
+  dayChangeHour: number,
   nowMs = Date.now(),
 ): ScheduleReservationRow[] {
+  const rollHour = Math.max(0, dayChangeHour - 24);
+  const maxStartMin = (24 + rollHour) * 60;
+  const inRollover = isTokyoRolloverPeriod(dayChangeHour, nowMs);
   const cutoff = nowMs - 60 * 60 * 1000;
+
   return reservations
     .filter((r) => {
+      const startMin = minutesSinceTokyoDay(businessDateYmd, r.startsAt);
+      if (!Number.isFinite(startMin) || startMin < 0 || startMin >= maxStartMin) return false;
+      if (inRollover) return true;
       const end = new Date(r.endsAt).getTime();
       return !Number.isNaN(end) && end > cutoff;
     })
     .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+}
+
+/** スケジュール取得に使う事業日（日報の事業日と、日マタギ上の「今日」を整合） */
+function scheduleDateForTripPick(reportBusinessDate: string, dayChangeHour: number): string {
+  const today = currentBusinessYmd(dayChangeHour);
+  if (reportBusinessDate === today) return today;
+  if (isTokyoRolloverPeriod(dayChangeHour) && reportBusinessDate < today) {
+    return reportBusinessDate;
+  }
+  return reportBusinessDate;
 }
 
 function viaStopsFromTrip(trip: TripLegFull): string[] {
@@ -876,7 +914,9 @@ export default function DailyReportDetailPage(): JSX.Element {
     setSchedulePickOpen(true);
     setSchedulePickErr(null);
     setSchedulePickLoading(true);
-    const r = await apiFetch<SchedulePayloadMini>(`/dispatch/schedule?date=${encodeURIComponent(report.businessDate)}`);
+    const dayChangeHour = me?.dayChangeHour ?? 28;
+    const scheduleDate = scheduleDateForTripPick(report.businessDate, dayChangeHour);
+    const r = await apiFetch<SchedulePayloadMini>(`/dispatch/schedule?date=${encodeURIComponent(scheduleDate)}`);
     setSchedulePickLoading(false);
     if (!r.ok) {
       setSchedulePickErr(r.error);
@@ -960,9 +1000,14 @@ export default function DailyReportDetailPage(): JSX.Element {
   }, [report, draftTripId]);
 
   const schedulePickReservations = useMemo(() => {
-    if (!schedulePayload) return [];
-    return scheduleReservationsForTripPick(schedulePayload.reservations);
-  }, [schedulePayload]);
+    if (!schedulePayload || !report) return [];
+    const businessYmd = schedulePayload.date || report.businessDate;
+    return scheduleReservationsForTripPick(
+      schedulePayload.reservations,
+      businessYmd,
+      me?.dayChangeHour ?? 28,
+    );
+  }, [schedulePayload, report, me?.dayChangeHour]);
 
   const scheduleDriverNameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -1280,14 +1325,15 @@ export default function DailyReportDetailPage(): JSX.Element {
               スケジュールから入力
             </h2>
             <p className="settings-hint">
-              この日の運行予定（現在の1時間前以降に終わるもの）から1件選ぶと、依頼者名・経路・車番・開始・終了時刻などが入力されます。
+              事業日 {report?.businessDate} の運行予定から1件選ぶと、依頼者名・経路・車番・開始・終了時刻などが入力されます。
+              日マタギの深夜帯（{me?.dayChangeHour ?? 28}時まで）は、24時より前に終わった予定も候補に含めます。
             </p>
             <Err msg={schedulePickErr} />
             <div className="attend-shift-dialog-scroll">
               {schedulePickLoading ? <p className="settings-hint">読み込み中…</p> : null}
               {!schedulePickLoading && schedulePickReservations.length === 0 ? (
                 <p className="settings-hint">
-                  この日付で、現在の1時間前以降に終わる運行予定がありません（スケジュールで予定を登録してください）。
+                  この事業日で選べる運行予定がありません（スケジュールで予定を登録してください）。
                 </p>
               ) : null}
               {!schedulePickLoading
