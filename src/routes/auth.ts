@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
+import type { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { authenticate } from "../auth/pre.js";
 import { userEffectivePermissionList } from "../lib/permissions.js";
@@ -8,6 +9,40 @@ import { hashToken, randomRefreshToken } from "../lib/tokens.js";
 import { demoTenantEnv, isDemoTenantSession } from "../lib/demo-tenant.js";
 import { isPlatformAdminEmail } from "../lib/platform-admin.js";
 import { evaluateTenantBillingAccess, trialEndsAtFrom } from "../lib/tenant-billing.js";
+import {
+  computeLicenseExpiryNotice,
+  registerExtensionStr,
+} from "../lib/employee-license-expiry.js";
+import { patchMyLicenseExtension } from "../lib/employee-register-extension.js";
+
+const LICENSE_PHOTO_MAX_LEN = 1_250_000;
+
+function licenseExpiryNoticeFromExtension(registerExtension: unknown) {
+  return computeLicenseExpiryNotice(registerExtensionStr(registerExtension, "licenseExpiresOn"));
+}
+
+function validateLicensePhotoDataUrl(value: unknown, label: string): string | undefined {
+  if (value === undefined) return undefined;
+  const s = String(value);
+  if (!s) return "";
+  if (s.length > LICENSE_PHOTO_MAX_LEN) {
+    throw new Error(`${label}の画像が大きすぎます（900KB 以下にしてください）`);
+  }
+  if (!s.startsWith("data:image/")) {
+    throw new Error(`${label}は画像データ（data URL）で指定してください`);
+  }
+  return s;
+}
+
+function validateLicenseExpiresOn(value: unknown): string {
+  const s = String(value ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    throw new Error("有効期限は yyyy-MM-dd 形式で指定してください");
+  }
+  const d = new Date(`${s}T12:00:00+09:00`);
+  if (Number.isNaN(d.getTime())) throw new Error("有効期限の日付が不正です");
+  return s;
+}
 
 const REFRESH_DAYS = 30;
 
@@ -175,7 +210,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         email: true,
         displayName: true,
         employeeId: true,
-        employee: { select: { familyName: true, givenName: true } },
+        employee: { select: { familyName: true, givenName: true, registerExtension: true } },
         tenant: {
           select: {
             id: true,
@@ -208,6 +243,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       },
       { email: user.email, tenantSlug: user.tenant.slug },
     );
+    const licenseExpiryNotice = user.employee
+      ? licenseExpiryNoticeFromExtension(user.employee.registerExtension)
+      : null;
     return {
       user: {
         id: user.id,
@@ -230,8 +268,77 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         trialEndsAt: user.tenant.trialEndsAt?.toISOString() ?? null,
         paidThroughAt: user.tenant.paidThroughAt?.toISOString() ?? null,
         canAccessApp: billingAccess.allowed,
+        licenseExpiryNotice,
       },
     };
+  });
+
+  app.get("/my-license", { preHandler: [authenticate] }, async (req, reply) => {
+    const u = req.user as { sub: string; tenantId: string };
+    const user = await prisma.user.findFirst({
+      where: { id: u.sub, tenantId: u.tenantId },
+      select: {
+        employeeId: true,
+        employee: { select: { registerExtension: true } },
+      },
+    });
+    if (!user?.employeeId || !user.employee) {
+      return reply.code(403).send({ error: "ログインに紐づく従業員がありません" });
+    }
+    const ext = user.employee.registerExtension;
+    return {
+      licenseExpiresOn: registerExtensionStr(ext, "licenseExpiresOn"),
+      licensePhotoFrontDataUrl:
+        registerExtensionStr(ext, "licensePhotoFrontDataUrl") ||
+        registerExtensionStr(ext, "licensePhotoDataUrl"),
+      licensePhotoBackDataUrl: registerExtensionStr(ext, "licensePhotoBackDataUrl"),
+    };
+  });
+
+  app.patch<{ Body: Record<string, unknown> }>("/my-license", { preHandler: [authenticate] }, async (req, reply) => {
+    const u = req.user as { sub: string; tenantId: string };
+    const user = await prisma.user.findFirst({
+      where: { id: u.sub, tenantId: u.tenantId },
+      select: {
+        employeeId: true,
+        employee: { select: { id: true, registerExtension: true } },
+      },
+    });
+    if (!user?.employeeId || !user.employee) {
+      return reply.code(403).send({ error: "ログインに紐づく従業員がありません" });
+    }
+    const b = req.body || {};
+    try {
+      const patch: {
+        licenseExpiresOn?: string;
+        licensePhotoFrontDataUrl?: string;
+        licensePhotoBackDataUrl?: string;
+      } = {};
+      if (b.licenseExpiresOn !== undefined) patch.licenseExpiresOn = validateLicenseExpiresOn(b.licenseExpiresOn);
+      if (b.licensePhotoFrontDataUrl !== undefined) {
+        patch.licensePhotoFrontDataUrl = validateLicensePhotoDataUrl(b.licensePhotoFrontDataUrl, "免許証（表面）");
+      }
+      if (b.licensePhotoBackDataUrl !== undefined) {
+        patch.licensePhotoBackDataUrl = validateLicensePhotoDataUrl(b.licensePhotoBackDataUrl, "免許証（裏面）");
+      }
+      if (Object.keys(patch).length === 0) {
+        return reply.code(400).send({ error: "更新する項目を指定してください" });
+      }
+      const ext = patchMyLicenseExtension(user.employee.registerExtension, patch);
+      await prisma.employee.update({
+        where: { id: user.employee.id },
+        data: { registerExtension: ext as Prisma.InputJsonValue },
+      });
+      const notice = licenseExpiryNoticeFromExtension(ext);
+      return {
+        ok: true,
+        licenseExpiresOn: registerExtensionStr(ext, "licenseExpiresOn"),
+        licenseExpiryNotice: notice,
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "更新に失敗しました";
+      return reply.code(400).send({ error: msg });
+    }
   });
 }
 

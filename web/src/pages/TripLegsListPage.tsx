@@ -289,43 +289,54 @@ export default function TripLegsListPage(): JSX.Element {
       <Err msg={err} />
 
       <div className="settings-section-panel trip-legs-search-panel">
-        <h3 className="settings-subtitle" style={{ marginTop: 0 }}>
-          検索
-        </h3>
-        <div className="settings-form trip-legs-search-form">
-          <label htmlFor="tl-client">依頼者名</label>
-          <input
-            id="tl-client"
-            type="text"
-            value={draft.clientName}
-            onChange={(e) => setDraft((d) => ({ ...d, clientName: e.target.value }))}
-            placeholder="部分一致"
-          />
-          <label htmlFor="tl-charter">客車の車両番号</label>
-          <input
-            id="tl-charter"
-            type="text"
-            value={draft.charterVehicleNo}
-            onChange={(e) => setDraft((d) => ({ ...d, charterVehicleNo: e.target.value }))}
-            placeholder="部分一致"
-          />
-          <label htmlFor="tl-receipt">領収書を発行した</label>
-          <select
-            id="tl-receipt"
-            value={draft.tripReceiptIssued}
-            onChange={(e) =>
-              setDraft((d) => ({
-                ...d,
-                tripReceiptIssued: e.target.value as SearchFilters["tripReceiptIssued"],
-              }))
-            }
-          >
-            <option value="">すべて</option>
-            <option value="true">発行済のみ</option>
-            <option value="false">未発行のみ</option>
-          </select>
+        <div className="trip-legs-search-head">
+          <h3 className="settings-subtitle" style={{ margin: 0 }}>
+            検索
+          </h3>
+          <p className="settings-hint trip-legs-search-note">直近の運行から最大 50 件を表示します。</p>
         </div>
 
+        <div className="trip-legs-search-row">
+          <div className="trip-legs-search-field">
+            <label htmlFor="tl-client">依頼者名</label>
+            <input
+              id="tl-client"
+              type="text"
+              value={draft.clientName}
+              onChange={(e) => setDraft((d) => ({ ...d, clientName: e.target.value }))}
+              placeholder="部分一致"
+            />
+          </div>
+          <div className="trip-legs-search-field">
+            <label htmlFor="tl-charter">客車の車両番号</label>
+            <input
+              id="tl-charter"
+              type="text"
+              value={draft.charterVehicleNo}
+              onChange={(e) => setDraft((d) => ({ ...d, charterVehicleNo: e.target.value }))}
+              placeholder="部分一致"
+            />
+          </div>
+          <div className="trip-legs-search-field">
+            <label htmlFor="tl-receipt">領収書を発行した</label>
+            <select
+              id="tl-receipt"
+              value={draft.tripReceiptIssued}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  tripReceiptIssued: e.target.value as SearchFilters["tripReceiptIssued"],
+                }))
+              }
+            >
+              <option value="">すべて</option>
+              <option value="true">発行済のみ</option>
+              <option value="false">未発行のみ</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="trip-legs-filter-grid">
         <MultiCheckGroup
           legend="支払方法"
           options={paymentMethods.map((pm) => ({ id: pm, label: pm }))}
@@ -350,8 +361,9 @@ export default function TripLegsListPage(): JSX.Element {
           selected={draft.escortVehicleIds}
           onChange={(escortVehicleIds) => setDraft((d) => ({ ...d, escortVehicleIds }))}
         />
+        </div>
 
-        <div className="settings-toolbar" style={{ marginTop: "0.65rem" }}>
+        <div className="trip-legs-search-actions">
           <button
             type="button"
             className="settings-primary"
@@ -372,9 +384,6 @@ export default function TripLegsListPage(): JSX.Element {
             条件をクリア
           </button>
         </div>
-        <p className="settings-hint" style={{ marginBottom: 0 }}>
-          直近の運行から最大 50 件を表示します。
-        </p>
       </div>
 
       <div className="settings-section-panel trip-history-wrap" style={{ marginTop: "1rem" }}>

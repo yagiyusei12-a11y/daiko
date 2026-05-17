@@ -35,6 +35,7 @@ import { prisma } from "../db.js";
 import { reverseGeocodeTownJaCached } from "../lib/reverse-geocode-cache.js";
 import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
 import { hasSecondClassDriverLicense } from "../lib/employee-license.js";
+import { buildRegisterExtension } from "../lib/employee-register-extension.js";
 
 type JsonObj = Record<string, unknown>;
 
@@ -103,60 +104,6 @@ function mergeVehicleDetail(existing: unknown, patch: JsonObj): JsonObj {
     next.voluntaryInsurance = { ...asObj(cur.voluntaryInsurance), ...ins };
   }
   return next;
-}
-
-function buildRegisterExtension(
-  base: unknown,
-  body: {
-    birthDate?: string;
-    phone?: string;
-    mobile?: string;
-    hiredOn?: string;
-    retiredOn?: string;
-    usualWorkDays?: string;
-    emergencyName?: string;
-    emergencyTel?: string;
-    licenseKind?: string;
-    licenseNumber?: string;
-    licenseExpiresOn?: string;
-    /** 複数選択（文字列配列） */
-    licenseConditions?: string[] | string;
-    licensePhotoFrontDataUrl?: string;
-    licensePhotoBackDataUrl?: string;
-  },
-): JsonObj {
-  const cur = asObj(base);
-  const ext: JsonObj = { ...cur };
-  const keys = [
-    "birthDate",
-    "phone",
-    "mobile",
-    "hiredOn",
-    "retiredOn",
-    "usualWorkDays",
-    "emergencyName",
-    "emergencyTel",
-    "licenseKind",
-    "licenseNumber",
-    "licenseExpiresOn",
-    "licensePhotoFrontDataUrl",
-    "licensePhotoBackDataUrl",
-  ] as const;
-  for (const k of keys) {
-    if (body[k] !== undefined) ext[k] = body[k] as string;
-  }
-  if (body.licenseConditions !== undefined) {
-    if (Array.isArray(body.licenseConditions)) {
-      ext.licenseConditions = body.licenseConditions.filter((x): x is string => typeof x === "string");
-    } else if (typeof body.licenseConditions === "string") {
-      const t = body.licenseConditions.trim();
-      ext.licenseConditions = t ? [t] : [];
-    }
-  }
-  if (body.licensePhotoFrontDataUrl !== undefined || body.licensePhotoBackDataUrl !== undefined) {
-    delete ext.licensePhotoDataUrl;
-  }
-  return ext;
 }
 
 type ZipCloudResponse = {
