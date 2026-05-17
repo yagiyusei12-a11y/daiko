@@ -596,6 +596,15 @@ function TripWizard({
         <button type="button" className="settings-secondary" onClick={() => setArrivedLocal(toDatetimeLocalValue(new Date()))}>
           現在時刻を到着にセット
         </button>
+
+        <div className="trip-fare-panel" aria-labelledby="trip-fare-panel-title">
+          <h4 id="trip-fare-panel-title" className="trip-fare-panel__title">
+            料金
+          </h4>
+          <p className="trip-fare-panel__lead settings-hint">
+            走行距離・運賃・支払いなど、請求に関わる項目です。
+          </p>
+          <div className="settings-form trip-fare-panel__form">
         <label>走行距離（km）</label>
         <input type="text" readOnly value={formatKm(distanceKmAuto)} title="到着メーター − 開始メーター" />
         <p className="settings-hint" style={{ marginTop: 0 }}>
@@ -686,7 +695,7 @@ function TripWizard({
           <input type="checkbox" checked={tripReceiptIssued} onChange={(e) => setTripReceiptIssued(e.target.checked)} />
           領収書を発行した
         </label>
-        <p style={{ margin: "0.35rem 0 0", fontWeight: 600, fontSize: "0.95rem" }}>
+        <p className="trip-fare-total">
           合計（運賃＋駐車場料金＋付帯料金）: ¥{tripTotalYen.toLocaleString("ja-JP")}
         </p>
 
@@ -731,6 +740,9 @@ function TripWizard({
             </div>
           </details>
         ) : null}
+
+          </div>
+        </div>
 
         <button type="button" className="settings-primary" style={{ marginTop: "0.75rem" }} disabled={busy} onClick={() => void submit()}>
           送信（この運行を保存）
