@@ -117,6 +117,10 @@ app.get("/sitemap.xml", async (_, reply) => {
 app.get("/googlea48fb01297c4ced2.html", async (_, reply) => {
   return reply.type("text/html; charset=utf-8").sendFile("googlea48fb01297c4ced2.html", publicAssetsRoot);
 });
+app.get("/portal", async (_, reply) => reply.redirect("/portal/", 302));
+app.get("/portal/", async (_, reply) => {
+  return reply.type("text/html; charset=utf-8").sendFile("portal/index.html", publicAssetsRoot);
+});
 
 const legalPages: Record<string, string> = {
   "/legal/tokushoho": "legal/tokushoho.html",
