@@ -145,6 +145,9 @@ app.get("/blog/google-maps-seo", async (_, reply) => {
 app.get("/blog/easy-for-everyone", async (_, reply) => {
   return reply.type("text/html; charset=utf-8").sendFile("blog/easy-for-everyone.html", lpStaticRoot);
 });
+app.get("/blog/multi-store-management", async (_, reply) => {
+  return reply.type("text/html; charset=utf-8").sendFile("blog/multi-store-management.html", lpStaticRoot);
+});
 for (const [route, file] of Object.entries(legalPages)) {
   app.get(route, async (_, reply) => {
     return reply.type("text/html; charset=utf-8").sendFile(file, lpStaticRoot);
