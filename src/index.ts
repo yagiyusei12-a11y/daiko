@@ -114,6 +114,9 @@ app.get("/robots.txt", async (_, reply) => {
 app.get("/sitemap.xml", async (_, reply) => {
   return reply.type("application/xml; charset=utf-8").sendFile("sitemap.xml", publicAssetsRoot);
 });
+app.get("/googlea48fb01297c4ced2.html", async (_, reply) => {
+  return reply.type("text/html; charset=utf-8").sendFile("googlea48fb01297c4ced2.html", publicAssetsRoot);
+});
 
 const legalPages: Record<string, string> = {
   "/legal/tokushoho": "legal/tokushoho.html",
