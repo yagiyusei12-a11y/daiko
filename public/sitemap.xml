@@ -21,6 +21,11 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://daiko.harunoyukoto.jp/blog/payroll-calculation</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://daiko.harunoyukoto.jp/legal/terms</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>

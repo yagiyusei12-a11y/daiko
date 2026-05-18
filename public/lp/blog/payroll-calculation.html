@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>深夜の「日またぎ」給与計算を間違えない！運転代行特有の勤怠管理と歩合の計算方法｜Daiko</title>
+    <meta
+      name="description"
+      content="運転代行店の経営者・管理者向け。日またぎ勤怠・歩合制・特殊手当が給与計算を難しくする理由と、手作業の見えない損失。Daikoで給与・勤怠を自動化する方法を解説。"
+    />
+    <link rel="canonical" href="https://daiko.harunoyukoto.jp/blog/payroll-calculation" />
+    <meta property="og:title" content="深夜の「日またぎ」給与計算を間違えない！運転代行特有の勤怠管理と歩合の計算方法" />
+    <meta
+      property="og:description"
+      content="運転代行の給与計算が複雑になる日またぎ・歩合・手当の理由と、手作業のリスク。Daikoによる自動化のポイント。"
+    />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://daiko.harunoyukoto.jp/blog/payroll-calculation" />
+    <meta property="og:site_name" content="Daiko" />
+    <meta property="og:image" content="https://daiko.harunoyukoto.jp/images/ogp-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="運転代行の日またぎ給与計算・歩合の計算方法｜Daiko" />
+    <meta
+      name="twitter:description"
+      content="日またぎ勤怠・歩合制・特殊手当。運転代行店の給与計算の難しさと、Daikoでの自動化。"
+    />
+    <meta name="twitter:image" content="https://daiko.harunoyukoto.jp/images/ogp-image.png" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "深夜の「日またぎ」給与計算を間違えない！運転代行特有の勤怠管理と歩合の計算方法",
+        "description": "運転代行店の経営者・管理者向け。日またぎ勤怠・歩合制・特殊手当が給与計算を難しくする理由と、Daikoによる自動化。",
+        "url": "https://daiko.harunoyukoto.jp/blog/payroll-calculation",
+        "mainEntityOfPage": {
+          "@type": "WebPage",
+          "@id": "https://daiko.harunoyukoto.jp/blog/payroll-calculation"
+        },
+        "image": "https://daiko.harunoyukoto.jp/images/ogp-image.png",
+        "datePublished": "2026-05-18",
+        "dateModified": "2026-05-18",
+        "inLanguage": "ja",
+        "author": {
+          "@id": "https://daiko.harunoyukoto.jp/#organization"
+        },
+        "publisher": {
+          "@id": "https://daiko.harunoyukoto.jp/#organization"
+        }
+      }
+    </script>
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/lp/lp.css" />
+    <link rel="stylesheet" href="/lp/lp-modern.css" />
+    <link rel="stylesheet" href="/lp/lp-mobile.css" />
+    <link rel="stylesheet" href="/lp/lp-article.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Noto Sans JP"', "system-ui", "sans-serif"],
+              display: ['"Plus Jakarta Sans"', '"Noto Sans JP"', "sans-serif"],
+            },
+            boxShadow: {
+              soft: "0 12px 40px rgba(15, 23, 42, 0.08)",
+              glow: "0 20px 50px rgba(37, 99, 235, 0.15)",
+            },
+            colors: {
+              brand: { DEFAULT: "#2563eb", dark: "#1d4ed8", soft: "#eff6ff" },
+              accent: { DEFAULT: "#f97316", soft: "#fff7ed" },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="bg-white text-slate-900 antialiased">
+    <a class="lp-skip" href="#main">本文へスキップ</a>
+
+    <header class="lp-tw-header sticky top-0 z-50 border-b border-slate-100 bg-white/90 backdrop-blur-md">
+      <div class="mx-auto flex h-16 max-w-6xl items-center gap-4 px-5 lg:h-[4.25rem]">
+        <a href="/" class="mr-auto inline-flex items-center gap-2 font-display text-lg font-bold tracking-tight text-slate-900 no-underline">
+          <span class="h-8 w-8 rounded-xl bg-gradient-to-br from-brand to-blue-400 shadow-soft" aria-hidden="true"></span>
+          Daiko
+        </a>
+        <nav class="hidden items-center gap-1 lg:flex" aria-label="グローバルナビゲーション">
+          <a href="/blog" class="rounded-lg bg-brand-soft px-3 py-2 text-sm font-semibold text-brand no-underline">ガイド</a>
+          <a href="/report" class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 no-underline hover:bg-slate-50 hover:text-brand">日報・監査書類</a>
+          <a href="/" class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 no-underline hover:bg-slate-50 hover:text-brand">トップ</a>
+        </nav>
+        <div class="hidden items-center gap-2 sm:flex">
+          <a href="/app/" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:border-brand hover:text-brand">デモ</a>
+          <a href="/app/register" class="rounded-xl bg-brand px-4 py-2 text-sm font-bold text-white no-underline shadow-soft hover:bg-brand-dark">無料で始める</a>
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <div class="border-b border-slate-100 bg-gradient-to-b from-brand-soft/40 to-white py-8 lg:py-10">
+        <div class="mx-auto max-w-3xl px-5 sm:px-6">
+          <nav class="text-sm text-slate-500" aria-label="パンくず">
+            <ol class="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 p-0 list-none">
+              <li><a href="/" class="font-medium text-brand no-underline hover:underline">トップ</a></li>
+              <li aria-hidden="true" class="text-slate-400">/</li>
+              <li><a href="/blog" class="font-medium text-brand no-underline hover:underline">ガイド</a></li>
+              <li aria-hidden="true" class="text-slate-400">/</li>
+              <li><span class="text-slate-700">労務・給与計算</span></li>
+            </ol>
+          </nav>
+        </div>
+      </div>
+
+      <div class="mx-auto max-w-3xl px-5 py-12 sm:px-6 lg:py-16">
+        <article class="blog-post lp-article" itemscope itemtype="https://schema.org/BlogPosting">
+          <meta
+            itemprop="headline"
+            content="深夜の「日またぎ」給与計算を間違えない！運転代行特有の勤怠管理と歩合の計算方法"
+          />
+          <meta itemprop="datePublished" content="2026-05-18" />
+
+          <header>
+            <h1 itemprop="name">
+              深夜の「日またぎ」給与計算を間違えない！運転代行特有の勤怠管理と歩合の計算方法
+            </h1>
+            <p class="post-meta">
+              <time datetime="2026-05-18" itemprop="datePublished">2026年5月18日</time>
+              <span aria-hidden="true"> | </span>
+              <span>カテゴリ: 労務・給与計算</span>
+              <span aria-hidden="true"> · </span>
+              <span>読了目安 約7分</span>
+            </p>
+          </header>
+
+          <section id="payroll-intro" aria-labelledby="payroll-intro-heading">
+            <h2 id="payroll-intro-heading">月末の給与計算、何時間かかっていますか？</h2>
+            <p>
+              運転代行業の経営者や管理者を最も悩ませる業務のひとつが、月末の「給与計算」です。一般的な飲食店や小売店と違い、運転代行業の給与計算は非常に複雑な要素が絡み合っています。
+            </p>
+            <p>
+              毎月、タイムカードと手書きの日報をデスクに山積みにして、電卓やExcelと格闘していませんか？本記事では、運転代行業の給与計算がなぜ難しくなるのか、そしてその負担をゼロにする方法を解説します。
+            </p>
+          </section>
+
+          <section id="payroll-reasons" aria-labelledby="payroll-reasons-heading">
+            <h2 id="payroll-reasons-heading">運転代行の給与計算が圧倒的に複雑な3つの理由</h2>
+
+            <h3 id="reason-overnight">1. 魔の「日またぎ（28時間表記）」問題</h3>
+            <p>
+              運転代行の営業時間は「20:00〜翌朝4:00」など、日をまたぐのが当たり前です。一般的なタイムカードや勤怠システムを使うと、午前0時を回った瞬間に「翌日の勤務」として分割されてしまいます。これにより、<strong>「1営業日の売上」と「その日のドライバーの稼働時間」にズレが生じ、集計を極めて困難</strong>にしています。
+            </p>
+
+            <h3 id="reason-commission">2. 「基本時給＋歩合制」の組み合わせ</h3>
+            <p>
+              多くの代行業者では、ドライバーのモチベーション維持のために「基本時給＋売上の〇％を還元（歩合）」といった給与体系を採用しています。これを正確に計算するには、<strong>「誰が・どの運行で・いくら売り上げたか」</strong>を日報から正確に拾い上げ、個人の勤怠データと紐付ける膨大な照合確認が必要です。
+            </p>
+
+            <h3 id="reason-allowance">3. 左ハンドル手当や待機料などの「特殊な加算」</h3>
+            <p>
+              基本料金だけでなく、「左ハンドル車の運転手当」や「迎車時の待機料」など、特定の条件で発生する手当をドライバーに還元するルールを設けている店舗も多いでしょう。こうしたイレギュラーな手当が手書き日報に埋もれると、計算漏れによるスタッフからの不満に直結します。
+            </p>
+          </section>
+
+          <section id="payroll-loss" aria-labelledby="payroll-loss-heading">
+            <h2 id="payroll-loss-heading">手作業での給与計算が引き起こす「見えない損失」</h2>
+            <p>
+              Excelや電卓での手作業は、経営者の貴重な時間を奪うだけでなく、「見えない損失」を生み出します。計算ミスによる給与の過払いは会社の利益を削り、逆に過少払いは<strong>ドライバーの不信感を招き、最悪の場合は離職に繋がります。</strong>
+            </p>
+            <p>
+              人材不足が深刻な運転代行業界において、「給与が正確かつ透明に支払われること」は、定着率を高めるための絶対条件です。
+            </p>
+          </section>
+
+          <section class="cta-section" id="daiko-payroll" aria-labelledby="daiko-payroll-heading">
+            <h2 id="daiko-payroll-heading">Daikoなら、複雑な歩合も日またぎも「完全自動化」</h2>
+            <p>
+              こうした運転代行業特有の労務課題を解決するために作られたのが、業務管理クラウド<strong>「Daiko」</strong>です。
+            </p>
+            <ul>
+              <li><strong>事業日ロール標準対応：</strong>「午前3時は27時」として扱い、日報と売上のズレを根本から防ぎます。</li>
+              <li><strong>日報と勤怠が完全連動：</strong>スマホから入力された配車・売上データと、タイムカード機能が直結。</li>
+              <li><strong>時給・歩合の自動計算：</strong>店舗ごとの歩合率や手当のルールを設定しておけば、月末の給与計算はシステムが自動で完了します。</li>
+            </ul>
+            <p>毎月数時間〜数十時間かかっていた事務作業から解放されませんか？</p>
+
+            <div class="cta-banner">
+              <p class="m-0 text-sm font-bold tracking-wide">＼ β版リリース記念！初期メンバー様限定 ／</p>
+              <p><strong>14日間は0円で全機能をご利用いただけます</strong></p>
+              <a href="/app/register" class="lp-btn lp-btn--white lp-btn--lg no-underline">Daikoを無料で試してみる</a>
+              <p class="cta-note">※契約期間の縛りなし・いつでも解約可能</p>
+              <p class="cta-note cta-note--link">
+                <a href="/app/" class="font-semibold text-white underline hover:no-underline">ログイン不要のデモはこちら</a>
+              </p>
+            </div>
+          </section>
+        </article>
+      </div>
+    </main>
+
+    <footer class="lp-footer">
+      <div class="lp-wrap lp-footer-inner">
+        <a class="lp-logo lp-logo--footer" href="/">Daiko</a>
+        <nav class="lp-footer-nav" aria-label="フッターリンク">
+          <a href="/">トップ</a>
+          <a href="/blog">ガイド</a>
+          <a href="/report">日報・監査書類</a>
+          <a href="/legal/tokushoho">特定商取引法に基づく表記</a>
+          <a href="/legal/privacy">プライバシーポリシー</a>
+          <a href="/legal/terms">利用規約</a>
+          <a href="/app/">デモ</a>
+          <a href="/app/register">新規登録</a>
+        </nav>
+        <p class="lp-footer-copy">© Daiko — 運転代行向け業務管理クラウド</p>
+      </div>
+    </footer>
+  </body>
+</html>
