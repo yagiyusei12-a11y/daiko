@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-shiga_daiko_enriched.csv から滋賀県運転代行ポータル（index.html）を生成する。
+data/3_enriched_csv/ 内の県別 CSV を統合し、全国対応ポータル index.html を生成する。
 
 使い方:
   python scripts/generate_portal_html.py
-  python scripts/generate_portal_html.py --output public/portal/index.html
+
+出力（同一内容）:
+  - index.html（プロジェクトルート）
+  - public/portal/index.html
 
 依存:
   pip install pandas
@@ -15,20 +18,32 @@ from __future__ import annotations
 
 import argparse
 import html
-import math
+import json
 import re
 import sys
 from pathlib import Path
 
 import pandas as pd
 
+from daiko_places_enrich import PREFECTURE_BY_STEM
+
 SITE_URL = "https://daiko.harunoyukoto.jp/"
-PORTAL_URL = "https://daiko.harunoyukoto.jp/portal"
-PAGE_TITLE = "滋賀県の運転代行業者一覧｜長浜・大津・彦根など｜はるのゆこと"
+PORTAL_URL = "https://daiko.harunoyukoto.jp/portal/"
+PAGE_TITLE = "全国の運転代行業者一覧・検索 | はるのゆこと"
 META_DESCRIPTION = (
-    "滋賀県・長浜市・大津市・彦根市などの運転代行業者一覧。"
-    "ワンタップで今すぐ代行を呼べます。電話番号・評価・公式サイトを掲載。"
+    "滋賀県、福井県、岐阜県、大阪府など、各地域の運転代行業者一覧。"
+    "営業時間や電話番号を掲載し、スマホからワンタップで今すぐ代行を呼べます。"
+    "エリアや市区町村での絞り込み対応。"
 )
+
+ADDRESS_COLUMNS = ("所在地", "主たる営業所の所在地")
+CITY_PATTERN = re.compile(
+    r"^(.+?(?:市|区|町|村)|.+?郡.+?(?:町|村))"
+)
+
+
+def project_root() -> Path:
+    return Path(__file__).resolve().parents[1]
 
 
 def cell_str(value: object) -> str:
@@ -40,130 +55,113 @@ def cell_str(value: object) -> str:
     return text
 
 
-def tel_href(phone: str) -> str:
-    cleaned = re.sub(r"[^\d+]", "", phone)
-    if not cleaned:
-        return ""
-    return f"tel:{cleaned}"
+def pick_address_column(df: pd.DataFrame) -> str | None:
+    for col in ADDRESS_COLUMNS:
+        if col in df.columns:
+            return col
+    return None
 
 
-def normalize_website(url: str) -> str:
-    url = url.strip()
-    if not url:
-        return ""
-    if not re.match(r"^https?://", url, re.I):
-        return f"https://{url}"
-    return url
+def prefecture_from_filename(csv_path: Path, row: pd.Series | None = None) -> str:
+    if row is not None:
+        for col in ("都道府県", "県名", "prefecture"):
+            if col in row.index:
+                label = cell_str(row.get(col))
+                if label:
+                    return label
+    stem = csv_path.stem.lower()
+    if stem in PREFECTURE_BY_STEM:
+        return PREFECTURE_BY_STEM[stem]
+    # 8515_2740104_misc などの非標準名 → 既知の別名
+    stem_aliases = {
+        "8515_2740104_misc": "岐阜県",
+        "daikougyouitirann5matu": "愛知県",
+        "daikouitirannintekyoten": "福井県",
+    }
+    if stem in stem_aliases:
+        return stem_aliases[stem]
+    return stem
 
 
-def parse_rating(value: str) -> float | None:
-    if not value:
-        return None
-    try:
-        rating = float(value)
-    except ValueError:
-        return None
-    if rating < 0 or rating > 5:
-        return None
-    return rating
+def extract_city(address: str, prefecture: str) -> str:
+    addr = address.strip()
+    if not addr:
+        return "その他"
+    if prefecture and addr.startswith(prefecture):
+        addr = addr[len(prefecture) :].strip()
+    match = CITY_PATTERN.match(addr)
+    if match:
+        return match.group(1)
+    return addr if addr else "その他"
 
 
-def stars_markup(rating: float | None) -> str:
-    if rating is None:
-        return '<span class="text-slate-400 text-sm">評価なし</span>'
+def load_all_businesses(enriched_dir: Path) -> list[dict[str, str]]:
+    records: list[dict[str, str]] = []
+    csv_files = sorted(enriched_dir.glob("*.csv"))
+    if not csv_files:
+        return records
 
-    full = int(math.floor(rating + 0.25))
-    full = max(0, min(5, full))
-    empty = 5 - full
-    stars = (
-        f'<span class="text-amber-500 tracking-tight" aria-hidden="true">'
-        f'{"★" * full}{"☆" * empty}</span>'
-        f'<span class="text-sm font-semibold text-slate-800">{rating:.1f}</span>'
+    for csv_path in csv_files:
+        if csv_path.name.endswith(".meta.json"):
+            continue
+        df = pd.read_csv(csv_path, encoding="utf-8-sig", dtype=str).fillna("")
+        if "業者名" not in df.columns:
+            print(f"  警告: スキップ（業者名なし）: {csv_path.name}", file=sys.stderr)
+            continue
+
+        address_col = pick_address_column(df)
+        if not address_col:
+            print(f"  警告: スキップ（所在地なし）: {csv_path.name}", file=sys.stderr)
+            continue
+
+        pref_default = prefecture_from_filename(csv_path)
+        for _, row in df.iterrows():
+            prefecture = prefecture_from_filename(csv_path, row) or pref_default
+            address = cell_str(row.get(address_col))
+            records.append(
+                {
+                    "prefecture": prefecture,
+                    "city": extract_city(address, prefecture),
+                    "cert": cell_str(row.get("認定番号")),
+                    "name": cell_str(row.get("業者名")),
+                    "address": address,
+                    "phone": cell_str(row.get("電話番号")),
+                    "website": cell_str(row.get("ウェブサイトURL")),
+                    "rating": cell_str(row.get("評価")),
+                    "reviews": cell_str(row.get("レビュー数")),
+                }
+            )
+
+    return records
+
+
+def build_prefecture_index(records: list[dict[str, str]]) -> dict[str, list[str]]:
+    cities_by_pref: dict[str, set[str]] = {}
+    for row in records:
+        pref = row["prefecture"]
+        cities_by_pref.setdefault(pref, set()).add(row["city"])
+    return {
+        pref: sorted(cities, key=lambda c: (c == "その他", c))
+        for pref, cities in sorted(cities_by_pref.items())
+    }
+
+
+def build_html(records: list[dict[str, str]]) -> str:
+    prefectures = sorted({r["prefecture"] for r in records})
+    cities_by_pref = build_prefecture_index(records)
+    payload = {
+        "businesses": records,
+        "prefectures": prefectures,
+        "citiesByPrefecture": cities_by_pref,
+        "total": len(records),
+    }
+    json_data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    json_data = json_data.replace("</", "<\\/")
+
+    pref_options = "\n".join(
+        f'            <option value="{html.escape(p)}">{html.escape(p)}</option>'
+        for p in prefectures
     )
-    return stars
-
-
-def render_card(row: pd.Series) -> str:
-    name = html.escape(cell_str(row.get("業者名")))
-    address = html.escape(cell_str(row.get("主たる営業所の所在地")))
-    cert = html.escape(cell_str(row.get("認定番号")))
-    phone = cell_str(row.get("電話番号"))
-    website = normalize_website(cell_str(row.get("ウェブサイトURL")))
-    rating = parse_rating(cell_str(row.get("評価")))
-    reviews = cell_str(row.get("レビュー数"))
-
-    stars = stars_markup(rating)
-    reviews_html = ""
-    if reviews:
-        reviews_html = (
-            f'<span class="text-xs text-slate-500">'
-            f'（{html.escape(reviews)}件のレビュー）</span>'
-        )
-
-    call_btn = ""
-    if phone:
-        href = html.escape(tel_href(phone), quote=True)
-        label = html.escape(phone)
-        call_btn = f"""
-          <a href="{href}"
-             class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]">
-            <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
-            </svg>
-            電話で呼ぶ
-          </a>
-          <p class="mt-1 text-center text-xs text-slate-500">{label}</p>
-        """
-
-    website_link = ""
-    if website:
-        safe_url = html.escape(website, quote=True)
-        display = html.escape(website.replace("https://", "").replace("http://", "").rstrip("/"))
-        if len(display) > 36:
-            display = display[:33] + "…"
-        website_link = f"""
-          <a href="{safe_url}" target="_blank" rel="noopener noreferrer"
-             class="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline">
-            公式HP
-            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-            </svg>
-          </a>
-        """
-
-    cert_badge = ""
-    if cert:
-        cert_badge = (
-            f'<span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">'
-            f'{cert}</span>'
-        )
-
-    return f"""
-    <article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
-      <div class="flex flex-wrap items-start justify-between gap-2">
-        <h2 class="font-display text-lg font-bold leading-snug text-slate-900">{name}</h2>
-        {cert_badge}
-      </div>
-      <p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600">
-        <svg class="mt-0.5 h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-          <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-        </svg>
-        <span>滋賀県 {address}</span>
-      </p>
-      <div class="mt-3 flex flex-wrap items-center gap-2">
-        {stars}
-        {reviews_html}
-      </div>
-      {website_link}
-      {call_btn}
-    </article>
-    """
-
-
-def build_html(df: pd.DataFrame) -> str:
-    cards = "\n".join(render_card(row) for _, row in df.iterrows())
-    count = len(df)
 
     return f"""<!DOCTYPE html>
 <html lang="ja">
@@ -196,13 +194,18 @@ def build_html(df: pd.DataFrame) -> str:
     </script>
     <style>
       body {{ font-family: "Segoe UI", "Hiragino Sans", "Meiryo", sans-serif; }}
+      .pref-tab.active {{
+        background-color: #2563eb;
+        color: #fff;
+        border-color: #2563eb;
+      }}
     </style>
   </head>
   <body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
     <header class="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
       <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
         <div>
-          <p class="text-xs font-semibold tracking-wide text-brand">滋賀県</p>
+          <p class="text-xs font-semibold tracking-wide text-brand">全国対応</p>
           <h1 class="text-lg font-bold leading-tight sm:text-xl">
             運転代行ポータル <span class="text-slate-400 font-normal">|</span> はるのゆこと
           </h1>
@@ -215,8 +218,8 @@ def build_html(df: pd.DataFrame) -> str:
     </header>
 
     <main id="main" class="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-      <section class="mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-brand to-blue-700 p-6 text-white shadow-lg sm:p-8" aria-labelledby="cta-heading">
-        <h2 id="cta-heading" class="text-base font-bold leading-relaxed sm:text-lg">
+      <section class="mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-brand to-blue-700 p-6 text-white shadow-lg sm:p-8" aria-labelledby="cta-top">
+        <h2 id="cta-top" class="text-base font-bold leading-relaxed sm:text-lg">
           【運転代行業者様へ】配車・売上管理をスマートにする最新システムを導入しませんか？初期費用を抑えて業務を効率化。詳しくはこちら
         </h2>
         <a href="{html.escape(SITE_URL)}"
@@ -225,16 +228,38 @@ def build_html(df: pd.DataFrame) -> str:
         </a>
       </section>
 
-      <div class="mb-6">
-        <p class="text-sm text-slate-600">
-          滋賀県内の認定運転代行業者 <strong class="text-slate-900">{count}</strong> 件を掲載しています。
-          お酒を飲んだあとは運転代行をご利用ください。スマホからワンタップでお電話できます。
-        </p>
-      </div>
+      <section class="mb-6 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-6" aria-labelledby="filter-heading">
+        <h2 id="filter-heading" class="text-sm font-bold text-slate-800">都道府県・市区町村で絞り込み</h2>
 
-      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {cards}
-      </div>
+        <div class="mt-4">
+          <label for="pref-select" class="mb-1 block text-xs font-semibold text-slate-500">都道府県を選択</label>
+          <select id="pref-select"
+                  class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-medium text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
+            <option value="">すべての都道府県</option>
+{pref_options}
+          </select>
+        </div>
+
+        <div id="pref-tabs" class="mt-3 hidden flex-wrap gap-2 sm:flex" role="tablist" aria-label="都道府県タブ"></div>
+
+        <div id="city-wrap" class="mt-4 hidden">
+          <label for="city-select" class="mb-1 block text-xs font-semibold text-slate-500">市区町村を選択</label>
+          <select id="city-select"
+                  class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
+            <option value="">すべての市区町村</option>
+          </select>
+        </div>
+
+        <p class="mt-4 text-sm text-slate-600">
+          掲載 <strong id="result-count" class="text-slate-900">0</strong> 件
+          <span class="text-slate-400">（全 <span id="total-count">{len(records)}</span> 件）</span>
+        </p>
+      </section>
+
+      <div id="card-grid" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite"></div>
+      <p id="empty-msg" class="hidden rounded-xl border border-dashed border-slate-300 bg-white py-12 text-center text-sm text-slate-500">
+        条件に一致する業者がありません。都道府県または市区町村を変更してください。
+      </p>
     </main>
 
     <footer class="mt-12 border-t border-slate-200 bg-white">
@@ -254,43 +279,227 @@ def build_html(df: pd.DataFrame) -> str:
         </p>
       </section>
     </footer>
+
+    <script id="portal-data" type="application/json">{json_data}</script>
+    <script>
+      (function () {{
+        const SITE_URL = {json.dumps(SITE_URL)};
+        const DATA = JSON.parse(document.getElementById("portal-data").textContent);
+
+        const prefSelect = document.getElementById("pref-select");
+        const citySelect = document.getElementById("city-select");
+        const cityWrap = document.getElementById("city-wrap");
+        const prefTabs = document.getElementById("pref-tabs");
+        const grid = document.getElementById("card-grid");
+        const emptyMsg = document.getElementById("empty-msg");
+        const resultCount = document.getElementById("result-count");
+
+        const state = {{ pref: "", city: "" }};
+
+        function esc(s) {{
+          if (!s) return "";
+          return String(s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+        }}
+
+        function telHref(phone) {{
+          const d = String(phone).replace(/[^\\d+]/g, "");
+          return d ? "tel:" + d : "";
+        }}
+
+        function normalizeUrl(url) {{
+          if (!url) return "";
+          return /^https?:\\/\\//i.test(url) ? url : "https://" + url;
+        }}
+
+        function starsHtml(rating) {{
+          const r = parseFloat(rating);
+          if (isNaN(r)) return '<span class="text-slate-400 text-sm">評価なし</span>';
+          const full = Math.max(0, Math.min(5, Math.floor(r + 0.25)));
+          const empty = 5 - full;
+          return (
+            '<span class="text-amber-500 tracking-tight" aria-hidden="true">' +
+            "★".repeat(full) + "☆".repeat(empty) +
+            '</span><span class="text-sm font-semibold text-slate-800">' + r.toFixed(1) + "</span>"
+          );
+        }}
+
+        function cardHtml(b) {{
+          const cert = esc(b.cert);
+          const name = esc(b.name);
+          const pref = esc(b.prefecture);
+          const addr = esc(b.address);
+          const phone = b.phone || "";
+          const website = normalizeUrl(b.website || "");
+          const reviews = b.reviews
+            ? '<span class="text-xs text-slate-500">（' + esc(b.reviews) + "件のレビュー）</span>"
+            : "";
+
+          let callBtn = "";
+          if (phone) {{
+            const href = esc(telHref(phone));
+            callBtn =
+              '<a href="' + href + '" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]">' +
+              '<svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>' +
+              "電話で呼ぶ</a><p class=\\"mt-1 text-center text-xs text-slate-500\\">" + esc(phone) + "</p>";
+          }}
+
+          let siteLink = "";
+          if (website) {{
+            const display = esc(website.replace(/^https?:\\/\\//, "").replace(/\\/$/, ""));
+            siteLink =
+              '<a href="' + esc(website) + '" target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline">' +
+              "公式HP</a>";
+          }}
+
+          const certBadge = cert
+            ? '<span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">' + cert + "</span>"
+            : "";
+
+          return (
+            '<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">' +
+            '<div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">' + name + "</h2>" + certBadge + "</div>" +
+            '<p class="mt-1 text-xs font-medium text-brand">' + pref + " · " + esc(b.city) + "</p>" +
+            '<p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>' + pref + " " + addr + "</span></p>" +
+            '<div class="mt-3 flex flex-wrap items-center gap-2">' + starsHtml(b.rating) + reviews + "</div>" +
+            siteLink + callBtn + "</article>"
+          );
+        }}
+
+        function buildPrefTabs() {{
+          prefTabs.innerHTML = "";
+          DATA.prefectures.forEach(function (p) {{
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "pref-tab rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:border-brand";
+            btn.textContent = p;
+            btn.dataset.pref = p;
+            btn.addEventListener("click", function () {{
+              prefSelect.value = p;
+              onPrefChange();
+            }});
+            prefTabs.appendChild(btn);
+          }});
+          if (DATA.prefectures.length > 0) {{
+            prefTabs.classList.remove("hidden");
+          }}
+        }}
+
+        function syncTabActive() {{
+          prefTabs.querySelectorAll(".pref-tab").forEach(function (btn) {{
+            btn.classList.toggle("active", btn.dataset.pref === state.pref);
+          }});
+        }}
+
+        function updateCityOptions() {{
+          citySelect.innerHTML = '<option value="">すべての市区町村</option>';
+          if (!state.pref) {{
+            cityWrap.classList.add("hidden");
+            state.city = "";
+            return;
+          }}
+          const cities = DATA.citiesByPrefecture[state.pref] || [];
+          cities.forEach(function (c) {{
+            const opt = document.createElement("option");
+            opt.value = c;
+            opt.textContent = c;
+            citySelect.appendChild(opt);
+          }});
+          cityWrap.classList.remove("hidden");
+        }}
+
+        function filtered() {{
+          return DATA.businesses.filter(function (b) {{
+            if (state.pref && b.prefecture !== state.pref) return false;
+            if (state.city && b.city !== state.city) return false;
+            return true;
+          }});
+        }}
+
+        function render() {{
+          const list = filtered();
+          resultCount.textContent = String(list.length);
+          grid.innerHTML = "";
+          if (list.length === 0) {{
+            emptyMsg.classList.remove("hidden");
+            return;
+          }}
+          emptyMsg.classList.add("hidden");
+          const frag = document.createDocumentFragment();
+          const template = document.createElement("template");
+          list.forEach(function (b) {{
+            template.innerHTML = cardHtml(b);
+            frag.appendChild(template.content.firstChild);
+          }});
+          grid.appendChild(frag);
+        }}
+
+        function onPrefChange() {{
+          state.pref = prefSelect.value;
+          state.city = "";
+          citySelect.value = "";
+          syncTabActive();
+          updateCityOptions();
+          render();
+        }}
+
+        function onCityChange() {{
+          state.city = citySelect.value;
+          render();
+        }}
+
+        prefSelect.addEventListener("change", onPrefChange);
+        citySelect.addEventListener("change", onCityChange);
+
+        buildPrefTabs();
+        render();
+      }})();
+    </script>
   </body>
 </html>
 """
 
 
+def write_outputs(html_doc: str, paths: list[Path]) -> None:
+    for path in paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(html_doc, encoding="utf-8")
+        print(f"  出力: {path.resolve()}")
+
+
 def main(argv: list[str] | None = None) -> int:
-    project_root = Path(__file__).resolve().parents[1]
-    parser = argparse.ArgumentParser(description="滋賀県運転代行ポータル HTML を生成します。")
+    root = project_root()
+    parser = argparse.ArgumentParser(description="全国運転代行ポータル HTML を生成します。")
     parser.add_argument(
-        "--input",
+        "--input-dir",
         type=Path,
-        default=project_root / "shiga_daiko_enriched.csv",
-        help="入力 CSV（既定: shiga_daiko_enriched.csv）",
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=project_root / "index.html",
-        help="出力 HTML（既定: プロジェクトルートの index.html）",
+        default=root / "data" / "3_enriched_csv",
+        help="enriched CSV フォルダ",
     )
     args = parser.parse_args(argv)
 
-    if not args.input.is_file():
-        print(f"エラー: 入力ファイルが見つかりません: {args.input}", file=sys.stderr)
+    if not args.input_dir.is_dir():
+        print(f"エラー: フォルダがありません: {args.input_dir}", file=sys.stderr)
         return 1
 
-    df = pd.read_csv(args.input, encoding="utf-8-sig", dtype=str).fillna("")
-    if "業者名" not in df.columns:
-        print("エラー: CSV に「業者名」列がありません。", file=sys.stderr)
+    print(f"読み込み: {args.input_dir}")
+    records = load_all_businesses(args.input_dir)
+    if not records:
+        print("エラー: 読み込める CSV がありません。", file=sys.stderr)
         return 1
 
-    html_doc = build_html(df)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(html_doc, encoding="utf-8")
+    prefs = sorted({r["prefecture"] for r in records})
+    print(f"  合計 {len(records)} 件 / {len(prefs)} 都道府県: {', '.join(prefs)}")
 
-    print(f"入力: {args.input}（{len(df)} 件）")
-    print(f"出力: {args.output.resolve()}")
+    html_doc = build_html(records)
+    outputs = [
+        root / "index.html",
+        root / "public" / "portal" / "index.html",
+    ]
+    write_outputs(html_doc, outputs)
     return 0
 
 
