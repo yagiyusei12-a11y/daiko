@@ -124,6 +124,9 @@ const legalPages: Record<string, string> = {
 app.get("/report", async (_, reply) => {
   return reply.type("text/html; charset=utf-8").sendFile("report.html", lpStaticRoot);
 });
+app.get("/blog", async (_, reply) => {
+  return reply.type("text/html; charset=utf-8").sendFile("blog/index.html", lpStaticRoot);
+});
 app.get("/blog/police-audit", async (_, reply) => {
   return reply.type("text/html; charset=utf-8").sendFile("blog/police-audit.html", lpStaticRoot);
 });
