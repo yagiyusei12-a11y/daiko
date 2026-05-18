@@ -1,0 +1,63 @@
+/* SEOブログ記事（/blog/*）用タイポグラフィ */
+.lp-article {
+  font-size: 1.0625rem;
+  line-height: 1.85;
+  color: #334155;
+}
+
+.lp-article > section + section {
+  margin-top: 3rem;
+  padding-top: 3rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.lp-article h2 {
+  margin: 0 0 1.25rem;
+  font-family: "Plus Jakarta Sans", "Noto Sans JP", system-ui, sans-serif;
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
+
+@media (min-width: 640px) {
+  .lp-article h2 {
+    font-size: 1.75rem;
+  }
+}
+
+.lp-article h3 {
+  margin: 2rem 0 0.75rem;
+  font-family: "Plus Jakarta Sans", "Noto Sans JP", system-ui, sans-serif;
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #1e293b;
+}
+
+.lp-article p {
+  margin: 0 0 1.25rem;
+}
+
+.lp-article p:last-child {
+  margin-bottom: 0;
+}
+
+.lp-article ul {
+  margin: 0 0 1.25rem;
+  padding-left: 1.25rem;
+}
+
+.lp-article li {
+  margin-bottom: 0.5rem;
+}
+
+.lp-article strong {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.lp-article-cta {
+  margin-top: 3.5rem;
+}

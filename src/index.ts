@@ -108,12 +108,25 @@ await app.register(fastifyStatic, {
 app.get("/favicon.ico", async (_, reply) => {
   return reply.sendFile("favicon.ico", publicAssetsRoot);
 });
+app.get("/robots.txt", async (_, reply) => {
+  return reply.type("text/plain; charset=utf-8").sendFile("robots.txt", publicAssetsRoot);
+});
+app.get("/sitemap.xml", async (_, reply) => {
+  return reply.type("application/xml; charset=utf-8").sendFile("sitemap.xml", publicAssetsRoot);
+});
 
 const legalPages: Record<string, string> = {
   "/legal/tokushoho": "legal/tokushoho.html",
   "/legal/privacy": "legal/privacy.html",
   "/legal/terms": "legal/terms.html",
 };
+
+app.get("/report", async (_, reply) => {
+  return reply.type("text/html; charset=utf-8").sendFile("report.html", lpStaticRoot);
+});
+app.get("/blog/police-audit", async (_, reply) => {
+  return reply.type("text/html; charset=utf-8").sendFile("blog/police-audit.html", lpStaticRoot);
+});
 for (const [route, file] of Object.entries(legalPages)) {
   app.get(route, async (_, reply) => {
     return reply.type("text/html; charset=utf-8").sendFile(file, lpStaticRoot);

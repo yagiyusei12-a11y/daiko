@@ -1,0 +1,195 @@
+/**
+ * Google モバイルフレンドリー向け（タップ領域 48px・本文 16px 以上）
+ * LP トップ（index.html）用。lg 未満をモバイル／タブレット想定とする。
+ */
+@media (max-width: 1023px) {
+  :root {
+    --lp-touch-min: 3rem; /* 48px */
+  }
+
+  /* --- タップ領域（48×48px 以上） --- */
+  .lp-tw-header a,
+  .lp-tw-header button,
+  #mobile-nav a,
+  .lp-footer-nav a,
+  .lp-faq-item summary,
+  main .lp-btn,
+  main a.lp-btn,
+  .lp-form button[type="submit"] {
+    min-height: var(--lp-touch-min);
+  }
+
+  #menu-btn {
+    width: var(--lp-touch-min);
+    height: var(--lp-touch-min);
+    min-width: var(--lp-touch-min);
+    min-height: var(--lp-touch-min);
+  }
+
+  .lp-tw-header a[href="/app/login"],
+  .lp-tw-header a[href="/app/register"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .lp-tw-header nav[aria-label="ページ内ナビゲーション"] a {
+    display: inline-flex;
+    align-items: center;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  #mobile-nav {
+    gap: 0.35rem;
+    padding-bottom: 1rem;
+  }
+
+  #mobile-nav a {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 0.5rem;
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  #mobile-nav a[href="/app/"] {
+    justify-content: center;
+    min-height: var(--lp-touch-min);
+    margin-top: 0.5rem;
+  }
+
+  main a.text-sm.font-bold,
+  main a.inline-flex.items-center.gap-1.text-sm {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--lp-touch-min);
+    padding: 0.625rem 0.25rem;
+    margin: 0.125rem 0;
+  }
+
+  .lp-cta-consult a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--lp-touch-min);
+    padding: 0.5rem 0.15rem;
+  }
+
+  .lp-footer-nav {
+    gap: 0.35rem 1rem;
+    justify-content: center;
+  }
+
+  .lp-footer-nav a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+  }
+
+  .lp-faq-list {
+    gap: 0.75rem;
+  }
+
+  .lp-faq-item summary {
+    display: flex;
+    align-items: center;
+    min-height: var(--lp-touch-min);
+    padding-top: 0.875rem;
+    padding-bottom: 0.875rem;
+    font-size: 1rem;
+  }
+
+  .lp-check {
+    min-height: var(--lp-touch-min);
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 0;
+  }
+
+  .lp-check input[type="checkbox"] {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  /* ヒーロー内サブCTA（デモ・相談）の横並び */
+  .lp-cta-stack .flex.flex-col.gap-3 a,
+  .lp-cta-stack .flex.sm\:flex-row a {
+    min-height: var(--lp-touch-min);
+    width: 100%;
+  }
+
+  @media (min-width: 640px) {
+    .lp-cta-stack .flex.sm\:flex-row a {
+      width: auto;
+      flex: 1;
+    }
+  }
+
+  /* --- 本文テキスト 16px 以上（メインコンテンツ） --- */
+  main {
+    font-size: 1rem;
+  }
+
+  main .text-sm {
+    font-size: 1rem;
+    line-height: 1.75;
+  }
+
+  main .text-base {
+    font-size: 1rem;
+  }
+
+  .lp-section-lead,
+  .lp-contact-lead,
+  .lp-faq-answer p,
+  .lp-about-pains p,
+  .lp-usecase-card p,
+  .lp-security-card p {
+    font-size: 1rem;
+    line-height: 1.75;
+  }
+
+  .lp-faq-answer p {
+    font-size: 1rem;
+  }
+
+  #company dl dt,
+  #company dl dd {
+    font-size: 1rem;
+  }
+
+  .lp-cta-consult {
+    font-size: 1rem;
+  }
+
+  .lp-cta-note {
+    font-size: 0.9375rem; /* 15px：補足だが読みやすさのため微調整 */
+    line-height: 1.5;
+  }
+
+  /* ヒーロー下の注釈リスト（補足だが可読性のため） */
+  main ul.text-xs {
+    font-size: 0.9375rem;
+    line-height: 1.6;
+  }
+
+  /* フォーム：16px で iOS の自動ズームを防ぎ、ラベルも読みやすく */
+  .lp-form label {
+    font-size: 1rem;
+  }
+
+  .lp-form input,
+  .lp-form textarea {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+
+  .lp-form-msg {
+    font-size: 1rem;
+  }
+}

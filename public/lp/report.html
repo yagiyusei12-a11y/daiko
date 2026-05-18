@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>運転代行の日報・監査書類作成機能｜Daiko</title>
+    <meta
+      name="description"
+      content="運転代行店の経営者・管理者向け。手書き日報のデジタル化から警察監査用書類・変更届出書のPDF出力まで、スマホで完結。法定帳票をタブ切替で一元管理できるDaikoの機能紹介。"
+    />
+    <link rel="canonical" href="https://daiko.harunoyukoto.jp/report" />
+    <meta property="og:title" content="運転代行の日報・監査書類作成機能｜Daiko" />
+    <meta
+      property="og:description"
+      content="日報・アルコール点検・変更届出書などをスマホとクラウドで作成。監査対応の書類もワンクリックでPDF出力。"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://daiko.harunoyukoto.jp/report" />
+    <meta property="og:site_name" content="Daiko" />
+    <meta property="og:image" content="https://daiko.harunoyukoto.jp/images/ogp-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="運転代行の日報・監査書類作成機能｜Daiko" />
+    <meta
+      name="twitter:description"
+      content="日報・監査書類をスマホで完結。法定帳票の作成とPDF出力に対応した運転代行向けクラウドDaiko。"
+    />
+    <meta name="twitter:image" content="https://daiko.harunoyukoto.jp/images/ogp-image.png" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/lp/lp.css" />
+    <link rel="stylesheet" href="/lp/lp-modern.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Noto Sans JP"', "system-ui", "sans-serif"],
+              display: ['"Plus Jakarta Sans"', '"Noto Sans JP"', "sans-serif"],
+            },
+            boxShadow: {
+              soft: "0 12px 40px rgba(15, 23, 42, 0.08)",
+              glow: "0 20px 50px rgba(37, 99, 235, 0.15)",
+            },
+            colors: {
+              brand: { DEFAULT: "#2563eb", dark: "#1d4ed8", soft: "#eff6ff" },
+              accent: { DEFAULT: "#f97316", soft: "#fff7ed" },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="bg-white text-slate-900 antialiased">
+    <a class="lp-skip" href="#main">本文へスキップ</a>
+
+    <header class="lp-tw-header sticky top-0 z-50 border-b border-slate-100 bg-white/90 backdrop-blur-md">
+      <div class="mx-auto flex h-16 max-w-6xl items-center gap-4 px-5 lg:h-[4.25rem]">
+        <a href="/" class="mr-auto inline-flex items-center gap-2 font-display text-lg font-bold tracking-tight text-slate-900 no-underline">
+          <span class="h-8 w-8 rounded-xl bg-gradient-to-br from-brand to-blue-400 shadow-soft" aria-hidden="true"></span>
+          Daiko
+        </a>
+        <nav class="hidden items-center gap-1 lg:flex" aria-label="ページ内ナビゲーション">
+          <a href="#daily-report" class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 no-underline hover:bg-slate-50 hover:text-brand">日報</a>
+          <a href="#documents" class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 no-underline hover:bg-slate-50 hover:text-brand">帳票・監査</a>
+          <a href="#pdf" class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 no-underline hover:bg-slate-50 hover:text-brand">PDF出力</a>
+          <a href="/" class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 no-underline hover:bg-slate-50 hover:text-brand">トップ</a>
+        </nav>
+        <div class="hidden items-center gap-2 sm:flex">
+          <a href="/app/" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 no-underline hover:border-brand hover:text-brand">デモ</a>
+          <a href="/app/register" class="rounded-xl bg-brand px-4 py-2 text-sm font-bold text-white no-underline shadow-soft hover:bg-brand-dark">無料で始める</a>
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="border-b border-slate-100 bg-gradient-to-b from-brand-soft/40 to-white py-14 lg:py-20">
+        <div class="mx-auto max-w-6xl px-5">
+          <nav class="mb-6 text-sm text-slate-500" aria-label="パンくず">
+            <a href="/" class="font-medium text-brand no-underline hover:underline">トップ</a>
+            <span class="mx-2" aria-hidden="true">/</span>
+            <span class="text-slate-700">日報・監査書類作成</span>
+          </nav>
+          <p class="text-sm font-bold tracking-wide text-brand">日報・監査書類</p>
+          <h1 class="mt-3 font-display text-3xl font-extrabold leading-tight tracking-tight text-slate-900 sm:text-4xl lg:text-[2.5rem]">
+            運転代行の日報・監査書類を、<br class="hidden sm:block" />
+            <span class="bg-gradient-to-r from-brand to-blue-500 bg-clip-text text-transparent">スマホで完結</span>
+          </h1>
+          <p class="mt-5 max-w-3xl text-base leading-relaxed text-slate-600 sm:text-lg">
+            手書き日報の転記や、監査・届出のたびに書式を調べる時間を減らします。現場入力から法定帳票のPDF出力まで、運転代行店の経営者・管理者向けに設計されたクラウド「Daiko」の機能です。
+          </p>
+          <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+            <a href="/app/" class="inline-flex items-center justify-center rounded-2xl bg-brand px-8 py-3.5 text-base font-bold text-white no-underline shadow-soft hover:bg-brand-dark">デモで書類作成を試す</a>
+            <a href="/#contact" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-8 py-3.5 text-base font-bold text-slate-700 no-underline hover:border-brand hover:text-brand">導入のご相談</a>
+          </div>
+        </div>
+      </section>
+
+      <section id="daily-report" class="bg-gray-50 py-16 lg:py-20">
+        <div class="mx-auto max-w-6xl px-5 sm:px-6">
+          <div class="mx-auto max-w-3xl text-center lg:mx-0 lg:text-left">
+            <p class="text-sm font-bold tracking-widest text-brand">DAILY REPORT</p>
+            <h2 class="mt-3 font-display text-2xl font-extrabold text-slate-900 sm:text-3xl">スマホで完結。スマートな日報・運行管理</h2>
+          </div>
+
+          <div class="mt-12 grid gap-10 lg:grid-cols-2 lg:items-center">
+            <article class="rounded-2xl border border-slate-100/80 bg-white p-8 shadow-sm lg:p-9">
+              <div class="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
+                <img
+                  src="/lp/screenshots/lp-mobile-trip-add.png"
+                  alt="運行を追加する画面のスクリーンショット。日報に連動する現場入力"
+                  width="420"
+                  height="780"
+                  class="block h-64 w-full object-cover object-top sm:h-72"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+              <p class="mb-2 text-xs font-bold uppercase tracking-wide text-accent">現場の負担をゼロに</p>
+              <p class="mb-1 text-xs font-medium text-slate-500">運行・日報管理</p>
+              <h3 class="font-display text-xl font-bold text-slate-900">手書き日報から解放</h3>
+              <ul class="mt-6 flex flex-col gap-4">
+                <li class="flex gap-3 text-sm leading-relaxed text-slate-600">
+                  <svg class="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                  <span>スマホ入力で即座にデータ化。必要ならそのまま印刷</span>
+                </li>
+                <li class="flex gap-3 text-sm leading-relaxed text-slate-600">
+                  <svg class="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                  <span>お迎え/お送り先はGPS連携でボタン一つで自動入力</span>
+                </li>
+                <li class="flex gap-3 text-sm leading-relaxed text-slate-600">
+                  <svg class="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                  <span>「午前3時は27時」など、日またぎの営業時間にも完全対応</span>
+                </li>
+              </ul>
+            </article>
+
+            <div class="text-slate-600">
+              <p class="text-base leading-relaxed">
+                運行データは日報・売上・給与計算の土台になります。現場で入力した内容が本部の画面にすぐ反映されるため、締め作業のたびに紙を集めて転記する必要がありません。
+              </p>
+              <p class="mt-4 text-base leading-relaxed">
+                事業日換算（28時間表記）に対応しているため、深夜帯の運行も正しい日付に紐づき、日報と売上のズレを抑えられます。
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="documents" class="lp-section lp-showcase">
+        <div class="lp-wrap">
+          <div class="lp-section-head">
+            <p class="lp-kicker">書類・帳票</p>
+            <h2 class="lp-heading">法定帳票をタブひとつで作成</h2>
+            <p class="lp-section-lead">
+              日報・アルコール点検・従業員名簿・変更届出書など、運転代行に必要な書類を「書類を作る」から一元管理。変更項目を選ぶと必要な入力欄だけが表示されます。
+            </p>
+          </div>
+
+          <article class="lp-showcase-block">
+            <div class="lp-showcase-media lp-showcase-media--wide">
+              <img
+                src="/lp/screenshots/feature-documents.png"
+                alt="書類を作る画面。日報・アルコール点検・変更届出書などをタブで切り替え"
+                width="900"
+                height="520"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+            <div class="lp-showcase-copy">
+              <span class="lp-showcase-tag">監査書類・届出</span>
+              <h3>警察監査・届出に必要な書類をクラウドで</h3>
+              <ul class="lp-showcase-list">
+                <li><strong>機能</strong>事業者情報・随伴車リストから自動入力。内容を直してPDF保存。</li>
+                <li><strong>機能</strong>変更届（共済更新・随伴車入替・屋号変更など）に対応。</li>
+                <li><strong>メリット</strong>手書き・Excel転記の手間を削減し、提出期限に間に合わせやすくなります。</li>
+                <li><strong>メリット</strong>マスタデータと連動するため、記入ミスや住所の食い違いを防げます。</li>
+              </ul>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="pdf" class="lp-section lp-showcase bg-gray-50">
+        <div class="lp-wrap">
+          <article class="lp-showcase-block">
+            <div class="lp-showcase-media lp-showcase-media--pdf">
+              <img
+                src="/lp/screenshots/feature-change-form-pdf.png"
+                alt="変更届出書のPDF出力サンプル。架空県公安委員会宛の様式"
+                width="640"
+                height="900"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+            <div class="lp-showcase-copy">
+              <span class="lp-showcase-tag">PDF出力</span>
+              <h3>公安委員会提出用の様式をそのまま出力</h3>
+              <p class="lp-showcase-lead">
+                画面上で入力した内容を、運転代行業の適正化に関する法律に沿った変更届出書の体裁でPDF化。印刷して提出できます（デモ画面のデータはすべて架空です）。
+              </p>
+              <ul class="lp-showcase-list">
+                <li><strong>機能</strong>届出日・変更日・変更項目・新旧対照表をフォームから自動反映。</li>
+                <li><strong>機能</strong>受託自動車共済契約の更新など、よくある届出パターンに対応。</li>
+                <li><strong>機能</strong>警察の監査時に必要な書類も、システムからワンクリックで印刷。</li>
+                <li><strong>メリット</strong>Wordや手書きの書式調整が不要で、提出物の品質を一定に保てます。</li>
+                <li><strong>メリット</strong>更新時期のたびに同じ手順で再出力でき、事務担当の引き継ぎも楽になります。</li>
+              </ul>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="border-t border-slate-100 bg-gradient-to-b from-brand-soft/30 to-white py-16 lg:py-20">
+        <div class="mx-auto max-w-3xl px-5 text-center">
+          <h2 class="font-display text-2xl font-extrabold text-slate-900 sm:text-3xl">まずはデモで、日報と書類作成を体験</h2>
+          <p class="mt-4 text-base leading-relaxed text-slate-600">
+            ログイン不要のデモ環境で、日報・帳票・PDF出力の流れを確認できます。月額5,478円（税込）・14日無料トライアル。
+          </p>
+          <div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <a href="/app/" class="lp-btn lp-btn--primary lp-btn--lg">デモで書類作成を試す</a>
+            <a href="/" class="lp-btn lp-btn--ghost lp-btn--lg">Daikoトップへ</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="lp-footer">
+      <div class="lp-wrap lp-footer-inner">
+        <a class="lp-logo lp-logo--footer" href="/">Daiko</a>
+        <nav class="lp-footer-nav" aria-label="フッターリンク">
+          <a href="/">トップ</a>
+          <a href="/legal/tokushoho">特定商取引法に基づく表記</a>
+          <a href="/legal/privacy">プライバシーポリシー</a>
+          <a href="/legal/terms">利用規約</a>
+          <a href="/app/">デモ</a>
+          <a href="/app/register">新規登録</a>
+        </nav>
+        <p class="lp-footer-copy">© Daiko — 運転代行向け業務管理クラウド</p>
+      </div>
+    </footer>
+  </body>
+</html>

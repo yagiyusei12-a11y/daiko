@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://daiko.harunoyukoto.jp/sitemap.xml

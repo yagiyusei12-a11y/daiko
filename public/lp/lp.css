@@ -1028,6 +1028,18 @@ a {
   box-shadow: var(--lp-shadow-lg);
   background: #f1f5f9;
   line-height: 0;
+  aspect-ratio: 900 / 520;
+}
+
+.lp-showcase-media--wide {
+  aspect-ratio: 900 / 520;
+}
+
+.lp-showcase-media--phone {
+  aspect-ratio: 420 / 780;
+  max-width: 16rem;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .lp-showcase-media img {
@@ -1037,11 +1049,18 @@ a {
 }
 
 .lp-showcase-media--pdf {
+  aspect-ratio: 640 / 900;
   max-width: 22rem;
   margin: 0 auto;
 }
 
 @media (min-width: 900px) {
+  .lp-showcase-media--phone {
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
   .lp-showcase-media--pdf {
     margin: 0;
     max-width: none;
@@ -1061,13 +1080,18 @@ a {
   margin-bottom: 0.75rem;
 }
 
-.lp-showcase-copy h3 {
+.lp-showcase-copy h3,
+.lp-showcase-copy-title {
   font-family: var(--lp-display);
   font-size: clamp(1.25rem, 3vw, 1.65rem);
   font-weight: 800;
   letter-spacing: -0.02em;
   margin: 0 0 0.75rem;
   line-height: 1.35;
+}
+
+.lp-about .lp-about-grid {
+  margin-top: 2rem;
 }
 
 .lp-showcase-lead {
@@ -1139,11 +1163,30 @@ a {
   box-shadow: var(--lp-shadow);
 }
 
-.lp-about-card h3 {
+.lp-about-card-title {
   margin: 0 0 1rem;
   font-family: var(--lp-display);
   font-size: 1.35rem;
+  font-weight: 700;
   color: var(--lp-blue);
+}
+
+.lp-about-subheading {
+  font-family: var(--lp-display);
+  font-size: clamp(1.35rem, 3vw, 1.75rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  margin: 0;
+  color: var(--lp-text);
+}
+
+.lp-screenshots-teaser-title {
+  margin: 0.5rem 0 0;
+  font-family: var(--lp-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--lp-text);
 }
 
 .lp-about-card p {
@@ -1368,7 +1411,8 @@ a {
   }
 }
 
-.lp-demo-band h2 {
+.lp-demo-band h2,
+.lp-demo-band-title {
   font-family: var(--lp-display);
   font-size: clamp(1.35rem, 3vw, 1.85rem);
   font-weight: 800;
