@@ -142,6 +142,9 @@ app.get("/blog/driver-recruitment", async (_, reply) => {
 app.get("/blog/google-maps-seo", async (_, reply) => {
   return reply.type("text/html; charset=utf-8").sendFile("blog/google-maps-seo.html", lpStaticRoot);
 });
+app.get("/blog/easy-for-everyone", async (_, reply) => {
+  return reply.type("text/html; charset=utf-8").sendFile("blog/easy-for-everyone.html", lpStaticRoot);
+});
 for (const [route, file] of Object.entries(legalPages)) {
   app.get(route, async (_, reply) => {
     return reply.type("text/html; charset=utf-8").sendFile(file, lpStaticRoot);
