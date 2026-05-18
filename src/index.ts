@@ -136,6 +136,9 @@ app.get("/blog/payroll-calculation", async (_, reply) => {
 app.get("/blog/dispatch-efficiency", async (_, reply) => {
   return reply.type("text/html; charset=utf-8").sendFile("blog/dispatch-efficiency.html", lpStaticRoot);
 });
+app.get("/blog/driver-recruitment", async (_, reply) => {
+  return reply.type("text/html; charset=utf-8").sendFile("blog/driver-recruitment.html", lpStaticRoot);
+});
 for (const [route, file] of Object.entries(legalPages)) {
   app.get(route, async (_, reply) => {
     return reply.type("text/html; charset=utf-8").sendFile(file, lpStaticRoot);
