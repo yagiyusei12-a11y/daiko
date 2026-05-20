@@ -253,8 +253,79 @@
           );
         }
 
+        const PORTAL_LIVE_DEBUG = true;
+        const LIVE_SLOT_VISIBLE =
+          "portal-live mt-3 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2.5 text-sm shadow-sm";
+
+        function normalizeCertForMatch(cert) {
+          let s = String(cert || "").trim();
+          try {
+            s = s.normalize("NFKC");
+          } catch (normErr) {
+            /* IE 等 */
+          }
+          return s;
+        }
+
         function liveLookupKey(prefecture, cert) {
-          return String(prefecture || "").trim() + "|" + String(cert || "").trim();
+          return String(prefecture || "").trim() + "|" + normalizeCertForMatch(cert);
+        }
+
+        function buildLiveIndexFromApi(byKey) {
+          const index = Object.create(null);
+          if (!byKey || typeof byKey !== "object") return index;
+          Object.keys(byKey).forEach(function (apiKey) {
+            const item = byKey[apiKey];
+            if (!item) return;
+            index[apiKey] = item;
+            const pref = String(item.prefecture || "").trim();
+            const certRaw = String(item.cert_number || "").trim();
+            const certNorm = normalizeCertForMatch(certRaw);
+            if (pref && certRaw) index[pref + "|" + certRaw] = item;
+            if (pref && certNorm) index[pref + "|" + certNorm] = item;
+            index[liveLookupKey(pref, certRaw)] = item;
+          });
+          return index;
+        }
+
+        function findLiveForCard(prefecture, cert) {
+          const pref = String(prefecture || "").trim();
+          const certRaw = String(cert || "").trim();
+          const certNorm = normalizeCertForMatch(certRaw);
+          const tryKeys = [];
+          if (pref || certRaw) {
+            tryKeys.push(pref + "|" + certRaw);
+            tryKeys.push(pref + "|" + certNorm);
+            tryKeys.push(liveLookupKey(pref, certRaw));
+          }
+          for (let i = 0; i < tryKeys.length; i++) {
+            const k = tryKeys[i];
+            if (k && liveIndex[k]) return { live: liveIndex[k], matchedKey: k };
+          }
+          const keys = Object.keys(liveIndex);
+          for (let j = 0; j < keys.length; j++) {
+            const item = liveIndex[keys[j]];
+            if (!item) continue;
+            if (
+              String(item.prefecture || "").trim() === pref &&
+              normalizeCertForMatch(item.cert_number || "") === certNorm
+            ) {
+              return { live: item, matchedKey: keys[j] + " (scan)" };
+            }
+          }
+          return null;
+        }
+
+        function hideLiveSlot(slot) {
+          slot.innerHTML = "";
+          slot.className = "portal-live hidden";
+          slot.classList.add("hidden");
+        }
+
+        function showLiveSlot(slot, live) {
+          slot.innerHTML = buildLiveInnerHtml(live);
+          slot.className = LIVE_SLOT_VISIBLE;
+          slot.classList.remove("hidden");
         }
 
         function formatPriceLine(prices) {
@@ -309,20 +380,63 @@
         function applyLiveToGrid() {
           try {
             if (!grid) return;
-            grid.querySelectorAll("article[data-prefecture]").forEach(function (article) {
+            const articles = grid.querySelectorAll("article[data-prefecture]");
+            let matched = 0;
+            let noMatch = 0;
+            let shown = 0;
+
+            articles.forEach(function (article) {
               const slot = article.querySelector("[data-live-slot]");
               if (!slot) return;
-              const key = liveLookupKey(article.dataset.prefecture, article.dataset.cert);
-              const live = liveIndex[key];
-              if (!hasLivePayload(live)) {
-                slot.className = "portal-live hidden";
-                slot.innerHTML = "";
+
+              const prefAttr = article.getAttribute("data-prefecture") || "";
+              const certAttr = article.getAttribute("data-cert") || "";
+              const lookupKey = liveLookupKey(prefAttr, certAttr);
+
+              if (PORTAL_LIVE_DEBUG) {
+                console.log("[portal-live] カード照合", {
+                  prefecture: prefAttr,
+                  cert: certAttr,
+                  lookupKey: lookupKey,
+                });
+              }
+
+              const found = findLiveForCard(prefAttr, certAttr);
+              const live = found ? found.live : null;
+
+              if (!live) {
+                noMatch += 1;
+                hideLiveSlot(slot);
+                if (PORTAL_LIVE_DEBUG) {
+                  console.log("[portal-live] 一致なし:", lookupKey);
+                }
                 return;
               }
-              slot.className =
-                "portal-live mt-3 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2.5 text-sm shadow-sm";
-              slot.innerHTML = buildLiveInnerHtml(live);
+
+              matched += 1;
+              if (!hasLivePayload(live)) {
+                hideLiveSlot(slot);
+                if (PORTAL_LIVE_DEBUG) {
+                  console.log("[portal-live] 一致したが表示データなし:", found.matchedKey, live);
+                }
+                return;
+              }
+
+              showLiveSlot(slot, live);
+              shown += 1;
+              if (PORTAL_LIVE_DEBUG) {
+                console.log("[portal-live] 一致しました:", found.matchedKey, live);
+              }
             });
+
+            if (PORTAL_LIVE_DEBUG) {
+              console.log("[portal-live] 反映サマリ", {
+                cards: articles.length,
+                matched: matched,
+                noMatch: noMatch,
+                shown: shown,
+              });
+            }
           } catch (err) {
             console.warn("リアルタイム情報の反映に失敗しました", err);
           }
@@ -337,10 +451,28 @@
         async function loadLiveInfo() {
           try {
             const res = await fetch(LIVE_API_URL, { credentials: "same-origin", cache: "no-store" });
-            if (!res.ok) return false;
+            if (!res.ok) {
+              if (PORTAL_LIVE_DEBUG) {
+                console.warn("[portal-live] API HTTP", res.status, res.statusText);
+              }
+              return false;
+            }
             const data = await res.json();
+            if (PORTAL_LIVE_DEBUG) {
+              const apiKeys = data && data.by_key ? Object.keys(data.by_key) : [];
+              console.log("[portal-live] API 生JSON", data);
+              console.log("[portal-live] API 件数", {
+                count: data && data.count,
+                ok: data && data.ok,
+                keyCount: apiKeys.length,
+                keys: apiKeys,
+              });
+            }
             if (!data || !data.ok || !data.by_key) return false;
-            liveIndex = data.by_key;
+            liveIndex = buildLiveIndexFromApi(data.by_key);
+            if (PORTAL_LIVE_DEBUG) {
+              console.log("[portal-live] インデックスキー数", Object.keys(liveIndex).length);
+            }
             return true;
           } catch (err) {
             console.warn("リアルタイム情報の取得に失敗しました", err);
