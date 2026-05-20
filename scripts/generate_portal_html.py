@@ -29,6 +29,7 @@ from daiko_places_enrich import PREFECTURE_BY_STEM
 
 SITE_URL = "https://daiko.harunoyukoto.jp/"
 PORTAL_URL = "https://daiko.harunoyukoto.jp/portal/"
+PORTAL_DATA_URL = "/portal/portal-data.json"
 LIVE_API_URL = "/portal-member/api/get_live_info.php"
 MEMBER_REGISTER_URL = "/portal-member/register.php"
 MEMBER_LOGIN_URL = "/portal-member/login.php"
@@ -152,15 +153,6 @@ def build_prefecture_index(records: list[dict[str, str]]) -> dict[str, list[str]
 def build_html(records: list[dict[str, str]]) -> str:
     prefectures = sorted({r["prefecture"] for r in records})
     cities_by_pref = build_prefecture_index(records)
-    payload = {
-        "businesses": records,
-        "prefectures": prefectures,
-        "citiesByPrefecture": cities_by_pref,
-        "total": len(records),
-    }
-    json_data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    json_data = json_data.replace("</", "<\\/")
-
     pref_options = "\n".join(
         f'            <option value="{html.escape(p)}">{html.escape(p)}</option>'
         for p in prefectures
@@ -180,55 +172,6 @@ def build_html(records: list[dict[str, str]]) -> str:
     <meta property="og:type" content="website" />
     <meta property="og:url" content="{html.escape(PORTAL_URL)}" />
     <meta property="og:locale" content="ja_JP" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {{
-        safelist: [
-          "hidden",
-          "portal-live",
-          "portal-live--visible",
-          {{
-            pattern: /(bg|text|border|from|to)-emerald-(50|100|200|500|800|900)/,
-          }},
-          {{
-            pattern: /(bg|text|border|from|to)-(teal|slate)-(50|600|700)/,
-          }},
-          "mt-3",
-          "mt-1",
-          "mt-0.5",
-          "mt-2",
-          "pt-2",
-          "rounded-xl",
-          "rounded-full",
-          "px-3",
-          "py-2.5",
-          "text-sm",
-          "text-xs",
-          "font-semibold",
-          "flex",
-          "flex-wrap",
-          "items-center",
-          "gap-1.5",
-          "gap-2",
-          "inline-flex",
-          "shadow-sm",
-          "border-t",
-          "h-2",
-          "w-2",
-          "bg-gradient-to-r",
-        ],
-        theme: {{
-          extend: {{
-            colors: {{
-              brand: {{ DEFAULT: "#2563eb", dark: "#1d4ed8" }},
-            }},
-            fontFamily: {{
-              display: ['"Segoe UI"', "Hiragino Sans", "Meiryo", "sans-serif"],
-            }},
-          }},
-        }},
-      }};
-    </script>
     <style>
       body {{ font-family: "Segoe UI", "Hiragino Sans", "Meiryo", sans-serif; }}
       .pref-tab.active {{
@@ -339,7 +282,10 @@ def build_html(records: list[dict[str, str]]) -> str:
         </p>
       </section>
 
-      <div id="card-grid" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite"></div>
+      <p id="portal-loading" class="rounded-xl border border-slate-200 bg-white py-10 text-center text-sm text-slate-600">
+        一覧を読み込んでいます…
+      </p>
+      <div id="card-grid" class="hidden grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite"></div>
       <p id="empty-msg" class="hidden rounded-xl border border-dashed border-slate-300 bg-white py-12 text-center text-sm text-slate-500">
         条件に一致する業者がありません。都道府県または市区町村を変更してください。
       </p>
@@ -371,25 +317,55 @@ def build_html(records: list[dict[str, str]]) -> str:
       </section>
     </footer>
 
-    <script id="portal-data" type="application/json">{json_data}</script>
+    <script>
+      tailwind.config = {{
+        theme: {{
+          extend: {{
+            colors: {{
+              brand: {{ DEFAULT: "#2563eb", dark: "#1d4ed8" }},
+            }},
+            fontFamily: {{
+              display: ['"Segoe UI"', "Hiragino Sans", "Meiryo", "sans-serif"],
+            }},
+          }},
+        }},
+      }};
+    </script>
+    <script defer src="https://cdn.tailwindcss.com"></script>
     <script>
       (function () {{
         const SITE_URL = {json.dumps(SITE_URL)};
         const LIVE_API_URL = {json.dumps(LIVE_API_URL)};
+        const PORTAL_DATA_URL = {json.dumps(PORTAL_DATA_URL)};
 
         let DATA = {{ businesses: [], prefectures: [], citiesByPrefecture: {{}}, total: 0 }};
-        try {{
-          const raw = JSON.parse(document.getElementById("portal-data").textContent);
-          DATA = {{
-            businesses: Array.isArray(raw.businesses) ? raw.businesses : [],
-            prefectures: Array.isArray(raw.prefectures) ? raw.prefectures : [],
-            citiesByPrefecture: raw.citiesByPrefecture && typeof raw.citiesByPrefecture === "object"
-              ? raw.citiesByPrefecture
-              : {{}},
-            total: typeof raw.total === "number" ? raw.total : (raw.businesses ? raw.businesses.length : 0),
-          }};
-        }} catch (parseErr) {{
-          console.error("ポータルデータの読み込みに失敗しました", parseErr);
+        let renderGeneration = 0;
+
+        async function loadPortalData() {{
+          const controller = new AbortController();
+          const timer = setTimeout(function () {{ controller.abort(); }}, 20000);
+          try {{
+            const res = await fetch(PORTAL_DATA_URL, {{
+              cache: "no-store",
+              signal: controller.signal,
+            }});
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            const raw = await res.json();
+            DATA = {{
+              businesses: Array.isArray(raw.businesses) ? raw.businesses : [],
+              prefectures: Array.isArray(raw.prefectures) ? raw.prefectures : [],
+              citiesByPrefecture: raw.citiesByPrefecture && typeof raw.citiesByPrefecture === "object"
+                ? raw.citiesByPrefecture
+                : {{}},
+              total: typeof raw.total === "number" ? raw.total : (raw.businesses ? raw.businesses.length : 0),
+            }};
+            return true;
+          }} catch (parseErr) {{
+            console.error("ポータルデータの読み込みに失敗しました", parseErr);
+            return false;
+          }} finally {{
+            clearTimeout(timer);
+          }}
         }}
 
         /** API 会員データ（配列検索用。by_key の辞書キーは使わない） */
@@ -401,6 +377,7 @@ def build_html(records: list[dict[str, str]]) -> str:
         const prefTabs = document.getElementById("pref-tabs");
         const grid = document.getElementById("card-grid");
         const emptyMsg = document.getElementById("empty-msg");
+        const portalLoading = document.getElementById("portal-loading");
         const resultCount = document.getElementById("result-count");
 
         const state = {{ pref: "", city: "" }};
@@ -770,8 +747,14 @@ def build_html(records: list[dict[str, str]]) -> str:
         }}
 
         async function loadLiveInfo() {{
+          const controller = new AbortController();
+          const timer = setTimeout(function () {{ controller.abort(); }}, 10000);
           try {{
-            const res = await fetch(LIVE_API_URL, {{ credentials: "same-origin", cache: "no-store" }});
+            const res = await fetch(LIVE_API_URL, {{
+              credentials: "same-origin",
+              cache: "no-store",
+              signal: controller.signal,
+            }});
             if (!res.ok) {{
               if (PORTAL_LIVE_DEBUG) {{
                 console.warn("[portal-live] API HTTP", res.status, res.statusText);
@@ -793,6 +776,8 @@ def build_html(records: list[dict[str, str]]) -> str:
           }} catch (err) {{
             console.warn("リアルタイム情報の取得に失敗しました", err);
             return false;
+          }} finally {{
+            clearTimeout(timer);
           }}
         }}
 
@@ -851,30 +836,57 @@ def build_html(records: list[dict[str, str]]) -> str:
           }}
         }}
 
-        function render() {{
+        function setGridLoading(isLoading) {{
+          if (portalLoading) portalLoading.classList.toggle("hidden", !isLoading);
+          if (grid) grid.classList.toggle("hidden", isLoading);
+        }}
+
+        function render(onDone) {{
+          const done = typeof onDone === "function" ? onDone : function () {{}};
           try {{
             const list = filtered();
             if (resultCount) resultCount.textContent = String(list.length);
-            if (!grid) return;
+            if (!grid) {{
+              done();
+              return;
+            }}
+            renderGeneration += 1;
+            const generation = renderGeneration;
             grid.innerHTML = "";
             if (list.length === 0) {{
               if (emptyMsg) emptyMsg.classList.remove("hidden");
+              done();
               return;
             }}
             if (emptyMsg) emptyMsg.classList.add("hidden");
-            const frag = document.createDocumentFragment();
             const template = document.createElement("template");
-            list.forEach(function (b) {{
-              try {{
-                appendCardNode(b, frag, template);
-              }} catch (cardErr) {{
-                console.warn("カード生成をスキップしました", b && b.name, cardErr);
+            let index = 0;
+            const chunkSize = 40;
+
+            function appendChunk() {{
+              if (generation !== renderGeneration) return;
+              const frag = document.createDocumentFragment();
+              const end = Math.min(index + chunkSize, list.length);
+              for (; index < end; index += 1) {{
+                try {{
+                  appendCardNode(list[index], frag, template);
+                }} catch (cardErr) {{
+                  console.warn("カード生成をスキップしました", list[index] && list[index].name, cardErr);
+                }}
               }}
-            }});
-            grid.appendChild(frag);
+              grid.appendChild(frag);
+              if (index < list.length) {{
+                requestAnimationFrame(appendChunk);
+              }} else {{
+                done();
+              }}
+            }}
+
+            requestAnimationFrame(appendChunk);
           }} catch (err) {{
             console.error("一覧の描画に失敗しました", err);
             if (emptyMsg) emptyMsg.classList.remove("hidden");
+            done();
           }}
         }}
 
@@ -895,13 +907,7 @@ def build_html(records: list[dict[str, str]]) -> str:
         if (prefSelect) prefSelect.addEventListener("change", onPrefChange);
         if (citySelect) citySelect.addEventListener("change", onCityChange);
 
-        function boot() {{
-          try {{
-            buildPrefTabs();
-            render();
-          }} catch (err) {{
-            console.error("ポータル初期化に失敗しました", err);
-          }}
+        function afterRender() {{
           loadLiveInfo()
             .then(function () {{
               applyLiveToGrid();
@@ -909,6 +915,33 @@ def build_html(records: list[dict[str, str]]) -> str:
             .catch(function (err) {{
               console.warn("リアルタイム情報の後追い反映をスキップしました", err);
             }});
+        }}
+
+        async function boot() {{
+          setGridLoading(true);
+          try {{
+            const ok = await loadPortalData();
+            if (!ok) {{
+              if (emptyMsg) {{
+                emptyMsg.textContent = "一覧データの読み込みに失敗しました。ページを再読み込みしてください。";
+                emptyMsg.classList.remove("hidden");
+              }}
+              setGridLoading(false);
+              return;
+            }}
+            buildPrefTabs();
+            render(function () {{
+              setGridLoading(false);
+              afterRender();
+            }});
+          }} catch (err) {{
+            console.error("ポータル初期化に失敗しました", err);
+            if (emptyMsg) {{
+              emptyMsg.textContent = "一覧の表示に失敗しました。ページを再読み込みしてください。";
+              emptyMsg.classList.remove("hidden");
+            }}
+            setGridLoading(false);
+          }}
         }}
 
         boot();
@@ -956,6 +989,18 @@ def main(argv: list[str] | None = None) -> int:
         root / "public" / "portal" / "index.html",
     ]
     write_outputs(html_doc, outputs)
+
+    data_path = root / "public" / "portal" / "portal-data.json"
+    data_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "businesses": records,
+        "prefectures": sorted({r["prefecture"] for r in records}),
+        "citiesByPrefecture": build_prefecture_index(records),
+        "total": len(records),
+    }
+    json_text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    data_path.write_text(json_text, encoding="utf-8")
+    print(f"  出力: {data_path.resolve()}")
     return 0
 
 
