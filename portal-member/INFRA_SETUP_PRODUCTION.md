@@ -1,30 +1,53 @@
 # portal-member 本番構築マニュアル（Kagoya VPS / Ubuntu）
 
-**対象**: すでに Node.js（Daiko Fastify）・Nginx・静的ポータル（`/portal/`）が動いている本番サーバー  
-**目的**: `portal-member`（PHP 会員システム）を MySQL と PHP-FPM 経由で完全稼働させる  
-**想定パス**: アプリは `ubuntu` ユーザーの `~/daiko`（= `/home/ubuntu/daiko`）に clone 済み
+**対象**: すでに Node.js（Daiko Fastify）・静的ポータル（`/portal/`）が本番稼働中の VPS  
+**目的**: `portal-member`（PHP 会員システム）を MySQL + PHP-FPM で動かし、HTTPS から利用可能にする  
+**想定パス**: `~/daiko`（= `/home/ubuntu/daiko`）
 
-> ローカルから VPS に入る例（鍵のパスは環境に合わせて変更）  
-> `ssh -i "C:\path\to\your-key.pem" ubuntu@133.18.141.239`
+## 本番アーキテクチャ（実態）
 
-以下は **VPS に SSH ログインしたあと**、上から順にコピペして進めてください。
+| レイヤ | 役割 |
+|--------|------|
+| **Docker Caddy**（80/443） | HTTPS 終端。`daiko.harunoyukoto.jp` を受ける |
+| **ホスト Nginx**（**9080 のみ**） | `/portal-member/` を PHP-FPM へ。80 番は使わない |
+| **PHP-FPM**（Unix ソケット） | `login.php` / `dashboard.php` / API 等 |
+| **Node.js**（3001） | Daiko 本体・`/portal/` 静的配信など（Caddy から `host.docker.internal:3001`） |
+| **MySQL**（3306） | `portal_member` DB（Daiko の PostgreSQL とは別） |
+
+```text
+Internet → Caddy (Docker :443)
+            ├─ /portal-member* → host.docker.internal:9080 → Nginx → PHP-FPM
+            └─ その他            → host.docker.internal:3001 → Node (Daiko)
+```
+
+> **注意**: ホストの Nginx を 80 番で起動しようとすると、Docker が 80/443 を使用中のため失敗します。portal-member 用 Nginx は **内部ポート 9080 専用**です。  
+> Docker から `127.0.0.1:9080` だけでは届かないため、**`172.17.0.1:9080`**（docker0 ブリッジ）でも待ち受けます。
+
+### 一括セットアップ（推奨）
+
+手順 1〜5 をまとめて実行するスクリプト:
+
+```bash
+# ローカルからアップロード（CRLF 除去してから実行）
+scp -i "鍵のパス" scripts/vps-setup-portal-member-infra.sh ubuntu@133.18.141.239:/tmp/
+ssh -i "鍵のパス" ubuntu@133.18.141.239 \
+  "sed -i 's/\r$//' /tmp/vps-setup-portal-member-infra.sh && bash /tmp/vps-setup-portal-member-infra.sh"
+```
 
 ---
 
-## 0. 事前確認（1分）
+## 0. 事前確認
 
 ```bash
-# リポジトリがあるか
 ls -la ~/daiko/portal-member/api/get_live_info.php
-
-# Node（Daiko）は動いているか（本番はポート 3001）
 curl -sS http://127.0.0.1:3001/health
 
-# Nginx の設定ファイル名を確認（サイト名は環境で異なります）
-ls -la /etc/nginx/sites-enabled/
+# HTTPS 手前が Caddy (Docker) か確認
+docker ps --format '{{.Names}}' | grep -i caddy
+cat ~/order/deploy/vps/Caddyfile
 ```
 
-以降、**`DAIKO_ROOT=/home/ubuntu/daiko`** として記載します。パスが違う場合は読み替えてください。
+以降 **`DAIKO_ROOT=/home/ubuntu/daiko`**、`CADDY_FILE=/home/ubuntu/order/deploy/vps/Caddyfile` とします。
 
 ---
 
@@ -35,190 +58,151 @@ ls -la /etc/nginx/sites-enabled/
 ```bash
 sudo apt update
 sudo apt install -y \
-  php-fpm \
-  php-cli \
-  php-mysql \
-  php-mbstring \
-  php-xml \
-  php-curl \
-  php-zip
+  php-fpm php-cli php-mysql php-mbstring php-xml php-curl php-zip
 ```
-
-Ubuntu 24.04 などでは `php-fpm` が **PHP 8.3** 系になることが多いです（8.2 の場合も手順は同じで、後述のパスだけ `8.2` に読み替え）。
 
 ### 1-2. サービスの起動・有効化
 
 ```bash
-# インストールされた PHP のメジャーバージョンを確認
-php -v
+php -v   # 例: PHP 8.3.x
 
-# 例: PHP 8.3 の場合
 sudo systemctl enable php8.3-fpm
 sudo systemctl start php8.3-fpm
 sudo systemctl status php8.3-fpm --no-pager
 ```
 
-PHP 8.2 の場合は `php8.2-fpm` に置き換えてください。
+（8.2 の場合は `php8.2-fpm` に読み替え）
 
-### 1-3. PHP-FPM のソケットパスを確認する
-
-**方法A（おすすめ）— ソケットファイルの存在確認**
+### 1-3. PHP-FPM ソケットの確認
 
 ```bash
 ls -la /run/php/
-```
-
-表示例:
-
-```text
-php8.3-fpm.sock -> /etc/alternatives/php-fpm.sock
-php-fpm.sock
-```
-
-本マニュアルでは **`/run/php/php8.3-fpm.sock`** を使います（実際のファイル名に合わせて Nginx の `fastcgi_pass` を後で設定）。
-
-**方法B — プール設定から読む**
-
-```bash
-# 8.3 の例
 grep -E '^listen\s*=' /etc/php/8.3/fpm/pool.d/www.conf
 ```
 
-`listen = /run/php/php8.3-fpm.sock` のように表示されます。
-
-**方法C — 動作テスト**
-
-```bash
-echo '<?php phpinfo();' | sudo tee /tmp/phpinfo-test.php
-sudo php-fpm8.3 -t 2>/dev/null || sudo php-fpm8.2 -t
-```
+Nginx の `fastcgi_pass` には **`unix:/run/php/php8.3-fpm.sock`** を指定します（実際のパスに合わせる）。
 
 ---
 
-## 2. MySQL（MariaDB）への流し込み
+## 2. MySQL への流し込み
 
-Ubuntu の `mysql-server` は多くの場合 **MariaDB** です。コマンドは `mysql` のまま使えます。
-
-### 2-1. MySQL サーバーのインストール（未導入の場合のみ）
+### 2-1. MySQL サーバー（未導入時のみ）
 
 ```bash
 sudo apt install -y mysql-server
 sudo systemctl enable mysql
 sudo systemctl start mysql
-sudo systemctl status mysql --no-pager
 ```
 
-すでに PostgreSQL（Daiko 用）だけ入っていて MySQL が無い場合に実行してください。  
-**Daiko 本体の PostgreSQL には触れません**（別 DB です）。
+Daiko 本体の **PostgreSQL には触れません**。
 
-### 2-2. 本番用パスワードを決める
+### 2-2. DB パスワード（`.portal-member-db-secret`）
 
-ターミナルでランダム文字列を生成（メモしておく）:
+本番では平文パスワードを **`~/daiko/.portal-member-db-secret`** に保存し、`config.php` 生成時に参照します（Git 管理外）。
 
 ```bash
-openssl rand -base64 24
+openssl rand -base64 24 | tee ~/daiko/.portal-member-db-secret
+chmod 600 ~/daiko/.portal-member-db-secret
 ```
 
-以下、例として次のプレースホルダを使います（**必ず自分の値に置き換え**）:
-
-| 項目 | 例（置き換える） |
-|------|------------------|
+| 項目 | 値 |
+|------|-----|
 | DB 名 | `portal_member` |
 | DB ユーザー | `portal_user` |
-| DB パスワード | `ここに openssl で出した文字列` |
+| DB パスワード | `.portal-member-db-secret` の内容 |
 
-### 2-3. root で DB・テーブルを作成（マイグレーション流し込み）
-
-`001_init.sql` には `CREATE DATABASE` と `USE portal_member` が含まれているため、**初回は root（または sudo mysql）で流し込み**ます。
+### 2-3. マイグレーション（`001_init.sql`）
 
 ```bash
 cd ~/daiko
 sudo mysql < portal-member/database/migrations/001_init.sql
-```
 
-エラーなく終わったら確認:
-
-```bash
-sudo mysql -e "SHOW DATABASES LIKE 'portal_member';"
 sudo mysql -e "USE portal_member; SHOW TABLES;"
 ```
 
-期待されるテーブル: `users`, `companies`, `prices`, `events`
+期待: `users`, `companies`, `prices`, `events`
 
-### 2-4. 本番用ユーザー作成と権限付与
+### 2-4. ユーザー作成と権限付与
 
-MySQL に root で入る:
+パスワードに記号が含まれる場合に備え、PHP で SQL を生成する方法が安全です。
 
 ```bash
-sudo mysql
-```
+export DAIKO_ROOT=/home/ubuntu/daiko
+export DB_PASS="$(tr -d '\n' < "${DAIKO_ROOT}/.portal-member-db-secret")"
 
-**mysql プロンプト内**で以下を実行（パスワードは `YOUR_PORTAL_DB_PASSWORD` を 2-2 で決めた値に変更）:
-
-```sql
-CREATE USER IF NOT EXISTS 'portal_user'@'localhost' IDENTIFIED BY 'YOUR_PORTAL_DB_PASSWORD';
-GRANT SELECT, INSERT, UPDATE, DELETE ON portal_member.* TO 'portal_user'@'localhost';
-FLUSH PRIVILEGES;
-EXIT;
+php -r '
+$pass = getenv("DB_PASS");
+$sql = sprintf(
+    "CREATE USER IF NOT EXISTS '\''portal_user'\''@'\''localhost'\'' IDENTIFIED BY %s;\n"
+    . "ALTER USER '\''portal_user'\''@'\''localhost'\'' IDENTIFIED BY %s;\n"
+    . "GRANT SELECT, INSERT, UPDATE, DELETE ON portal_member.* TO '\''portal_user'\''@'\''localhost'\'';\n"
+    . "FLUSH PRIVILEGES;\n",
+    var_export($pass, true),
+    var_export($pass, true)
+);
+file_put_contents("/tmp/portal_member_grants.sql", $sql);
+'
+sudo mysql < /tmp/portal_member_grants.sql
+rm -f /tmp/portal_member_grants.sql
 ```
 
 接続テスト:
 
 ```bash
-mysql -u portal_user -p portal_member -e "SELECT COUNT(*) AS users FROM users;"
+mysql -u portal_user -p"$(cat ~/daiko/.portal-member-db-secret)" portal_member \
+  -e "SELECT COUNT(*) AS users FROM users;"
 ```
-
-（初回は 0 件で正常です）
 
 ---
 
 ## 3. `config/config.php` の作成
 
-### 3-1. コピーと編集
+### 3-1. シークレットから自動生成
 
 ```bash
-cd ~/daiko/portal-member
-cp config/config.example.php config/config.php
-nano config/config.php
+export DAIKO_ROOT=/home/ubuntu/daiko
+php <<'PHP'
+<?php
+$root = getenv('DAIKO_ROOT') ?: '/home/ubuntu/daiko';
+$secret = $root . '/.portal-member-db-secret';
+$example = $root . '/portal-member/config/config.example.php';
+$target = $root . '/portal-member/config/config.php';
+$pass = trim(file_get_contents($secret));
+$text = file_get_contents($example);
+$text = preg_replace(
+    "/'password'\\s*=>\\s*'[^']*'/",
+    "'password' => " . var_export($pass, true),
+    $text,
+    1
+);
+file_put_contents($target, $text);
+PHP
 ```
 
-**変更する箇所（`db` 配列）**:
+手動で編集する場合は `config.example.php` をコピーし、`db.password` だけ `.portal-member-db-secret` と同じ値にします。
 
-```php
-    'db' => [
-        'host' => '127.0.0.1',
-        'port' => 3306,
-        'database' => 'portal_member',
-        'username' => 'portal_user',
-        'password' => 'YOUR_PORTAL_DB_PASSWORD',  // 2-2 で決めた値
-        'charset' => 'utf8mb4',
-    ],
-```
+### 3-2. パーミッション（www-data が `config.php` を読める）
 
-`enriched_csv_dir` はデフォルトのままで問題ありません（`~/daiko/data/3_enriched_csv` を指します）。  
-登録時の CSV マージに使います。
-
-### 3-2. パーミッション（PHP-FPM が読めるように）
-
-PHP-FPM は通常 **`www-data`** ユーザーで動きます。`ubuntu` のホーム配下にコードがあるため、読み取り権限を付けます。
+PHP-FPM は **`www-data`** で動作します。`config.php` は **グループ `www-data`・モード `640`** とします。
 
 ```bash
-# ホームに「通過だけ」許可（中身は見えないが daiko 配下へ辿れる）
 chmod o+x /home/ubuntu
-
-# portal-member と enriched CSV を www-data が読めるように
 chmod -R o+rX /home/ubuntu/daiko/portal-member
 chmod -R o+rX /home/ubuntu/daiko/data/3_enriched_csv
 
-# config.php は他人に読まれないよう厳しめに
+sudo chgrp www-data /home/ubuntu/daiko/portal-member/config/config.php
 chmod 640 /home/ubuntu/daiko/portal-member/config/config.php
+sudo chmod g+x /home/ubuntu/daiko/portal-member/config
+
+sudo systemctl restart php8.3-fpm
 ```
 
-### 3-3. PHP から DB 接続テスト（任意）
+### 3-3. DB 接続テスト
 
 ```bash
+export DAIKO_ROOT=/home/ubuntu/daiko
 php -r '
-$c = require "/home/ubuntu/daiko/portal-member/config/config.php";
+$c = require getenv("DAIKO_ROOT") . "/portal-member/config/config.php";
 $d = $c["db"];
 $dsn = "mysql:host={$d["host"]};port={$d["port"]};dbname={$d["database"]};charset={$d["charset"]}";
 new PDO($dsn, $d["username"], $d["password"]);
@@ -226,50 +210,37 @@ echo "DB OK\n";
 '
 ```
 
-`DB OK` と出れば成功です。
-
 ---
 
-## 4. Nginx 設定のマージと反映
+## 4. Nginx（内部 9080）の設定
 
-### 4-1. 既存設定のバックアップ
+既存の **Docker Caddy 用サイト設定は変更しません**。portal-member 専用の Nginx サイトを **新規追加**します。
 
-```bash
-# 有効なサイト設定を確認（ファイル名は環境により daiko / default など）
-NGINX_SITE=$(ls /etc/nginx/sites-enabled/ | head -1)
-echo "編集対象: /etc/nginx/sites-available/${NGINX_SITE}"
+### 4-1. サイト設定ファイルの作成
 
-sudo cp "/etc/nginx/sites-available/${NGINX_SITE}" \
-        "/etc/nginx/sites-available/${NGINX_SITE}.bak.$(date +%Y%m%d%H%M)"
-```
-
-手動で名前が分かっている場合:
+`fastcgi_pass` のソケットは 1-3 で確認したパスに合わせてください。
 
 ```bash
-sudo nano /etc/nginx/sites-available/daiko
-# または
-sudo nano /etc/nginx/sites-enabled/daiko
-```
+DAIKO_ROOT=/home/ubuntu/daiko
+PHP_SOCK=/run/php/php8.3-fpm.sock   # 環境に合わせて変更
 
-### 4-2. 挿入する location ブロック（コピペ用）
+sudo tee /etc/nginx/sites-available/portal-member-internal >/dev/null <<NGINX
+# portal-member: PHP only on internal port (Caddy -> 9080)
+server {
+    listen 127.0.0.1:9080;
+    listen 172.17.0.1:9080;
+    listen [::1]:9080;
+    server_name localhost;
 
-**重要**: 次のブロックは、既存の **`location / { ... proxy_pass ... }`（Node へ渡すブロック）より上** に置いてください。  
-そうしないと `/portal-member/` が Node に取られて 404 になります。
-
-`fastcgi_pass` のソケットは **1-3 で確認したパス**に合わせてください（以下は PHP 8.3 の例）。
-
-```nginx
-    # ----- portal-member（PHP-FPM）-----
     location ^~ /portal-member/ {
-        alias /home/ubuntu/daiko/portal-member/;
+        alias ${DAIKO_ROOT}/portal-member/;
         index index.php login.php;
 
         location ~ \.php$ {
             include fastcgi_params;
-            fastcgi_param SCRIPT_FILENAME $request_filename;
+            fastcgi_param SCRIPT_FILENAME \$request_filename;
             fastcgi_index index.php;
-
-            fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+            fastcgi_pass unix:${PHP_SOCK};
             fastcgi_read_timeout 60s;
         }
 
@@ -279,127 +250,141 @@ sudo nano /etc/nginx/sites-enabled/daiko
         }
     }
 
-    # 機密ディレクトリ直アクセス拒否
     location ~ ^/portal-member/(config|database|includes)/ {
         deny all;
         return 404;
     }
-    # ----- /portal-member -----
+}
+NGINX
+
+sudo ln -sf /etc/nginx/sites-available/portal-member-internal \
+  /etc/nginx/sites-enabled/portal-member-internal
+sudo rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
 ```
 
-PHP 8.2 の場合:
+### 4-2. 起動とリロード
 
-```nginx
-            fastcgi_pass unix:/run/php/php8.2-fpm.sock;
-```
-
-### 4-3. 既存設定との関係（確認ポイント）
-
-| パス | 振り分け |
-|------|----------|
-| `/portal/` | 既存どおり（静的 HTML または alias） |
-| `/portal-member/` | **今回追加** → PHP-FPM |
-| `/` `/app/` `/api/` など | 既存どおり → Node（`127.0.0.1:3001` 等） |
-
-Node の upstream 名やポートは **既存のまま変更しない**でください（本番 Daiko は **3001**）。
-
-### 4-4. 構文チェックとリロード
+80 番は Docker が使用中のため、**9080 のみ**で起動します。
 
 ```bash
 sudo nginx -t
-```
-
-`syntax is ok` / `test is successful` と出たら:
-
-```bash
+sudo systemctl enable nginx
+sudo systemctl start nginx    # 初回。80 番エラーが出ても 9080 が listen していれば OK
 sudo systemctl reload nginx
+sudo ss -tlnp | grep 9080
 ```
 
-失敗した場合はバックアップから戻す:
+### 4-3. ルーティング一覧
 
-```bash
-sudo cp "/etc/nginx/sites-available/${NGINX_SITE}.bak."* \
-        "/etc/nginx/sites-available/${NGINX_SITE}"
-sudo nginx -t && sudo systemctl reload nginx
-```
+| パス | 処理 |
+|------|------|
+| `/portal-member/*` | Nginx:9080 → PHP-FPM |
+| `/portal/` 他 | Caddy → Node:3001（既存） |
+| `/app/` `/api/` 等 | Caddy → Node:3001（既存） |
 
 ---
 
-## 5. 動作確認（最終接続テスト）
+## 5. Caddy（Docker）への `handle` 追加
 
-### 5-1. VPS 上から
+`~/order/deploy/vps/Caddyfile` の **`daiko.harunoyukoto.jp` ブロック内**、`reverse_proxy ...:3001` の **直前に** 次を追加します。
 
-```bash
-# 公開 API（JSON）
-curl -sS http://127.0.0.1/portal-member/api/get_live_info.php | head -c 200
-echo
-
-# ログイン画面（HTML）
-curl -sS -o /dev/null -w "login.php HTTP %{http_code}\n" \
-  http://127.0.0.1/portal-member/login.php
+```caddyfile
+daiko.harunoyukoto.jp {
+	handle /portal-member* {
+		reverse_proxy host.docker.internal:9080
+	}
+	reverse_proxy host.docker.internal:3001
+}
 ```
 
-期待:
+反映:
 
-- API: `{"ok":true,...}` または会員未登録時でも `ok:true` と空の `by_key`
-- login.php: `HTTP 200`
+```bash
+sudo cp ~/order/deploy/vps/Caddyfile \
+  ~/order/deploy/vps/Caddyfile.bak.$(date +%Y%m%d%H%M%S)
 
-### 5-2. ブラウザ（HTTPS）
+# 編集後
+docker exec vps-caddy-1 caddy reload --config /etc/caddy/Caddyfile \
+  || docker restart vps-caddy-1
+```
+
+> `handle /portal-member*` が無いと、HTTPS の `/portal-member/` は Node に流れ `{"error":"not found"}` になります。
+
+---
+
+## 6. 動作確認
+
+### 6-1. ホスト Nginx（9080）経由
+
+```bash
+curl -sS http://127.0.0.1:9080/portal-member/api/get_live_info.php | head -c 200
+echo
+curl -sS -o /dev/null -w "login:%{http_code}\n" \
+  http://127.0.0.1:9080/portal-member/login.php
+```
+
+### 6-2. Docker から 9080 へ（Caddy 経路の確認）
+
+```bash
+docker exec vps-caddy-1 wget -qO- \
+  http://host.docker.internal:9080/portal-member/api/get_live_info.php | head -c 120
+```
+
+### 6-3. 本番 HTTPS
+
+```bash
+curl -sS https://daiko.harunoyukoto.jp/portal-member/api/get_live_info.php | head -c 200
+curl -sS -o /dev/null -w "login:%{http_code}\n" \
+  https://daiko.harunoyukoto.jp/portal-member/login.php
+```
 
 | URL | 期待 |
 |-----|------|
-| https://daiko.harunoyukoto.jp/portal-member/login.php | ログイン画面 |
-| https://daiko.harunoyukoto.jp/portal-member/api/get_live_info.php | JSON |
-| https://daiko.harunoyukoto.jp/portal/ | ポータル（会員登録後、カードにリアルタイム枠） |
-
-### 5-3. 会員登録のスモークテスト（任意）
-
-1. https://daiko.harunoyukoto.jp/portal-member/register.php を開く  
-2. `data/3_enriched_csv` に存在する **認定番号** と都道府県で登録  
-3. https://daiko.harunoyukoto.jp/portal-member/dashboard.php で料金・イベントを保存  
-4. `/portal/` を再読み込みし、該当業者カードに「本日営業中」等が出るか確認  
+| `.../portal-member/api/get_live_info.php` | `{"ok":true,...}` |
+| `.../portal-member/login.php` | HTTP 200 |
+| `.../portal/` | ポータル HTML（リアルタイム枠は会員登録後） |
 
 ---
 
-## 6. よくあるトラブル
+## 7. よくあるトラブル
 
 | 症状 | 原因と対処 |
 |------|------------|
-| API が `{"error":"not found"}`（Node の JSON） | Nginx で `/portal-member/` が Node より下にある、または未設定 → **4-2 の location を `location /` より上に** |
-| 502 Bad Gateway | `fastcgi_pass` のソケットパス不一致 → **1-3 で再確認** |
-| 500 + `config missing` | `config/config.php` 未作成 → **手順 3** |
-| 500 + DB エラー | ユーザー・パスワード・権限 → **手順 2-4** |
-| ファイルが読めない | `www-data` が `~/daiko` を読めない → **手順 3-2 の chmod** |
-| `register.php` で CSV マージ失敗 | `data/3_enriched_csv` の権限不足 → `chmod -R o+rX ~/daiko/data/3_enriched_csv` |
-
-ログ確認:
+| HTTPS で `{"error":"not found"}` | Caddy に `handle /portal-member*` が無い → **手順 5** |
+| HTTPS 502 | Nginx が `127.0.0.1:9080` のみ待受 → **`172.17.0.1:9080` を追加**（手順 4-1） |
+| 500 Permission denied（config.php） | `www-data` が読めない → **chgrp www-data + chmod 640**（手順 3-2） |
+| 502 / empty（PHP） | `fastcgi_pass` のソケット不一致 → **手順 1-3** |
+| 500 DB エラー | `portal_user` / `.portal-member-db-secret` 不一致 → **手順 2・3** |
+| Nginx が 80 番で起動失敗 | 正常（Docker が 80 使用）。**9080 が listen していれば OK** |
 
 ```bash
-sudo tail -n 50 /var/log/nginx/error.log
-sudo journalctl -u php8.3-fpm -n 50 --no-pager
+sudo tail -n 30 /var/log/nginx/error.log
+sudo journalctl -u php8.3-fpm -n 30 --no-pager
+docker logs vps-caddy-1 --tail 20
 ```
 
 ---
 
-## 7. チェックリスト（完了の目安）
+## 8. チェックリスト
 
-- [ ] `php8.x-fpm` が **active (running)**
+- [ ] `php8.x-fpm` が active
 - [ ] `/run/php/php8.x-fpm.sock` が存在
-- [ ] DB `portal_member` と 4 テーブルが存在
-- [ ] `portal_user` で `mysql -u portal_user -p portal_member` 接続できる
-- [ ] `config/config.php` に本番パスワードを設定済み
-- [ ] `sudo nginx -t` 成功 → `reload` 済み
-- [ ] `curl` で `get_live_info.php` が JSON を返す
-- [ ] ブラウザで `login.php` が 200
+- [ ] `portal_member` DB と 4 テーブル
+- [ ] `~/daiko/.portal-member-db-secret`（600）
+- [ ] `config.php`（640, グループ `www-data`）
+- [ ] Nginx が `127.0.0.1:9080` と `172.17.0.1:9080` で listen
+- [ ] Caddyfile に `handle /portal-member*` → `:9080`
+- [ ] HTTPS で API / login が 200
 
 ---
 
-## 参考ファイル（リポジトリ内）
+## 参考
 
 | ファイル | 内容 |
 |----------|------|
-| `portal-member/database/migrations/001_init.sql` | スキーマ定義 |
-| `portal-member/nginx_proxy.conf` | Nginx 設定のコメント付き全文例 |
-| `portal-member/config/config.example.php` | 設定の雛形 |
+| `database/migrations/001_init.sql` | スキーマ |
+| `nginx_proxy.conf` | 旧来のコメント付き Nginx 例（本番は **9080 + Caddy** を優先） |
+| `../scripts/vps-setup-portal-member-infra.sh` | 一括セットアップ |
+| `../scripts/vps-finish-portal-member.sh` | 権限・Caddy 追記の仕上げ用 |
 
-詳細なアプリ仕様は [README.md](./README.md) を参照してください。
+アプリ仕様: [README.md](./README.md)

@@ -4,6 +4,7 @@ public/app/
 .env
 .env.deploy
 portal-member/config/config.php
+.portal-member-db-secret
 scripts/.vps-platform-env.snippet
 prisma/dev.db
 prisma/dev.db-journal
