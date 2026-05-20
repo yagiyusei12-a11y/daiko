@@ -123,7 +123,21 @@
       (function () {
         const SITE_URL = "https://daiko.harunoyukoto.jp/";
         const LIVE_API_URL = "/portal-member/api/get_live_info.php";
-        const DATA = JSON.parse(document.getElementById("portal-data").textContent);
+
+        let DATA = { businesses: [], prefectures: [], citiesByPrefecture: {}, total: 0 };
+        try {
+          const raw = JSON.parse(document.getElementById("portal-data").textContent);
+          DATA = {
+            businesses: Array.isArray(raw.businesses) ? raw.businesses : [],
+            prefectures: Array.isArray(raw.prefectures) ? raw.prefectures : [],
+            citiesByPrefecture: raw.citiesByPrefecture && typeof raw.citiesByPrefecture === "object"
+              ? raw.citiesByPrefecture
+              : {},
+            total: typeof raw.total === "number" ? raw.total : (raw.businesses ? raw.businesses.length : 0),
+          };
+        } catch (parseErr) {
+          console.error("ポータルデータの読み込みに失敗しました", parseErr);
+        }
 
         let liveIndex = {};
 
@@ -251,7 +265,7 @@
                 '<span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>本日営業中</span>' +
                 "<span>（待機ドライバー: " + esc(String(ev.drivers_available || 0)) + "名）</span></p>";
             } else if (ev.drivers_available > 0) {
-              html += "<p class="font-semibold text-emerald-800">待機ドライバー: " + esc(String(ev.drivers_available)) + "名</p>";
+              html += '<p class="font-semibold text-emerald-800">待機ドライバー: ' + esc(String(ev.drivers_available)) + "名</p>";
             }
             if (ev.title || ev.body) {
               const label = ev.title || ev.body;
@@ -269,31 +283,44 @@
         }
 
         function applyLiveToGrid() {
-          grid.querySelectorAll("article[data-cert]").forEach(function (article) {
-            const slot = article.querySelector("[data-live-slot]");
-            if (!slot) return;
-            const key = liveLookupKey(article.dataset.prefecture, article.dataset.cert);
-            const live = liveIndex[key];
-            if (!hasLivePayload(live)) {
-              slot.className = "portal-live hidden";
-              slot.innerHTML = "";
-              return;
-            }
-            slot.className =
-              "portal-live mt-3 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2.5 text-sm shadow-sm";
-            slot.innerHTML = buildLiveInnerHtml(live);
-          });
+          try {
+            if (!grid) return;
+            grid.querySelectorAll("article[data-prefecture]").forEach(function (article) {
+              const slot = article.querySelector("[data-live-slot]");
+              if (!slot) return;
+              const key = liveLookupKey(article.dataset.prefecture, article.dataset.cert);
+              const live = liveIndex[key];
+              if (!hasLivePayload(live)) {
+                slot.className = "portal-live hidden";
+                slot.innerHTML = "";
+                return;
+              }
+              slot.className =
+                "portal-live mt-3 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2.5 text-sm shadow-sm";
+              slot.innerHTML = buildLiveInnerHtml(live);
+            });
+          } catch (err) {
+            console.warn("リアルタイム情報の反映に失敗しました", err);
+          }
+        }
+
+        function appendCardNode(b, frag, template) {
+          template.innerHTML = cardHtml(b);
+          const node = template.content.firstElementChild;
+          if (node) frag.appendChild(node);
         }
 
         async function loadLiveInfo() {
           try {
             const res = await fetch(LIVE_API_URL, { credentials: "same-origin", cache: "no-store" });
-            if (!res.ok) return;
+            if (!res.ok) return false;
             const data = await res.json();
-            if (!data.ok || !data.by_key) return;
+            if (!data || !data.ok || !data.by_key) return false;
             liveIndex = data.by_key;
+            return true;
           } catch (err) {
             console.warn("リアルタイム情報の取得に失敗しました", err);
+            return false;
           }
         }
 
@@ -340,30 +367,43 @@
         }
 
         function filtered() {
-          return DATA.businesses.filter(function (b) {
-            if (state.pref && b.prefecture !== state.pref) return false;
-            if (state.city && b.city !== state.city) return false;
-            return true;
-          });
+          try {
+            return DATA.businesses.filter(function (b) {
+              if (state.pref && b.prefecture !== state.pref) return false;
+              if (state.city && b.city !== state.city) return false;
+              return true;
+            });
+          } catch (err) {
+            console.warn("filter failed", err);
+            return [];
+          }
         }
 
         function render() {
-          const list = filtered();
-          resultCount.textContent = String(list.length);
-          grid.innerHTML = "";
-          if (list.length === 0) {
-            emptyMsg.classList.remove("hidden");
-            return;
+          try {
+            const list = filtered();
+            if (resultCount) resultCount.textContent = String(list.length);
+            if (!grid) return;
+            grid.innerHTML = "";
+            if (list.length === 0) {
+              if (emptyMsg) emptyMsg.classList.remove("hidden");
+              return;
+            }
+            if (emptyMsg) emptyMsg.classList.add("hidden");
+            const frag = document.createDocumentFragment();
+            const template = document.createElement("template");
+            list.forEach(function (b) {
+              try {
+                appendCardNode(b, frag, template);
+              } catch (cardErr) {
+                console.warn("カード生成をスキップしました", b && b.name, cardErr);
+              }
+            });
+            grid.appendChild(frag);
+          } catch (err) {
+            console.error("一覧の描画に失敗しました", err);
+            if (emptyMsg) emptyMsg.classList.remove("hidden");
           }
-          emptyMsg.classList.add("hidden");
-          const frag = document.createDocumentFragment();
-          const template = document.createElement("template");
-          list.forEach(function (b) {
-            template.innerHTML = cardHtml(b);
-            frag.appendChild(template.content.firstChild);
-          });
-          grid.appendChild(frag);
-          applyLiveToGrid();
         }
 
         function onPrefChange() {
@@ -380,12 +420,26 @@
           render();
         }
 
-        prefSelect.addEventListener("change", onPrefChange);
-        citySelect.addEventListener("change", onCityChange);
+        if (prefSelect) prefSelect.addEventListener("change", onPrefChange);
+        if (citySelect) citySelect.addEventListener("change", onCityChange);
 
-        buildPrefTabs();
-        render();
-        loadLiveInfo().then(applyLiveToGrid);
+        function boot() {
+          try {
+            buildPrefTabs();
+            render();
+          } catch (err) {
+            console.error("ポータル初期化に失敗しました", err);
+          }
+          loadLiveInfo()
+            .then(function () {
+              applyLiveToGrid();
+            })
+            .catch(function (err) {
+              console.warn("リアルタイム情報の後追い反映をスキップしました", err);
+            });
+        }
+
+        boot();
       })();
     </script>
   </body>
