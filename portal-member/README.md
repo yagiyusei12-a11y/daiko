@@ -22,7 +22,8 @@ cp portal-member/config/config.example.php portal-member/config/config.php
 PHP 8.1+ と `pdo_mysql` が必要です。
 
 - 開発例: `cd portal-member && php -S localhost:8080`
-- 本番: nginx で `portal-member/` を PHP-FPM に渡す（例: `/portal-member/`）
+- **本番（Kagoya VPS）**: [INFRA_SETUP_PRODUCTION.md](./INFRA_SETUP_PRODUCTION.md)（PHP-FPM・MySQL・Nginx・config.php の手順書）
+- Nginx 設定例: [nginx_proxy.conf](./nginx_proxy.conf)
 
 ## 主なファイル
 
