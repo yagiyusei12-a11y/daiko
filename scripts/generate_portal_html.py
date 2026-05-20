@@ -422,18 +422,62 @@ def build_html(records: list[dict[str, str]]) -> str:
         const LIVE_SLOT_VISIBLE =
           "portal-live mt-3 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2.5 text-sm shadow-sm";
 
-        function normalizeCertForMatch(cert) {{
-          let s = String(cert || "").trim();
+        function normalizeUnicode(s) {{
+          let t = String(s || "").trim();
           try {{
-            s = s.normalize("NFKC");
+            t = t.normalize("NFKC");
           }} catch (normErr) {{
             /* IE 等 */
           }}
+          return t;
+        }}
+
+        /** 都道府県のベース名（末尾の都・道・府・県と空白を除去） */
+        function normalizePrefectureBase(prefecture) {{
+          let s = normalizeUnicode(prefecture);
+          s = s.replace(/[\\s\\u3000]+/g, "");
+          s = s.replace(/(都|道|府|県)$/u, "");
           return s;
         }}
 
-        function liveLookupKey(prefecture, cert) {{
-          return String(prefecture || "").trim() + "|" + normalizeCertForMatch(cert);
+        /**
+         * 認定番号から数字列を抽出し整数化（「第02号」「2」「公安委員会 第 02 号」→ 2）
+         * 複数ある場合は最後の数字列を採用（「第○号」形式を想定）
+         */
+        function extractCertNumber(cert) {{
+          const s = normalizeUnicode(cert);
+          if (!s) return null;
+          const matches = s.match(/\\d+/g);
+          if (!matches || matches.length === 0) return null;
+          const n = parseInt(matches[matches.length - 1], 10);
+          return Number.isFinite(n) ? n : null;
+        }}
+
+        function normalizeCertForMatch(cert) {{
+          return normalizeUnicode(cert);
+        }}
+
+        /** 照合用キー: 都道府県ベース + 認定番号（数値） */
+        function liveMatchKey(prefecture, cert) {{
+          const prefBase = normalizePrefectureBase(prefecture);
+          const certNum = extractCertNumber(cert);
+          if (!prefBase || certNum === null) return null;
+          return prefBase + "|#" + certNum;
+        }}
+
+        function prefecturesMatch(a, b) {{
+          const pa = normalizePrefectureBase(a);
+          const pb = normalizePrefectureBase(b);
+          return pa !== "" && pb !== "" && pa === pb;
+        }}
+
+        function certsMatch(a, b) {{
+          const na = extractCertNumber(a);
+          const nb = extractCertNumber(b);
+          if (na !== null && nb !== null) return na === nb;
+          const sa = normalizeCertForMatch(a);
+          const sb = normalizeCertForMatch(b);
+          return sa !== "" && sb !== "" && sa === sb;
         }}
 
         function buildLiveIndexFromApi(byKey) {{
@@ -442,43 +486,40 @@ def build_html(records: list[dict[str, str]]) -> str:
           Object.keys(byKey).forEach(function (apiKey) {{
             const item = byKey[apiKey];
             if (!item) return;
+            const pairKey = liveMatchKey(item.prefecture, item.cert_number);
+            if (pairKey) index[pairKey] = item;
             index[apiKey] = item;
-            const pref = String(item.prefecture || "").trim();
-            const certRaw = String(item.cert_number || "").trim();
-            const certNorm = normalizeCertForMatch(certRaw);
-            if (pref && certRaw) index[pref + "|" + certRaw] = item;
-            if (pref && certNorm) index[pref + "|" + certNorm] = item;
-            index[liveLookupKey(pref, certRaw)] = item;
           }});
           return index;
         }}
 
         function findLiveForCard(prefecture, cert) {{
-          const pref = String(prefecture || "").trim();
-          const certRaw = String(cert || "").trim();
-          const certNorm = normalizeCertForMatch(certRaw);
-          const tryKeys = [];
-          if (pref || certRaw) {{
-            tryKeys.push(pref + "|" + certRaw);
-            tryKeys.push(pref + "|" + certNorm);
-            tryKeys.push(liveLookupKey(pref, certRaw));
-          }}
-          for (let i = 0; i < tryKeys.length; i++) {{
-            const k = tryKeys[i];
-            if (k && liveIndex[k]) return {{ live: liveIndex[k], matchedKey: k }};
+          const pairKey = liveMatchKey(prefecture, cert);
+          if (pairKey && liveIndex[pairKey]) {{
+            return {{ live: liveIndex[pairKey], matchedKey: pairKey }};
           }}
           const keys = Object.keys(liveIndex);
           for (let j = 0; j < keys.length; j++) {{
             const item = liveIndex[keys[j]];
-            if (!item) continue;
-            if (
-              String(item.prefecture || "").trim() === pref &&
-              normalizeCertForMatch(item.cert_number || "") === certNorm
-            ) {{
-              return {{ live: item, matchedKey: keys[j] + " (scan)" }};
+            if (!item || !item.prefecture) continue;
+            if (prefecturesMatch(prefecture, item.prefecture) && certsMatch(cert, item.cert_number)) {{
+              return {{
+                live: item,
+                matchedKey: keys[j] + " (scan:" + liveMatchKey(item.prefecture, item.cert_number) + ")",
+              }};
             }}
           }}
           return null;
+        }}
+
+        function describeCardMatchKeys(prefecture, cert) {{
+          return {{
+            prefecture: prefecture,
+            cert: cert,
+            prefBase: normalizePrefectureBase(prefecture),
+            certNum: extractCertNumber(cert),
+            matchKey: liveMatchKey(prefecture, cert),
+          }};
         }}
 
         function hideLiveSlot(slot) {{
@@ -556,14 +597,10 @@ def build_html(records: list[dict[str, str]]) -> str:
 
               const prefAttr = article.getAttribute("data-prefecture") || "";
               const certAttr = article.getAttribute("data-cert") || "";
-              const lookupKey = liveLookupKey(prefAttr, certAttr);
+              const cardKeys = describeCardMatchKeys(prefAttr, certAttr);
 
               if (PORTAL_LIVE_DEBUG) {{
-                console.log("[portal-live] カード照合", {{
-                  prefecture: prefAttr,
-                  cert: certAttr,
-                  lookupKey: lookupKey,
-                }});
+                console.log("[portal-live] カード照合", cardKeys);
               }}
 
               const found = findLiveForCard(prefAttr, certAttr);
@@ -573,7 +610,11 @@ def build_html(records: list[dict[str, str]]) -> str:
                 noMatch += 1;
                 hideLiveSlot(slot);
                 if (PORTAL_LIVE_DEBUG) {{
-                  console.log("[portal-live] 一致なし:", lookupKey);
+                  console.log(
+                    "[portal-live] 一致なし:",
+                    cardKeys.matchKey || cardKeys.prefBase + "|" + cardKeys.certNum,
+                    cardKeys
+                  );
                 }}
                 return;
               }}
@@ -625,12 +666,26 @@ def build_html(records: list[dict[str, str]]) -> str:
             const data = await res.json();
             if (PORTAL_LIVE_DEBUG) {{
               const apiKeys = data && data.by_key ? Object.keys(data.by_key) : [];
+              const parsed = (data && data.by_key)
+                ? Object.keys(data.by_key).map(function (k) {{
+                    const it = data.by_key[k];
+                    return {{
+                      apiKey: k,
+                      prefecture: it.prefecture,
+                      cert_number: it.cert_number,
+                      prefBase: normalizePrefectureBase(it.prefecture),
+                      certNum: extractCertNumber(it.cert_number),
+                      matchKey: liveMatchKey(it.prefecture, it.cert_number),
+                    }};
+                  }})
+                : [];
               console.log("[portal-live] API 生JSON", data);
               console.log("[portal-live] API 件数", {{
                 count: data && data.count,
                 ok: data && data.ok,
                 keyCount: apiKeys.length,
                 keys: apiKeys,
+                parsed: parsed,
               }});
             }}
             if (!data || !data.ok || !data.by_key) return false;
