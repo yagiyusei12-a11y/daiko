@@ -29,6 +29,7 @@ from daiko_places_enrich import PREFECTURE_BY_STEM
 
 SITE_URL = "https://daiko.harunoyukoto.jp/"
 PORTAL_URL = "https://daiko.harunoyukoto.jp/portal/"
+LIVE_API_URL = "/portal-member/api/get_live_info.php"
 PAGE_TITLE = "全国の運転代行業者一覧・検索 | はるのゆこと"
 META_DESCRIPTION = (
     "滋賀県、福井県、岐阜県、大阪府など、各地域の運転代行業者一覧。"
@@ -284,7 +285,10 @@ def build_html(records: list[dict[str, str]]) -> str:
     <script>
       (function () {{
         const SITE_URL = {json.dumps(SITE_URL)};
+        const LIVE_API_URL = {json.dumps(LIVE_API_URL)};
         const DATA = JSON.parse(document.getElementById("portal-data").textContent);
+
+        let liveIndex = {{}};
 
         const prefSelect = document.getElementById("pref-select");
         const citySelect = document.getElementById("city-select");
@@ -359,14 +363,101 @@ def build_html(records: list[dict[str, str]]) -> str:
             ? '<span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">' + cert + "</span>"
             : "";
 
+          const certRaw = String(b.cert || "").trim();
+          const prefRaw = String(b.prefecture || "").trim();
+
           return (
-            '<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">' +
+            '<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"' +
+            ' data-prefecture="' + esc(prefRaw) + '" data-cert="' + esc(certRaw) + '">' +
             '<div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">' + name + "</h2>" + certBadge + "</div>" +
             '<p class="mt-1 text-xs font-medium text-brand">' + pref + " · " + esc(b.city) + "</p>" +
             '<p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>' + pref + " " + addr + "</span></p>" +
             '<div class="mt-3 flex flex-wrap items-center gap-2">' + starsHtml(b.rating) + reviews + "</div>" +
+            '<div class="portal-live hidden" data-live-slot aria-live="polite"></div>' +
             siteLink + callBtn + "</article>"
           );
+        }}
+
+        function liveLookupKey(prefecture, cert) {{
+          return String(prefecture || "").trim() + "|" + String(cert || "").trim();
+        }}
+
+        function formatPriceLine(prices) {{
+          if (!prices) return "";
+          const parts = [];
+          if (prices.base_distance != null && prices.base_price != null) {{
+            parts.push("初乗り " + prices.base_distance + "km " + prices.base_price + "円");
+          }}
+          if (prices.per_km_price != null) {{
+            parts.push("以降 " + prices.per_km_price + "円/km");
+          }}
+          if (prices.note) parts.push(prices.note);
+          return parts.join(" · ");
+        }}
+
+        function hasLivePayload(live) {{
+          if (!live) return false;
+          const ev = live.event;
+          if (ev && (ev.is_active || ev.drivers_available > 0 || ev.title || ev.body)) return true;
+          const p = live.prices;
+          if (!p) return false;
+          return p.base_price != null || p.per_km_price != null || p.base_distance != null || !!p.note;
+        }}
+
+        function buildLiveInnerHtml(live) {{
+          let html = "";
+          const ev = live.event;
+          if (ev) {{
+            if (ev.is_active) {{
+              html +=
+                '<p class="flex flex-wrap items-center gap-2 font-semibold text-emerald-800">' +
+                '<span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>本日営業中</span>' +
+                "<span>（待機ドライバー: " + esc(String(ev.drivers_available || 0)) + "名）</span></p>";
+            }} else if (ev.drivers_available > 0) {{
+              html += "<p class=\"font-semibold text-emerald-800\">待機ドライバー: " + esc(String(ev.drivers_available)) + "名</p>";
+            }}
+            if (ev.title || ev.body) {{
+              const label = ev.title || ev.body;
+              html += '<p class="mt-1 text-slate-700"><span class="font-semibold text-emerald-900">イベント:</span> ' + esc(label) + "</p>";
+              if (ev.title && ev.body && ev.body !== ev.title) {{
+                html += '<p class="mt-0.5 text-xs text-slate-600">' + esc(ev.body) + "</p>";
+              }}
+            }}
+          }}
+          const priceLine = formatPriceLine(live.prices);
+          if (priceLine) {{
+            html += '<p class="mt-2 border-t border-emerald-100 pt-2 text-xs text-slate-700"><span class="font-semibold">料金:</span> ' + esc(priceLine) + "</p>";
+          }}
+          return html;
+        }}
+
+        function applyLiveToGrid() {{
+          grid.querySelectorAll("article[data-cert]").forEach(function (article) {{
+            const slot = article.querySelector("[data-live-slot]");
+            if (!slot) return;
+            const key = liveLookupKey(article.dataset.prefecture, article.dataset.cert);
+            const live = liveIndex[key];
+            if (!hasLivePayload(live)) {{
+              slot.className = "portal-live hidden";
+              slot.innerHTML = "";
+              return;
+            }}
+            slot.className =
+              "portal-live mt-3 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2.5 text-sm shadow-sm";
+            slot.innerHTML = buildLiveInnerHtml(live);
+          }});
+        }}
+
+        async function loadLiveInfo() {{
+          try {{
+            const res = await fetch(LIVE_API_URL, {{ credentials: "same-origin", cache: "no-store" }});
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data.ok || !data.by_key) return;
+            liveIndex = data.by_key;
+          }} catch (err) {{
+            console.warn("リアルタイム情報の取得に失敗しました", err);
+          }}
         }}
 
         function buildPrefTabs() {{
@@ -435,6 +526,7 @@ def build_html(records: list[dict[str, str]]) -> str:
             frag.appendChild(template.content.firstChild);
           }});
           grid.appendChild(frag);
+          applyLiveToGrid();
         }}
 
         function onPrefChange() {{
@@ -456,6 +548,7 @@ def build_html(records: list[dict[str, str]]) -> str:
 
         buildPrefTabs();
         render();
+        loadLiveInfo().then(applyLiveToGrid);
       }})();
     </script>
   </body>
