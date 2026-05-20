@@ -30,6 +30,8 @@ from daiko_places_enrich import PREFECTURE_BY_STEM
 SITE_URL = "https://daiko.harunoyukoto.jp/"
 PORTAL_URL = "https://daiko.harunoyukoto.jp/portal/"
 LIVE_API_URL = "/portal-member/api/get_live_info.php"
+MEMBER_REGISTER_URL = "/portal-member/register.php"
+MEMBER_LOGIN_URL = "/portal-member/login.php"
 PAGE_TITLE = "全国の運転代行業者一覧・検索 | はるのゆこと"
 META_DESCRIPTION = (
     "滋賀県、福井県、岐阜県、大阪府など、各地域の運転代行業者一覧。"
@@ -211,10 +213,20 @@ def build_html(records: list[dict[str, str]]) -> str:
             運転代行ポータル <span class="text-slate-400 font-normal">|</span> はるのゆこと
           </h1>
         </div>
-        <a href="{html.escape(SITE_URL)}"
-           class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 no-underline shadow-sm hover:border-brand hover:text-brand">
-          システムについて（トップへ戻る）
-        </a>
+        <nav class="flex flex-wrap items-center gap-2" aria-label="サイトナビゲーション">
+          <a href="{html.escape(MEMBER_REGISTER_URL)}"
+             class="rounded-xl bg-brand px-4 py-2 text-sm font-bold text-white no-underline shadow-sm transition hover:bg-blue-800">
+            業者会員登録
+          </a>
+          <a href="{html.escape(MEMBER_LOGIN_URL)}"
+             class="rounded-xl border border-brand/30 bg-white px-4 py-2 text-sm font-semibold text-brand no-underline shadow-sm hover:bg-blue-50">
+            会員ログイン
+          </a>
+          <a href="{html.escape(SITE_URL)}"
+             class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 no-underline shadow-sm hover:border-brand hover:text-brand">
+            システムについて
+          </a>
+        </nav>
       </div>
     </header>
 
@@ -223,10 +235,16 @@ def build_html(records: list[dict[str, str]]) -> str:
         <h2 id="cta-top" class="text-base font-bold leading-relaxed sm:text-lg">
           【運転代行業者様へ】配車・売上管理をスマートにする最新システムを導入しませんか？初期費用を抑えて業務を効率化。詳しくはこちら
         </h2>
-        <a href="{html.escape(SITE_URL)}"
-           class="mt-5 inline-flex items-center justify-center rounded-xl bg-white px-6 py-3 text-sm font-bold text-brand shadow-md transition hover:bg-blue-50 sm:text-base">
-          Daiko（運転代行向け業務管理）を見る →
-        </a>
+        <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <a href="{html.escape(MEMBER_REGISTER_URL)}"
+             class="inline-flex items-center justify-center rounded-xl bg-white px-6 py-3 text-sm font-bold text-brand shadow-md transition hover:bg-blue-50 sm:text-base">
+            掲載情報を更新する（無料会員登録）→
+          </a>
+          <a href="{html.escape(SITE_URL)}"
+             class="inline-flex items-center justify-center rounded-xl border border-white/40 bg-white/10 px-6 py-3 text-sm font-bold text-white no-underline transition hover:bg-white/20 sm:text-base">
+            Daiko（業務管理システム）を見る →
+          </a>
+        </div>
       </section>
 
       <section class="mb-6 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-6" aria-labelledby="filter-heading">
@@ -269,14 +287,22 @@ def build_html(records: list[dict[str, str]]) -> str:
           <p class="text-sm font-semibold leading-relaxed text-slate-800 sm:text-base">
             【運転代行業者様へ】配車・売上管理をスマートにする最新システムを導入しませんか？初期費用を抑えて業務を効率化。詳しくはこちら
           </p>
-          <a href="{html.escape(SITE_URL)}"
-             class="mt-4 inline-flex rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white no-underline shadow-sm hover:bg-blue-800">
-            詳しくはこちら（Daiko 公式サイト）
-          </a>
+          <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <a href="{html.escape(MEMBER_REGISTER_URL)}"
+               class="inline-flex rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white no-underline shadow-sm hover:bg-blue-800">
+              業者会員登録（掲載・リアルタイム情報の更新）
+            </a>
+            <a href="{html.escape(SITE_URL)}"
+               class="inline-flex rounded-xl border border-brand/20 bg-white px-5 py-2.5 text-sm font-bold text-brand no-underline shadow-sm hover:bg-blue-50">
+              Daiko 公式サイト
+            </a>
+          </div>
         </div>
         <p class="mt-8 text-center text-xs text-slate-500">
           掲載情報は Google 等の公開情報をもとに自動収集しています。内容の正確性は各事業者へご確認ください。<br />
           運営: <a href="{html.escape(SITE_URL)}" class="text-brand hover:underline">はるのゆこと / Daiko</a>
+          · <a href="{html.escape(MEMBER_REGISTER_URL)}" class="text-brand hover:underline">業者会員登録</a>
+          · <a href="{html.escape(MEMBER_LOGIN_URL)}" class="text-brand hover:underline">会員ログイン</a>
         </p>
       </section>
     </footer>
