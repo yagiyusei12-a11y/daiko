@@ -30,6 +30,7 @@ from daiko_places_enrich import PREFECTURE_BY_STEM
 SITE_URL = "https://daiko.harunoyukoto.jp/"
 PORTAL_URL = "https://daiko.harunoyukoto.jp/portal/"
 PORTAL_DATA_URL = "/portal/portal-data.json"
+PORTAL_CSS_URL = "/portal/portal.css"
 LIVE_API_URL = "/portal-member/api/get_live_info.php"
 MEMBER_REGISTER_URL = "/portal-member/register.php"
 MEMBER_LOGIN_URL = "/portal-member/login.php"
@@ -172,44 +173,7 @@ def build_html(records: list[dict[str, str]]) -> str:
     <meta property="og:type" content="website" />
     <meta property="og:url" content="{html.escape(PORTAL_URL)}" />
     <meta property="og:locale" content="ja_JP" />
-    <style>
-      body {{ font-family: "Segoe UI", "Hiragino Sans", "Meiryo", sans-serif; }}
-      .pref-tab.active {{
-        background-color: #2563eb;
-        color: #fff;
-        border-color: #2563eb;
-      }}
-      /* リアルタイム枠（Tailwind CDN の動的クラス未生成対策・表示は CSS で保証） */
-      .portal-live.hidden {{
-        display: none !important;
-      }}
-      .portal-live.portal-live--visible {{
-        display: block !important;
-        margin-top: 0.75rem;
-        border-radius: 0.75rem;
-        border: 1px solid #a7f3d0;
-        background: linear-gradient(to right, #ecfdf5, #f0fdfa);
-        padding: 0.625rem 0.75rem;
-        font-size: 0.875rem;
-        line-height: 1.5;
-        box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-      }}
-      .portal-live--visible .portal-live-dot {{
-        display: inline-block;
-        width: 0.5rem;
-        height: 0.5rem;
-        border-radius: 9999px;
-        background-color: #10b981;
-      }}
-      .portal-live--visible .portal-live-title {{
-        font-weight: 600;
-        color: #065f46;
-      }}
-      .portal-live--visible .portal-live-muted {{
-        color: #334155;
-        font-size: 0.75rem;
-      }}
-    </style>
+    <link rel="stylesheet" href="{html.escape(PORTAL_CSS_URL)}" />
   </head>
   <body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
     <header class="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
@@ -287,7 +251,7 @@ def build_html(records: list[dict[str, str]]) -> str:
       </p>
       <div id="card-grid" class="hidden grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite"></div>
       <p id="empty-msg" class="hidden rounded-xl border border-dashed border-slate-300 bg-white py-12 text-center text-sm text-slate-500">
-        条件に一致する業者がありません。都道府県または市区町村を変更してください。
+        条件に一致する業者がありません。都道府県を選ぶか、別の市区町村をお試しください。
       </p>
     </main>
 
@@ -317,21 +281,6 @@ def build_html(records: list[dict[str, str]]) -> str:
       </section>
     </footer>
 
-    <script>
-      tailwind.config = {{
-        theme: {{
-          extend: {{
-            colors: {{
-              brand: {{ DEFAULT: "#2563eb", dark: "#1d4ed8" }},
-            }},
-            fontFamily: {{
-              display: ['"Segoe UI"', "Hiragino Sans", "Meiryo", "sans-serif"],
-            }},
-          }},
-        }},
-      }};
-    </script>
-    <script defer src="https://cdn.tailwindcss.com"></script>
     <script>
       (function () {{
         const SITE_URL = {json.dumps(SITE_URL)};
@@ -595,6 +544,10 @@ def build_html(records: list[dict[str, str]]) -> str:
           return {{ live: matchedEntry.live, matchedKey: matchedEntry.apiKey }};
         }}
 
+        function liveArticle(slot) {{
+          return slot && slot.closest ? slot.closest("article") : null;
+        }}
+
         function hideLiveSlot(slot) {{
           if (!slot) return;
           slot.innerHTML = "";
@@ -602,6 +555,8 @@ def build_html(records: list[dict[str, str]]) -> str:
           slot.classList.add("hidden");
           slot.classList.remove("portal-live--visible");
           slot.hidden = true;
+          const article = liveArticle(slot);
+          if (article) article.classList.remove("portal-card--live");
         }}
 
         function showLiveSlot(slot, live) {{
@@ -611,6 +566,8 @@ def build_html(records: list[dict[str, str]]) -> str:
           slot.classList.remove("hidden");
           slot.hidden = false;
           slot.removeAttribute("hidden");
+          const article = liveArticle(slot);
+          if (article) article.classList.add("portal-card--live");
         }}
 
         function formatPriceLine(prices) {{
@@ -896,20 +853,27 @@ def build_html(records: list[dict[str, str]]) -> str:
           citySelect.value = "";
           syncTabActive();
           updateCityOptions();
-          render();
+          render(applyLiveToGrid);
         }}
 
         function onCityChange() {{
           state.city = citySelect.value;
-          render();
+          render(applyLiveToGrid);
         }}
 
         if (prefSelect) prefSelect.addEventListener("change", onPrefChange);
         if (citySelect) citySelect.addEventListener("change", onCityChange);
 
+        let liveInfoLoaded = false;
+
         function afterRender() {{
+          if (liveInfoLoaded) {{
+            applyLiveToGrid();
+            return;
+          }}
           loadLiveInfo()
-            .then(function () {{
+            .then(function (ok) {{
+              liveInfoLoaded = !!ok;
               applyLiveToGrid();
             }})
             .catch(function (err) {{
@@ -918,6 +882,7 @@ def build_html(records: list[dict[str, str]]) -> str:
         }}
 
         async function boot() {{
+          if (emptyMsg) emptyMsg.classList.add("hidden");
           setGridLoading(true);
           try {{
             const ok = await loadPortalData();

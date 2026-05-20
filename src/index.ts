@@ -124,6 +124,9 @@ app.get("/portal/", async (_, reply) => {
 app.get("/portal/portal-data.json", async (_, reply) => {
   return reply.type("application/json; charset=utf-8").sendFile("portal/portal-data.json", publicAssetsRoot);
 });
+app.get("/portal/portal.css", async (_, reply) => {
+  return reply.type("text/css; charset=utf-8").sendFile("portal/portal.css", publicAssetsRoot);
+});
 
 const legalPages: Record<string, string> = {
   "/legal/tokushoho": "legal/tokushoho.html",
