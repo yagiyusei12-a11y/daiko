@@ -121,6 +121,9 @@ app.get("/portal", async (_, reply) => reply.redirect("/portal/", 302));
 app.get("/portal/", async (_, reply) => {
   return reply.type("text/html; charset=utf-8").sendFile("portal/index.html", publicAssetsRoot);
 });
+app.get("/portal/portal-data.json", async (_, reply) => {
+  return reply.type("application/json; charset=utf-8").sendFile("portal/portal-data.json", publicAssetsRoot);
+});
 
 const legalPages: Record<string, string> = {
   "/legal/tokushoho": "legal/tokushoho.html",
