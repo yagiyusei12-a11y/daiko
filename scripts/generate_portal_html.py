@@ -419,7 +419,8 @@ def build_html(records: list[dict[str, str]]) -> str:
           );
         }}
 
-        const PORTAL_LIVE_DEBUG = true;
+        /** 照合デバッグ（true で【比較】ログを出力） */
+        const PORTAL_LIVE_DEBUG = false;
         const LIVE_SLOT_VISIBLE =
           "portal-live mt-3 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2.5 text-sm shadow-sm";
 
