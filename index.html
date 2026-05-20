@@ -163,7 +163,8 @@
           console.error("ポータルデータの読み込みに失敗しました", parseErr);
         }
 
-        let liveIndex = {};
+        /** API 会員データ（配列検索用。by_key の辞書キーは使わない） */
+        let liveEntries = [];
 
         const prefSelect = document.getElementById("pref-select");
         const citySelect = document.getElementById("city-select");
@@ -288,73 +289,104 @@
           return Number.isFinite(n) ? n : null;
         }
 
-        function normalizeCertForMatch(cert) {
-          return normalizeUnicode(cert);
+        function formatCompareLabel(prefBase, certNum, prefRaw, certRaw) {
+          const prefLabel = prefRaw || prefBase || "（空）";
+          const certLabel = certNum !== null ? String(certNum) : (certRaw || "（番号なし）");
+          return prefLabel + "/番号" + certLabel;
         }
 
-        /** 照合用キー: 都道府県ベース + 認定番号（数値） */
-        function liveMatchKey(prefecture, cert) {
-          const prefBase = normalizePrefectureBase(prefecture);
-          const certNum = extractCertNumber(cert);
-          if (!prefBase || certNum === null) return null;
-          return prefBase + "|#" + certNum;
+        function toLiveEntry(item, apiKey) {
+          return {
+            apiKey: apiKey || "",
+            prefecture: String(item.prefecture || "").trim(),
+            cert_number: String(item.cert_number || "").trim(),
+            prefBase: normalizePrefectureBase(item.prefecture),
+            certNum: extractCertNumber(item.cert_number),
+            live: item,
+          };
         }
 
-        function prefecturesMatch(a, b) {
-          const pa = normalizePrefectureBase(a);
-          const pb = normalizePrefectureBase(b);
-          return pa !== "" && pb !== "" && pa === pb;
-        }
-
-        function certsMatch(a, b) {
-          const na = extractCertNumber(a);
-          const nb = extractCertNumber(b);
-          if (na !== null && nb !== null) return na === nb;
-          const sa = normalizeCertForMatch(a);
-          const sb = normalizeCertForMatch(b);
-          return sa !== "" && sb !== "" && sa === sb;
-        }
-
+        /** by_key の値を配列化（辞書キーは参照用に apiKey のみ保持） */
         function buildLiveIndexFromApi(byKey) {
-          const index = Object.create(null);
-          if (!byKey || typeof byKey !== "object") return index;
+          const list = [];
+          if (!byKey || typeof byKey !== "object") return list;
           Object.keys(byKey).forEach(function (apiKey) {
             const item = byKey[apiKey];
             if (!item) return;
-            const pairKey = liveMatchKey(item.prefecture, item.cert_number);
-            if (pairKey) index[pairKey] = item;
-            index[apiKey] = item;
+            list.push(toLiveEntry(item, apiKey));
           });
-          return index;
+          return list;
         }
 
         function findLiveForCard(prefecture, cert) {
-          const pairKey = liveMatchKey(prefecture, cert);
-          if (pairKey && liveIndex[pairKey]) {
-            return { live: liveIndex[pairKey], matchedKey: pairKey };
-          }
-          const keys = Object.keys(liveIndex);
-          for (let j = 0; j < keys.length; j++) {
-            const item = liveIndex[keys[j]];
-            if (!item || !item.prefecture) continue;
-            if (prefecturesMatch(prefecture, item.prefecture) && certsMatch(cert, item.cert_number)) {
-              return {
-                live: item,
-                matchedKey: keys[j] + " (scan:" + liveMatchKey(item.prefecture, item.cert_number) + ")",
-              };
-            }
-          }
-          return null;
-        }
+          const cardPrefBase = normalizePrefectureBase(prefecture);
+          const cardCertNum = extractCertNumber(cert);
+          const cardLabel = formatCompareLabel(cardPrefBase, cardCertNum, prefecture, cert);
 
-        function describeCardMatchKeys(prefecture, cert) {
-          return {
-            prefecture: prefecture,
-            cert: cert,
-            prefBase: normalizePrefectureBase(prefecture),
-            certNum: extractCertNumber(cert),
-            matchKey: liveMatchKey(prefecture, cert),
-          };
+          if (!cardPrefBase || cardCertNum === null) {
+            if (PORTAL_LIVE_DEBUG) {
+              console.log(
+                "[portal-live] 【比較】カード側の抽出不足 → 検索スキップ カード側:" + cardLabel,
+                { prefecture: prefecture, cert: cert }
+              );
+            }
+            return null;
+          }
+
+          if (!liveEntries.length) {
+            if (PORTAL_LIVE_DEBUG) {
+              console.log("[portal-live] 【比較】API配列が空 vs カード側:" + cardLabel);
+            }
+            return null;
+          }
+
+          if (PORTAL_LIVE_DEBUG) {
+            liveEntries.forEach(function (entry) {
+              const apiLabel = formatCompareLabel(
+                entry.prefBase,
+                entry.certNum,
+                entry.prefecture,
+                entry.cert_number
+              );
+              const prefOk = entry.prefBase === cardPrefBase;
+              const certOk = entry.certNum === cardCertNum;
+              console.log(
+                "[portal-live] 【比較】API側:" +
+                  apiLabel +
+                  " vs カード側:" +
+                  cardLabel +
+                  " => " +
+                  (prefOk && certOk ? "★両方一致" : "不一致（県:" + prefOk + " 番号:" + certOk + "）")
+              );
+            });
+          }
+
+          const matchedEntry = liveEntries.find(function (entry) {
+            return entry.prefBase === cardPrefBase && entry.certNum === cardCertNum;
+          });
+
+          if (!matchedEntry) {
+            if (PORTAL_LIVE_DEBUG) {
+              console.log("[portal-live] 【比較】最終結果: 一致なし カード側:" + cardLabel);
+            }
+            return null;
+          }
+
+          if (PORTAL_LIVE_DEBUG) {
+            console.log(
+              "[portal-live] 【比較】最終結果: 一致しました API側:" +
+                formatCompareLabel(
+                  matchedEntry.prefBase,
+                  matchedEntry.certNum,
+                  matchedEntry.prefecture,
+                  matchedEntry.cert_number
+                ) +
+                " vs カード側:" +
+                cardLabel
+            );
+          }
+
+          return { live: matchedEntry.live, matchedKey: matchedEntry.apiKey };
         }
 
         function hideLiveSlot(slot) {
@@ -432,10 +464,12 @@
 
               const prefAttr = article.getAttribute("data-prefecture") || "";
               const certAttr = article.getAttribute("data-cert") || "";
-              const cardKeys = describeCardMatchKeys(prefAttr, certAttr);
 
               if (PORTAL_LIVE_DEBUG) {
-                console.log("[portal-live] カード照合", cardKeys);
+                console.log("[portal-live] --- カード照合開始 ---", {
+                  prefecture: prefAttr,
+                  cert: certAttr,
+                });
               }
 
               const found = findLiveForCard(prefAttr, certAttr);
@@ -444,13 +478,6 @@
               if (!live) {
                 noMatch += 1;
                 hideLiveSlot(slot);
-                if (PORTAL_LIVE_DEBUG) {
-                  console.log(
-                    "[portal-live] 一致なし:",
-                    cardKeys.matchKey || cardKeys.prefBase + "|" + cardKeys.certNum,
-                    cardKeys
-                  );
-                }
                 return;
               }
 
@@ -501,32 +528,13 @@
             const data = await res.json();
             if (PORTAL_LIVE_DEBUG) {
               const apiKeys = data && data.by_key ? Object.keys(data.by_key) : [];
-              const parsed = (data && data.by_key)
-                ? Object.keys(data.by_key).map(function (k) {
-                    const it = data.by_key[k];
-                    return {
-                      apiKey: k,
-                      prefecture: it.prefecture,
-                      cert_number: it.cert_number,
-                      prefBase: normalizePrefectureBase(it.prefecture),
-                      certNum: extractCertNumber(it.cert_number),
-                      matchKey: liveMatchKey(it.prefecture, it.cert_number),
-                    };
-                  })
-                : [];
               console.log("[portal-live] API 生JSON", data);
-              console.log("[portal-live] API 件数", {
-                count: data && data.count,
-                ok: data && data.ok,
-                keyCount: apiKeys.length,
-                keys: apiKeys,
-                parsed: parsed,
-              });
+              console.log("[portal-live] API by_key 辞書キー（参考・照合には未使用）", apiKeys);
             }
             if (!data || !data.ok || !data.by_key) return false;
-            liveIndex = buildLiveIndexFromApi(data.by_key);
+            liveEntries = buildLiveIndexFromApi(data.by_key);
             if (PORTAL_LIVE_DEBUG) {
-              console.log("[portal-live] インデックスキー数", Object.keys(liveIndex).length);
+              console.log("[portal-live] API配列化 件数=" + liveEntries.length, liveEntries);
             }
             return true;
           } catch (err) {
