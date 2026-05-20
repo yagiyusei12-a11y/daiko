@@ -780,13 +780,32 @@ def build_html(records: list[dict[str, str]]) -> str:
           cityWrap.classList.remove("hidden");
         }}
 
+        /** 会員リアルタイム情報があり表示対象の業者か */
+        function businessHasLiveDisplay(b) {{
+          const found = findLiveForCard(b.prefecture, b.cert);
+          return !!(found && found.live && hasLivePayload(found.live));
+        }}
+
+        /** エメラルド枠ありのカードを先頭に（同グループ内の元順序は維持） */
+        function sortByLiveFirst(list) {{
+          if (!liveEntries.length || !list.length) return list;
+          const withLive = [];
+          const withoutLive = [];
+          list.forEach(function (b) {{
+            if (businessHasLiveDisplay(b)) withLive.push(b);
+            else withoutLive.push(b);
+          }});
+          return withLive.concat(withoutLive);
+        }}
+
         function filtered() {{
           try {{
-            return DATA.businesses.filter(function (b) {{
+            const matched = DATA.businesses.filter(function (b) {{
               if (state.pref && b.prefecture !== state.pref) return false;
               if (state.city && b.city !== state.city) return false;
               return true;
             }});
+            return sortByLiveFirst(matched);
           }} catch (err) {{
             console.warn("filter failed", err);
             return [];
@@ -864,23 +883,6 @@ def build_html(records: list[dict[str, str]]) -> str:
         if (prefSelect) prefSelect.addEventListener("change", onPrefChange);
         if (citySelect) citySelect.addEventListener("change", onCityChange);
 
-        let liveInfoLoaded = false;
-
-        function afterRender() {{
-          if (liveInfoLoaded) {{
-            applyLiveToGrid();
-            return;
-          }}
-          loadLiveInfo()
-            .then(function (ok) {{
-              liveInfoLoaded = !!ok;
-              applyLiveToGrid();
-            }})
-            .catch(function (err) {{
-              console.warn("リアルタイム情報の後追い反映をスキップしました", err);
-            }});
-        }}
-
         async function boot() {{
           if (emptyMsg) emptyMsg.classList.add("hidden");
           setGridLoading(true);
@@ -895,9 +897,10 @@ def build_html(records: list[dict[str, str]]) -> str:
               return;
             }}
             buildPrefTabs();
+            await loadLiveInfo();
             render(function () {{
               setGridLoading(false);
-              afterRender();
+              applyLiveToGrid();
             }});
           }} catch (err) {{
             console.error("ポータル初期化に失敗しました", err);
