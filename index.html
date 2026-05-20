@@ -15,6 +15,40 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
+        safelist: [
+          "hidden",
+          "portal-live",
+          "portal-live--visible",
+          {
+            pattern: /(bg|text|border|from|to)-emerald-(50|100|200|500|800|900)/,
+          },
+          {
+            pattern: /(bg|text|border|from|to)-(teal|slate)-(50|600|700)/,
+          },
+          "mt-3",
+          "mt-1",
+          "mt-0.5",
+          "mt-2",
+          "pt-2",
+          "rounded-xl",
+          "rounded-full",
+          "px-3",
+          "py-2.5",
+          "text-sm",
+          "text-xs",
+          "font-semibold",
+          "flex",
+          "flex-wrap",
+          "items-center",
+          "gap-1.5",
+          "gap-2",
+          "inline-flex",
+          "shadow-sm",
+          "border-t",
+          "h-2",
+          "w-2",
+          "bg-gradient-to-r",
+        ],
         theme: {
           extend: {
             colors: {
@@ -33,6 +67,36 @@
         background-color: #2563eb;
         color: #fff;
         border-color: #2563eb;
+      }
+      /* リアルタイム枠（Tailwind CDN の動的クラス未生成対策・表示は CSS で保証） */
+      .portal-live.hidden {
+        display: none !important;
+      }
+      .portal-live.portal-live--visible {
+        display: block !important;
+        margin-top: 0.75rem;
+        border-radius: 0.75rem;
+        border: 1px solid #a7f3d0;
+        background: linear-gradient(to right, #ecfdf5, #f0fdfa);
+        padding: 0.625rem 0.75rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      }
+      .portal-live--visible .portal-live-dot {
+        display: inline-block;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 9999px;
+        background-color: #10b981;
+      }
+      .portal-live--visible .portal-live-title {
+        font-weight: 600;
+        color: #065f46;
+      }
+      .portal-live--visible .portal-live-muted {
+        color: #334155;
+        font-size: 0.75rem;
       }
     </style>
   </head>
@@ -249,15 +313,14 @@
             '<p class="mt-1 text-xs font-medium text-brand">' + pref + " · " + esc(b.city) + "</p>" +
             '<p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>' + pref + " " + addr + "</span></p>" +
             '<div class="mt-3 flex flex-wrap items-center gap-2">' + starsHtml(b.rating) + reviews + "</div>" +
-            '<div class="portal-live hidden" data-live-slot aria-live="polite"></div>' +
+            '<div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div>' +
             siteLink + callBtn + "</article>"
           );
         }
 
         /** 照合デバッグ（true で【比較】ログを出力） */
         const PORTAL_LIVE_DEBUG = false;
-        const LIVE_SLOT_VISIBLE =
-          "portal-live mt-3 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2.5 text-sm shadow-sm";
+        const LIVE_SLOT_BASE = "portal-live hidden";
 
         function normalizeUnicode(s) {
           let t = String(s || "").trim();
@@ -391,15 +454,21 @@
         }
 
         function hideLiveSlot(slot) {
+          if (!slot) return;
           slot.innerHTML = "";
-          slot.className = "portal-live hidden";
+          slot.className = LIVE_SLOT_BASE;
           slot.classList.add("hidden");
+          slot.classList.remove("portal-live--visible");
+          slot.hidden = true;
         }
 
         function showLiveSlot(slot, live) {
+          if (!slot) return;
           slot.innerHTML = buildLiveInnerHtml(live);
-          slot.className = LIVE_SLOT_VISIBLE;
+          slot.className = "portal-live portal-live--visible";
           slot.classList.remove("hidden");
+          slot.hidden = false;
+          slot.removeAttribute("hidden");
         }
 
         function formatPriceLine(prices) {
@@ -415,38 +484,56 @@
           return parts.join(" · ");
         }
 
+        function hasValue(v) {
+          if (v === null || v === undefined) return false;
+          if (typeof v === "string") return v.trim() !== "";
+          return true;
+        }
+
         function hasLivePayload(live) {
           if (!live) return false;
           const ev = live.event;
-          if (ev && (ev.is_active || ev.drivers_available > 0 || ev.title || ev.body)) return true;
+          if (ev) {
+            if (ev.is_active === true || ev.is_active === 1 || ev.is_active === "1") return true;
+            if (Number(ev.drivers_available) > 0) return true;
+            if (hasValue(ev.title) || hasValue(ev.body)) return true;
+          }
           const p = live.prices;
-          if (!p) return false;
-          return p.base_price != null || p.per_km_price != null || p.base_distance != null || !!p.note;
+          if (p) {
+            if (hasValue(p.base_price) || hasValue(p.per_km_price) || hasValue(p.base_distance)) return true;
+            if (hasValue(p.note)) return true;
+          }
+          return false;
         }
 
         function buildLiveInnerHtml(live) {
           let html = "";
           const ev = live.event;
           if (ev) {
-            if (ev.is_active) {
+            const active = ev.is_active === true || ev.is_active === 1 || ev.is_active === "1";
+            const drivers = Number(ev.drivers_available) || 0;
+            if (active) {
               html +=
-                '<p class="flex flex-wrap items-center gap-2 font-semibold text-emerald-800">' +
-                '<span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>本日営業中</span>' +
-                "<span>（待機ドライバー: " + esc(String(ev.drivers_available || 0)) + "名）</span></p>";
-            } else if (ev.drivers_available > 0) {
-              html += '<p class="font-semibold text-emerald-800">待機ドライバー: ' + esc(String(ev.drivers_available)) + "名</p>";
+                '<p class="flex flex-wrap items-center gap-2 portal-live-title">' +
+                '<span class="inline-flex items-center gap-1.5"><span class="portal-live-dot" aria-hidden="true"></span>本日営業中</span>' +
+                "<span>（待機ドライバー: " + esc(String(drivers)) + "名）</span></p>";
+            } else if (drivers > 0) {
+              html += '<p class="portal-live-title">待機ドライバー: ' + esc(String(drivers)) + "名</p>";
             }
-            if (ev.title || ev.body) {
-              const label = ev.title || ev.body;
-              html += '<p class="mt-1 text-slate-700"><span class="font-semibold text-emerald-900">イベント:</span> ' + esc(label) + "</p>";
-              if (ev.title && ev.body && ev.body !== ev.title) {
-                html += '<p class="mt-0.5 text-xs text-slate-600">' + esc(ev.body) + "</p>";
+            if (hasValue(ev.title) || hasValue(ev.body)) {
+              const label = (ev.title || ev.body || "").trim();
+              html += '<p class="mt-1 portal-live-muted"><span class="font-semibold text-emerald-900">イベント:</span> ' + esc(label) + "</p>";
+              if (hasValue(ev.title) && hasValue(ev.body) && ev.body.trim() !== ev.title.trim()) {
+                html += '<p class="mt-0.5 text-xs text-slate-600">' + esc(ev.body.trim()) + "</p>";
               }
             }
           }
           const priceLine = formatPriceLine(live.prices);
           if (priceLine) {
-            html += '<p class="mt-2 border-t border-emerald-100 pt-2 text-xs text-slate-700"><span class="font-semibold">料金:</span> ' + esc(priceLine) + "</p>";
+            html += '<p class="mt-2 border-t border-emerald-100 pt-2 portal-live-muted"><span class="font-semibold">料金:</span> ' + esc(priceLine) + "</p>";
+          }
+          if (!html.trim()) {
+            html = '<p class="portal-live-title">会員登録の最新情報があります</p>';
           }
           return html;
         }
@@ -460,7 +547,7 @@
             let shown = 0;
 
             articles.forEach(function (article) {
-              const slot = article.querySelector("[data-live-slot]");
+              const slot = article.querySelector("div.portal-live[data-live-slot]");
               if (!slot) return;
 
               const prefAttr = article.getAttribute("data-prefecture") || "";
