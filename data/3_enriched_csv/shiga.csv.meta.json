@@ -1,10 +1,11 @@
 {
   "source_csv": "shiga.csv",
-  "source_mtime": 1779129723.4280086,
+  "source_mtime": 1779362522.8525555,
   "source_size": 4436,
   "rows_total": 76,
-  "complete": true,
-  "rows_completed": 76,
+  "complete": false,
+  "rows_completed": 69,
+  "pending_rows": 7,
   "completed_certs": [
     "第１０６号",
     "第１０８号",

@@ -82,6 +82,9 @@ def prefecture_from_filename(csv_path: Path, row: pd.Series | None = None) -> st
         "8515_2740104_misc": "岐阜県",
         "daikougyouitirann5matu": "愛知県",
         "daikouitirannintekyoten": "福井県",
+        "kyouto": "京都府",
+        "oosaka": "大阪府",
+        "hyougo": "兵庫県",
     }
     if stem in stem_aliases:
         return stem_aliases[stem]

@@ -17,8 +17,8 @@ from typing import Iterable, Sequence
 import pandas as pd
 import pdfplumber
 
-# ヘッダー候補（完全一致）
-CERT_HEADER_ALIASES = frozenset({"認定番号", "認定の番号"})
+# ヘッダー候補（完全一致・normalize 後の部分一致も併用）
+CERT_HEADER_ALIASES = frozenset({"認定番号", "認定の番号", "認定証番号"})
 NAME_HEADER_ALIASES = frozenset(
     {
         "主たる営業所名",
@@ -27,8 +27,10 @@ NAME_HEADER_ALIASES = frozenset(
         "名称",
         "商号又は名称",
         "営業所の名称",
+        "営業所名",
         "運転代行名",
         "代行業者名",
+        "自動車運転代行の名称",
     }
 )
 ADDRESS_HEADER_ALIASES = frozenset(
@@ -63,6 +65,10 @@ CERT_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"^[第]?[０-９0-9]+号$"),
     # 岐阜・愛知・福井など（認定番号が「199」「2」のみの形式）
     re.compile(r"^[０-９0-9]{1,4}$"),
+    # 兵庫・静岡・和歌山など（6桁）
+    re.compile(r"^[０-９0-9]{5,6}$"),
+    # 奈良・山梨など（64-0001 / 47-0003）
+    re.compile(r"^[０-９0-9]{2,3}-[０-９0-9]{3,5}$"),
 )
 
 
@@ -112,7 +118,8 @@ def cell_matches_aliases(cell: str, aliases: frozenset[str]) -> bool:
         return True
     if normalized in NON_CERT_HEADER_ALIASES:
         return False
-    return any(alias in normalized for alias in aliases if len(alias) >= 2)
+    # 短い別名（「名称」など）の部分一致で別列を誤認しない（4文字以上のみ）
+    return any(alias in normalized for alias in aliases if len(alias) >= 4)
 
 
 def parse_header_map(cells: list[str]) -> ColumnMap | None:
@@ -127,11 +134,13 @@ def parse_header_map(cells: list[str]) -> ColumnMap | None:
         normalized = normalize_header_label(cell)
         if normalized in NON_CERT_HEADER_ALIASES:
             continue
-        if cell_matches_aliases(cell, CERT_HEADER_ALIASES):
+        if cell_matches_aliases(cell, CERT_HEADER_ALIASES) or "認定番号" in normalized:
             cert_idx = i
         elif cell_matches_aliases(cell, NAME_HEADER_ALIASES):
             name_idx = i
         elif cell_matches_aliases(cell, ADDRESS_HEADER_ALIASES):
+            address_idx = i
+        elif address_idx is None and ("警察署" in normalized or normalized == "管轄署"):
             address_idx = i
 
     if cert_idx is not None and name_idx is not None and address_idx is not None:
@@ -155,7 +164,17 @@ def parse_header_map(cells: list[str]) -> ColumnMap | None:
     return None
 
 
+def is_blob_header_row(cells: list[str]) -> bool:
+    """山梨県など: 1行目に全列ヘッダーが結合されたノイズ行"""
+    joined = " ".join(normalize_cell(c) for c in cells if c)
+    if len(joined) < 80:
+        return False
+    return "認定番号" in joined and "営業所" in joined and joined.count(" ") > 15
+
+
 def is_header_row(cells: list[str]) -> bool:
+    if is_blob_header_row(cells):
+        return True
     return parse_header_map(cells) is not None
 
 
@@ -231,6 +250,9 @@ def extract_rows_from_pdf(pdf_path: Path) -> list[dict[str, str]]:
                     if not any(cells):
                         continue
 
+                    if is_blob_header_row(cells):
+                        continue
+
                     header_map = parse_header_map(cells)
                     if header_map is not None:
                         col_map = header_map
@@ -249,6 +271,8 @@ def extract_rows_from_pdf(pdf_path: Path) -> list[dict[str, str]]:
                     if col_map.auto_cert:
                         auto_cert_seq += 1
                         row["認定番号"] = str(auto_cert_seq)
+                        row["所在地"] = col_map.pick(cells, "address") or last_address
+                    else:
                         row["所在地"] = col_map.pick(cells, "address") or last_address
                     rows.append(row)
 

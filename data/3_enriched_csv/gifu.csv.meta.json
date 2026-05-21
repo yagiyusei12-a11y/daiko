@@ -1,10 +1,11 @@
 {
   "source_csv": "gifu.csv",
-  "source_mtime": 1779129723.2380142,
+  "source_mtime": 1779362518.9075847,
   "source_size": 3056,
   "rows_total": 88,
-  "complete": true,
-  "rows_completed": 88,
+  "complete": false,
+  "rows_completed": 84,
+  "pending_rows": 4,
   "completed_certs": [
     "10",
     "103",

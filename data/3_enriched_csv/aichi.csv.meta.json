@@ -1,10 +1,11 @@
 {
   "source_csv": "aichi.csv",
-  "source_mtime": 1779129722.768009,
+  "source_mtime": 1779362518.4425533,
   "source_size": 3466,
   "rows_total": 89,
-  "complete": true,
-  "rows_completed": 89,
+  "complete": false,
+  "rows_completed": 84,
+  "pending_rows": 5,
   "completed_certs": [
     "117",
     "143",

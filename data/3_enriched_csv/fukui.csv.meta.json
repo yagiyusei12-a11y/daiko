@@ -1,10 +1,11 @@
 {
   "source_csv": "fukui.csv",
-  "source_mtime": 1779129723.0470066,
+  "source_mtime": 1779362518.72258,
   "source_size": 4210,
   "rows_total": 118,
-  "complete": true,
-  "rows_completed": 118,
+  "complete": false,
+  "rows_completed": 115,
+  "pending_rows": 3,
   "completed_certs": [
     "105",
     "124",
