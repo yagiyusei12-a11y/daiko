@@ -202,6 +202,34 @@ select {
   border-color: var(--brand);
 }
 
+/* パンくず・地域リンク */
+.portal-breadcrumb a { text-decoration: none; }
+.portal-pref-link,
+.portal-city-link {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--slate-200);
+  background: var(--slate-50);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--slate-800);
+  text-decoration: none;
+  transition: border-color 150ms, background-color 150ms;
+}
+.portal-pref-link:hover,
+.portal-city-link:hover {
+  border-color: var(--brand);
+  background: var(--blue-50);
+  color: var(--brand);
+}
+.portal-pref-list,
+.portal-city-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
 #card-grid article {
   display: flex;
   flex-direction: column;

@@ -3,24 +3,25 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>全国の運転代行業者一覧・検索 | はるのゆこと</title>
-    <meta name="description" content="滋賀県、福井県、岐阜県、大阪府など、各地域の運転代行業者一覧。営業時間や電話番号を掲載し、スマホからワンタップで今すぐ代行を呼べます。エリアや市区町村での絞り込み対応。" />
+    <title>【2026年最新】全国の運転代行一覧｜料金・すぐ呼べる代行検索</title>
+    <meta name="description" content="全国の運転代行業者を都道府県・市区町村から探せる一覧ポータル。料金・電話番号・公式サイトを掲載。すぐ呼べる代行業者を検索できます。" />
     <link rel="canonical" href="https://daiko.harunoyukoto.jp/portal/" />
     <meta name="robots" content="index, follow" />
-    <meta property="og:title" content="全国の運転代行業者一覧・検索 | はるのゆこと" />
-    <meta property="og:description" content="滋賀県、福井県、岐阜県、大阪府など、各地域の運転代行業者一覧。営業時間や電話番号を掲載し、スマホからワンタップで今すぐ代行を呼べます。エリアや市区町村での絞り込み対応。" />
+    <meta property="og:title" content="【2026年最新】全国の運転代行一覧｜料金・すぐ呼べる代行検索" />
+    <meta property="og:description" content="全国の運転代行業者を都道府県・市区町村から探せる一覧ポータル。料金・電話番号・公式サイトを掲載。すぐ呼べる代行業者を検索できます。" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://daiko.harunoyukoto.jp/portal/" />
     <meta property="og:locale" content="ja_JP" />
     <link rel="stylesheet" href="/portal/portal.css" />
   </head>
   <body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
+
     <header class="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
       <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
         <div>
           <p class="text-xs font-semibold tracking-wide text-brand">全国対応</p>
           <h1 class="text-lg font-bold leading-tight sm:text-xl">
-            運転代行ポータル <span class="text-slate-400 font-normal">|</span> はるのゆこと
+            <a href="/portal/" class="no-underline text-inherit hover:text-brand">運転代行ポータル | はるのゆこと</a>
           </h1>
         </div>
         <nav class="flex flex-wrap items-center gap-2" aria-label="サイトナビゲーション">
@@ -39,8 +40,9 @@
         </nav>
       </div>
     </header>
-
     <main id="main" class="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+
+
       <section class="mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-brand to-blue-700 p-6 text-white shadow-lg sm:p-8" aria-labelledby="cta-top">
         <h2 id="cta-top" class="text-base font-bold leading-relaxed sm:text-lg">
           【運転代行業者様へ】配車・売上管理をスマートにする最新システムを導入しませんか？初期費用を抑えて業務を効率化。詳しくはこちら
@@ -56,57 +58,39 @@
           </a>
         </div>
       </section>
-
-      <section class="mb-6 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-6" aria-labelledby="filter-heading">
-        <h2 id="filter-heading" class="text-sm font-bold text-slate-800">都道府県・市区町村で絞り込み</h2>
-
-        <div class="mt-4">
-          <label for="pref-select" class="mb-1 block text-xs font-semibold text-slate-500">都道府県を選択</label>
-          <select id="pref-select"
-                  class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-medium text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-            <option value="">すべての都道府県</option>
-            <option value="三重県">三重県</option>
-            <option value="京都府">京都府</option>
-            <option value="兵庫県">兵庫県</option>
-            <option value="和歌山県">和歌山県</option>
-            <option value="大阪府">大阪府</option>
-            <option value="奈良県">奈良県</option>
-            <option value="富山県">富山県</option>
-            <option value="山梨県">山梨県</option>
-            <option value="岐阜県">岐阜県</option>
-            <option value="愛知県">愛知県</option>
-            <option value="新潟県">新潟県</option>
-            <option value="滋賀県">滋賀県</option>
-            <option value="石川県">石川県</option>
-            <option value="福井県">福井県</option>
-            <option value="長野県">長野県</option>
-            <option value="静岡県">静岡県</option>
-          </select>
-        </div>
-
-        <div id="pref-tabs" class="mt-3 hidden flex-wrap gap-2 sm:flex" role="tablist" aria-label="都道府県タブ"></div>
-
-        <div id="city-wrap" class="mt-4 hidden">
-          <label for="city-select" class="mb-1 block text-xs font-semibold text-slate-500">市区町村を選択</label>
-          <select id="city-select"
-                  class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-            <option value="">すべての市区町村</option>
-          </select>
-        </div>
-
-        <p class="mt-4 text-sm text-slate-600">
-          掲載 <strong id="result-count" class="text-slate-900">0</strong> 件
-          <span class="text-slate-400">（全 <span id="total-count">1887</span> 件）</span>
-        </p>
+      <section aria-labelledby="national-heading">
+        <h2 id="national-heading" class="text-xl font-bold text-slate-900 sm:text-2xl">都道府県から探す</h2>
+        <p class="mt-2 text-sm text-slate-600">掲載業者数 合計 <strong>1887</strong> 件 · 16 都道府県</p>
+        <p class="mt-1 text-sm text-slate-500">お住まいの地域を選ぶと、市区町村別の一覧ページへ移動します。</p>
       </section>
 
-      <p id="portal-loading" class="rounded-xl border border-slate-200 bg-white py-10 text-center text-sm text-slate-600">
-        一覧を読み込んでいます…
-      </p>
-      <div id="card-grid" class="hidden grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite"></div>
-      <p id="empty-msg" class="hidden rounded-xl border border-dashed border-slate-300 bg-white py-12 text-center text-sm text-slate-500">
-        条件に一致する業者がありません。都道府県を選ぶか、別の市区町村をお試しください。
-      </p>
+      <section class="portal-region-block mb-8 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+        <h2 class="text-base font-bold text-slate-800">中部</h2>
+        <ul class="portal-pref-list mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <li><a href="/portal/toyama/" class="portal-pref-link">富山県 <span class="text-slate-400">（124件）</span></a></li>
+          <li><a href="/portal/yamanashi/" class="portal-pref-link">山梨県 <span class="text-slate-400">（100件）</span></a></li>
+          <li><a href="/portal/gifu/" class="portal-pref-link">岐阜県 <span class="text-slate-400">（88件）</span></a></li>
+          <li><a href="/portal/aichi/" class="portal-pref-link">愛知県 <span class="text-slate-400">（89件）</span></a></li>
+          <li><a href="/portal/niigata/" class="portal-pref-link">新潟県 <span class="text-slate-400">（193件）</span></a></li>
+          <li><a href="/portal/ishikawa/" class="portal-pref-link">石川県 <span class="text-slate-400">（93件）</span></a></li>
+          <li><a href="/portal/fukui/" class="portal-pref-link">福井県 <span class="text-slate-400">（118件）</span></a></li>
+          <li><a href="/portal/nagano/" class="portal-pref-link">長野県 <span class="text-slate-400">（178件）</span></a></li>
+          <li><a href="/portal/shizuoka/" class="portal-pref-link">静岡県 <span class="text-slate-400">（225件）</span></a></li>
+        </ul>
+      </section>
+      <section class="portal-region-block mb-8 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+        <h2 class="text-base font-bold text-slate-800">近畿</h2>
+        <ul class="portal-pref-list mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <li><a href="/portal/mie/" class="portal-pref-link">三重県 <span class="text-slate-400">（81件）</span></a></li>
+          <li><a href="/portal/kyouto/" class="portal-pref-link">京都府 <span class="text-slate-400">（39件）</span></a></li>
+          <li><a href="/portal/hyougo/" class="portal-pref-link">兵庫県 <span class="text-slate-400">（161件）</span></a></li>
+          <li><a href="/portal/wakayama/" class="portal-pref-link">和歌山県 <span class="text-slate-400">（145件）</span></a></li>
+          <li><a href="/portal/oosaka/" class="portal-pref-link">大阪府 <span class="text-slate-400">（119件）</span></a></li>
+          <li><a href="/portal/nara/" class="portal-pref-link">奈良県 <span class="text-slate-400">（58件）</span></a></li>
+          <li><a href="/portal/shiga/" class="portal-pref-link">滋賀県 <span class="text-slate-400">（76件）</span></a></li>
+        </ul>
+      </section>
+
     </main>
 
     <footer class="mt-12 border-t border-slate-200 bg-white">
@@ -135,639 +119,5 @@
       </section>
     </footer>
 
-    <script>
-      (function () {
-        const SITE_URL = "https://daiko.harunoyukoto.jp/";
-        const LIVE_API_URL = "/portal-member/api/get_live_info.php";
-        const PORTAL_DATA_URL = "/portal/portal-data.json";
-
-        let DATA = { businesses: [], prefectures: [], citiesByPrefecture: {}, total: 0 };
-        let renderGeneration = 0;
-
-        async function loadPortalData() {
-          const controller = new AbortController();
-          const timer = setTimeout(function () { controller.abort(); }, 20000);
-          try {
-            const res = await fetch(PORTAL_DATA_URL, {
-              cache: "no-store",
-              signal: controller.signal,
-            });
-            if (!res.ok) throw new Error("HTTP " + res.status);
-            const raw = await res.json();
-            DATA = {
-              businesses: Array.isArray(raw.businesses) ? raw.businesses : [],
-              prefectures: Array.isArray(raw.prefectures) ? raw.prefectures : [],
-              citiesByPrefecture: raw.citiesByPrefecture && typeof raw.citiesByPrefecture === "object"
-                ? raw.citiesByPrefecture
-                : {},
-              total: typeof raw.total === "number" ? raw.total : (raw.businesses ? raw.businesses.length : 0),
-            };
-            return true;
-          } catch (parseErr) {
-            console.error("ポータルデータの読み込みに失敗しました", parseErr);
-            return false;
-          } finally {
-            clearTimeout(timer);
-          }
-        }
-
-        /** API 会員データ（配列検索用。by_key の辞書キーは使わない） */
-        let liveEntries = [];
-
-        const prefSelect = document.getElementById("pref-select");
-        const citySelect = document.getElementById("city-select");
-        const cityWrap = document.getElementById("city-wrap");
-        const prefTabs = document.getElementById("pref-tabs");
-        const grid = document.getElementById("card-grid");
-        const emptyMsg = document.getElementById("empty-msg");
-        const portalLoading = document.getElementById("portal-loading");
-        const resultCount = document.getElementById("result-count");
-
-        const state = { pref: "", city: "" };
-
-        function esc(s) {
-          if (!s) return "";
-          return String(s)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;");
-        }
-
-        function telHref(phone) {
-          const d = String(phone).replace(/[^\d+]/g, "");
-          return d ? "tel:" + d : "";
-        }
-
-        function normalizeUrl(url) {
-          if (!url) return "";
-          return /^https?:\/\//i.test(url) ? url : "https://" + url;
-        }
-
-        function starsHtml(rating) {
-          const r = parseFloat(rating);
-          if (isNaN(r)) return '<span class="text-slate-400 text-sm">評価なし</span>';
-          const full = Math.max(0, Math.min(5, Math.floor(r + 0.25)));
-          const empty = 5 - full;
-          return (
-            '<span class="text-amber-500 tracking-tight" aria-hidden="true">' +
-            "★".repeat(full) + "☆".repeat(empty) +
-            '</span><span class="text-sm font-semibold text-slate-800">' + r.toFixed(1) + "</span>"
-          );
-        }
-
-        function cardHtml(b) {
-          const cert = esc(b.cert);
-          const name = esc(b.name);
-          const pref = esc(b.prefecture);
-          const addr = esc(b.address);
-          const phone = b.phone || "";
-          const website = normalizeUrl(b.website || "");
-          const reviews = b.reviews
-            ? '<span class="text-xs text-slate-500">（' + esc(b.reviews) + "件のレビュー）</span>"
-            : "";
-
-          let callBtn = "";
-          if (phone) {
-            const href = esc(telHref(phone));
-            callBtn =
-              '<a href="' + href + '" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]">' +
-              '<svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>' +
-              "電話で呼ぶ</a><p class=\"mt-1 text-center text-xs text-slate-500\">" + esc(phone) + "</p>";
-          }
-
-          let siteLink = "";
-          if (website) {
-            const display = esc(website.replace(/^https?:\/\//, "").replace(/\/$/, ""));
-            siteLink =
-              '<a href="' + esc(website) + '" target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline">' +
-              "公式HP</a>";
-          }
-
-          const certBadge = cert
-            ? '<span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">' + cert + "</span>"
-            : "";
-
-          const certRaw = String(b.cert || "").trim();
-          const prefRaw = String(b.prefecture || "").trim();
-
-          return (
-            '<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"' +
-            ' data-prefecture="' + esc(prefRaw) + '" data-cert="' + esc(certRaw) + '">' +
-            '<div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">' + name + "</h2>" + certBadge + "</div>" +
-            '<p class="mt-1 text-xs font-medium text-brand">' + pref + " · " + esc(b.city) + "</p>" +
-            '<p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>' + pref + " " + addr + "</span></p>" +
-            '<div class="mt-3 flex flex-wrap items-center gap-2">' + starsHtml(b.rating) + reviews + "</div>" +
-            '<div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div>' +
-            siteLink + callBtn + "</article>"
-          );
-        }
-
-        /** 照合デバッグ（true で【比較】ログを出力） */
-        const PORTAL_LIVE_DEBUG = false;
-        const LIVE_SLOT_BASE = "portal-live hidden";
-
-        function normalizeUnicode(s) {
-          let t = String(s || "").trim();
-          try {
-            t = t.normalize("NFKC");
-          } catch (normErr) {
-            /* IE 等 */
-          }
-          return t;
-        }
-
-        /** 都道府県のベース名（末尾の都・道・府・県と空白を除去） */
-        function normalizePrefectureBase(prefecture) {
-          let s = normalizeUnicode(prefecture);
-          s = s.replace(/[\s\u3000]+/g, "");
-          s = s.replace(/(都|道|府|県)$/u, "");
-          return s;
-        }
-
-        /**
-         * 認定番号から数字列を抽出し整数化（「第02号」「2」「公安委員会 第 02 号」→ 2）
-         * 複数ある場合は最後の数字列を採用（「第○号」形式を想定）
-         */
-        function extractCertNumber(cert) {
-          const s = normalizeUnicode(cert);
-          if (!s) return null;
-          const matches = s.match(/\d+/g);
-          if (!matches || matches.length === 0) return null;
-          const n = parseInt(matches[matches.length - 1], 10);
-          return Number.isFinite(n) ? n : null;
-        }
-
-        function formatCompareLabel(prefBase, certNum, prefRaw, certRaw) {
-          const prefLabel = prefRaw || prefBase || "（空）";
-          const certLabel = certNum !== null ? String(certNum) : (certRaw || "（番号なし）");
-          return prefLabel + "/番号" + certLabel;
-        }
-
-        function toLiveEntry(item, apiKey) {
-          return {
-            apiKey: apiKey || "",
-            prefecture: String(item.prefecture || "").trim(),
-            cert_number: String(item.cert_number || "").trim(),
-            prefBase: normalizePrefectureBase(item.prefecture),
-            certNum: extractCertNumber(item.cert_number),
-            live: item,
-          };
-        }
-
-        /** by_key の値を配列化（辞書キーは参照用に apiKey のみ保持） */
-        function buildLiveIndexFromApi(byKey) {
-          const list = [];
-          if (!byKey || typeof byKey !== "object") return list;
-          Object.keys(byKey).forEach(function (apiKey) {
-            const item = byKey[apiKey];
-            if (!item) return;
-            list.push(toLiveEntry(item, apiKey));
-          });
-          return list;
-        }
-
-        function findLiveForCard(prefecture, cert) {
-          const cardPrefBase = normalizePrefectureBase(prefecture);
-          const cardCertNum = extractCertNumber(cert);
-          const cardLabel = formatCompareLabel(cardPrefBase, cardCertNum, prefecture, cert);
-
-          if (!cardPrefBase || cardCertNum === null) {
-            if (PORTAL_LIVE_DEBUG) {
-              console.log(
-                "[portal-live] 【比較】カード側の抽出不足 → 検索スキップ カード側:" + cardLabel,
-                { prefecture: prefecture, cert: cert }
-              );
-            }
-            return null;
-          }
-
-          if (!liveEntries.length) {
-            if (PORTAL_LIVE_DEBUG) {
-              console.log("[portal-live] 【比較】API配列が空 vs カード側:" + cardLabel);
-            }
-            return null;
-          }
-
-          if (PORTAL_LIVE_DEBUG) {
-            liveEntries.forEach(function (entry) {
-              const apiLabel = formatCompareLabel(
-                entry.prefBase,
-                entry.certNum,
-                entry.prefecture,
-                entry.cert_number
-              );
-              const prefOk = entry.prefBase === cardPrefBase;
-              const certOk = entry.certNum === cardCertNum;
-              console.log(
-                "[portal-live] 【比較】API側:" +
-                  apiLabel +
-                  " vs カード側:" +
-                  cardLabel +
-                  " => " +
-                  (prefOk && certOk ? "★両方一致" : "不一致（県:" + prefOk + " 番号:" + certOk + "）")
-              );
-            });
-          }
-
-          const matchedEntry = liveEntries.find(function (entry) {
-            return entry.prefBase === cardPrefBase && entry.certNum === cardCertNum;
-          });
-
-          if (!matchedEntry) {
-            if (PORTAL_LIVE_DEBUG) {
-              console.log("[portal-live] 【比較】最終結果: 一致なし カード側:" + cardLabel);
-            }
-            return null;
-          }
-
-          if (PORTAL_LIVE_DEBUG) {
-            console.log(
-              "[portal-live] 【比較】最終結果: 一致しました API側:" +
-                formatCompareLabel(
-                  matchedEntry.prefBase,
-                  matchedEntry.certNum,
-                  matchedEntry.prefecture,
-                  matchedEntry.cert_number
-                ) +
-                " vs カード側:" +
-                cardLabel
-            );
-          }
-
-          return { live: matchedEntry.live, matchedKey: matchedEntry.apiKey };
-        }
-
-        function liveArticle(slot) {
-          return slot && slot.closest ? slot.closest("article") : null;
-        }
-
-        function hideLiveSlot(slot) {
-          if (!slot) return;
-          slot.innerHTML = "";
-          slot.className = LIVE_SLOT_BASE;
-          slot.classList.add("hidden");
-          slot.classList.remove("portal-live--visible");
-          slot.hidden = true;
-          const article = liveArticle(slot);
-          if (article) article.classList.remove("portal-card--live");
-        }
-
-        function showLiveSlot(slot, live) {
-          if (!slot) return;
-          slot.innerHTML = buildLiveInnerHtml(live);
-          slot.className = "portal-live portal-live--visible";
-          slot.classList.remove("hidden");
-          slot.hidden = false;
-          slot.removeAttribute("hidden");
-          const article = liveArticle(slot);
-          if (article) article.classList.add("portal-card--live");
-        }
-
-        function formatPriceLine(prices) {
-          if (!prices) return "";
-          const parts = [];
-          if (prices.base_distance != null && prices.base_price != null) {
-            parts.push("初乗り " + prices.base_distance + "km " + prices.base_price + "円");
-          }
-          if (prices.per_km_price != null) {
-            parts.push("以降 " + prices.per_km_price + "円/km");
-          }
-          if (prices.note) parts.push(prices.note);
-          return parts.join(" · ");
-        }
-
-        function hasValue(v) {
-          if (v === null || v === undefined) return false;
-          if (typeof v === "string") return v.trim() !== "";
-          return true;
-        }
-
-        function hasLivePayload(live) {
-          if (!live) return false;
-          const ev = live.event;
-          if (ev) {
-            if (ev.is_active === true || ev.is_active === 1 || ev.is_active === "1") return true;
-            if (Number(ev.drivers_available) > 0) return true;
-            if (hasValue(ev.title) || hasValue(ev.body)) return true;
-          }
-          const p = live.prices;
-          if (p) {
-            if (hasValue(p.base_price) || hasValue(p.per_km_price) || hasValue(p.base_distance)) return true;
-            if (hasValue(p.note)) return true;
-          }
-          return false;
-        }
-
-        function buildLiveInnerHtml(live) {
-          let html = "";
-          const ev = live.event;
-          if (ev) {
-            const active = ev.is_active === true || ev.is_active === 1 || ev.is_active === "1";
-            const drivers = Number(ev.drivers_available) || 0;
-            if (active) {
-              html +=
-                '<p class="flex flex-wrap items-center gap-2 portal-live-title">' +
-                '<span class="inline-flex items-center gap-1.5"><span class="portal-live-dot" aria-hidden="true"></span>本日営業中</span>' +
-                "<span>（待機ドライバー: " + esc(String(drivers)) + "名）</span></p>";
-            } else if (drivers > 0) {
-              html += '<p class="portal-live-title">待機ドライバー: ' + esc(String(drivers)) + "名</p>";
-            }
-            if (hasValue(ev.title) || hasValue(ev.body)) {
-              const label = (ev.title || ev.body || "").trim();
-              html += '<p class="mt-1 portal-live-muted"><span class="font-semibold text-emerald-900">イベント:</span> ' + esc(label) + "</p>";
-              if (hasValue(ev.title) && hasValue(ev.body) && ev.body.trim() !== ev.title.trim()) {
-                html += '<p class="mt-0.5 text-xs text-slate-600">' + esc(ev.body.trim()) + "</p>";
-              }
-            }
-          }
-          const priceLine = formatPriceLine(live.prices);
-          if (priceLine) {
-            html += '<p class="mt-2 border-t border-emerald-100 pt-2 portal-live-muted"><span class="font-semibold">料金:</span> ' + esc(priceLine) + "</p>";
-          }
-          if (!html.trim()) {
-            html = '<p class="portal-live-title">会員登録の最新情報があります</p>';
-          }
-          return html;
-        }
-
-        function applyLiveToGrid() {
-          try {
-            if (!grid) return;
-            const articles = grid.querySelectorAll("article[data-prefecture]");
-            let matched = 0;
-            let noMatch = 0;
-            let shown = 0;
-
-            articles.forEach(function (article) {
-              const slot = article.querySelector("div.portal-live[data-live-slot]");
-              if (!slot) return;
-
-              const prefAttr = article.getAttribute("data-prefecture") || "";
-              const certAttr = article.getAttribute("data-cert") || "";
-
-              if (PORTAL_LIVE_DEBUG) {
-                console.log("[portal-live] --- カード照合開始 ---", {
-                  prefecture: prefAttr,
-                  cert: certAttr,
-                });
-              }
-
-              const found = findLiveForCard(prefAttr, certAttr);
-              const live = found ? found.live : null;
-
-              if (!live) {
-                noMatch += 1;
-                hideLiveSlot(slot);
-                return;
-              }
-
-              matched += 1;
-              if (!hasLivePayload(live)) {
-                hideLiveSlot(slot);
-                if (PORTAL_LIVE_DEBUG) {
-                  console.log("[portal-live] 一致したが表示データなし:", found.matchedKey, live);
-                }
-                return;
-              }
-
-              showLiveSlot(slot, live);
-              shown += 1;
-              if (PORTAL_LIVE_DEBUG) {
-                console.log("[portal-live] 一致しました:", found.matchedKey, live);
-              }
-            });
-
-            if (PORTAL_LIVE_DEBUG) {
-              console.log("[portal-live] 反映サマリ", {
-                cards: articles.length,
-                matched: matched,
-                noMatch: noMatch,
-                shown: shown,
-              });
-            }
-          } catch (err) {
-            console.warn("リアルタイム情報の反映に失敗しました", err);
-          }
-        }
-
-        function appendCardNode(b, frag, template) {
-          template.innerHTML = cardHtml(b);
-          const node = template.content.firstElementChild;
-          if (node) frag.appendChild(node);
-        }
-
-        async function loadLiveInfo() {
-          const controller = new AbortController();
-          const timer = setTimeout(function () { controller.abort(); }, 10000);
-          try {
-            const res = await fetch(LIVE_API_URL, {
-              credentials: "same-origin",
-              cache: "no-store",
-              signal: controller.signal,
-            });
-            if (!res.ok) {
-              if (PORTAL_LIVE_DEBUG) {
-                console.warn("[portal-live] API HTTP", res.status, res.statusText);
-              }
-              return false;
-            }
-            const data = await res.json();
-            if (PORTAL_LIVE_DEBUG) {
-              const apiKeys = data && data.by_key ? Object.keys(data.by_key) : [];
-              console.log("[portal-live] API 生JSON", data);
-              console.log("[portal-live] API by_key 辞書キー（参考・照合には未使用）", apiKeys);
-            }
-            if (!data || !data.ok || !data.by_key) return false;
-            liveEntries = buildLiveIndexFromApi(data.by_key);
-            if (PORTAL_LIVE_DEBUG) {
-              console.log("[portal-live] API配列化 件数=" + liveEntries.length, liveEntries);
-            }
-            return true;
-          } catch (err) {
-            console.warn("リアルタイム情報の取得に失敗しました", err);
-            return false;
-          } finally {
-            clearTimeout(timer);
-          }
-        }
-
-        function buildPrefTabs() {
-          prefTabs.innerHTML = "";
-          DATA.prefectures.forEach(function (p) {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "pref-tab rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:border-brand";
-            btn.textContent = p;
-            btn.dataset.pref = p;
-            btn.addEventListener("click", function () {
-              prefSelect.value = p;
-              onPrefChange();
-            });
-            prefTabs.appendChild(btn);
-          });
-          if (DATA.prefectures.length > 0) {
-            prefTabs.classList.remove("hidden");
-          }
-        }
-
-        function syncTabActive() {
-          prefTabs.querySelectorAll(".pref-tab").forEach(function (btn) {
-            btn.classList.toggle("active", btn.dataset.pref === state.pref);
-          });
-        }
-
-        function updateCityOptions() {
-          citySelect.innerHTML = '<option value="">すべての市区町村</option>';
-          if (!state.pref) {
-            cityWrap.classList.add("hidden");
-            state.city = "";
-            return;
-          }
-          const cities = DATA.citiesByPrefecture[state.pref] || [];
-          cities.forEach(function (c) {
-            const opt = document.createElement("option");
-            opt.value = c;
-            opt.textContent = c;
-            citySelect.appendChild(opt);
-          });
-          cityWrap.classList.remove("hidden");
-        }
-
-        /** 会員リアルタイム情報があり表示対象の業者か */
-        function businessHasLiveDisplay(b) {
-          const found = findLiveForCard(b.prefecture, b.cert);
-          return !!(found && found.live && hasLivePayload(found.live));
-        }
-
-        /** エメラルド枠ありのカードを先頭に（同グループ内の元順序は維持） */
-        function sortByLiveFirst(list) {
-          if (!liveEntries.length || !list.length) return list;
-          const withLive = [];
-          const withoutLive = [];
-          list.forEach(function (b) {
-            if (businessHasLiveDisplay(b)) withLive.push(b);
-            else withoutLive.push(b);
-          });
-          return withLive.concat(withoutLive);
-        }
-
-        function filtered() {
-          try {
-            const matched = DATA.businesses.filter(function (b) {
-              if (state.pref && b.prefecture !== state.pref) return false;
-              if (state.city && b.city !== state.city) return false;
-              return true;
-            });
-            return sortByLiveFirst(matched);
-          } catch (err) {
-            console.warn("filter failed", err);
-            return [];
-          }
-        }
-
-        function setGridLoading(isLoading) {
-          if (portalLoading) portalLoading.classList.toggle("hidden", !isLoading);
-          if (grid) grid.classList.toggle("hidden", isLoading);
-        }
-
-        function render(onDone) {
-          const done = typeof onDone === "function" ? onDone : function () {};
-          try {
-            const list = filtered();
-            if (resultCount) resultCount.textContent = String(list.length);
-            if (!grid) {
-              done();
-              return;
-            }
-            renderGeneration += 1;
-            const generation = renderGeneration;
-            grid.innerHTML = "";
-            if (list.length === 0) {
-              if (emptyMsg) emptyMsg.classList.remove("hidden");
-              done();
-              return;
-            }
-            if (emptyMsg) emptyMsg.classList.add("hidden");
-            const template = document.createElement("template");
-            let index = 0;
-            const chunkSize = 40;
-
-            function appendChunk() {
-              if (generation !== renderGeneration) return;
-              const frag = document.createDocumentFragment();
-              const end = Math.min(index + chunkSize, list.length);
-              for (; index < end; index += 1) {
-                try {
-                  appendCardNode(list[index], frag, template);
-                } catch (cardErr) {
-                  console.warn("カード生成をスキップしました", list[index] && list[index].name, cardErr);
-                }
-              }
-              grid.appendChild(frag);
-              if (index < list.length) {
-                requestAnimationFrame(appendChunk);
-              } else {
-                done();
-              }
-            }
-
-            requestAnimationFrame(appendChunk);
-          } catch (err) {
-            console.error("一覧の描画に失敗しました", err);
-            if (emptyMsg) emptyMsg.classList.remove("hidden");
-            done();
-          }
-        }
-
-        function onPrefChange() {
-          state.pref = prefSelect.value;
-          state.city = "";
-          citySelect.value = "";
-          syncTabActive();
-          updateCityOptions();
-          render(applyLiveToGrid);
-        }
-
-        function onCityChange() {
-          state.city = citySelect.value;
-          render(applyLiveToGrid);
-        }
-
-        if (prefSelect) prefSelect.addEventListener("change", onPrefChange);
-        if (citySelect) citySelect.addEventListener("change", onCityChange);
-
-        async function boot() {
-          if (emptyMsg) emptyMsg.classList.add("hidden");
-          setGridLoading(true);
-          try {
-            const ok = await loadPortalData();
-            if (!ok) {
-              if (emptyMsg) {
-                emptyMsg.textContent = "一覧データの読み込みに失敗しました。ページを再読み込みしてください。";
-                emptyMsg.classList.remove("hidden");
-              }
-              setGridLoading(false);
-              return;
-            }
-            buildPrefTabs();
-            await loadLiveInfo();
-            render(function () {
-              setGridLoading(false);
-              applyLiveToGrid();
-            });
-          } catch (err) {
-            console.error("ポータル初期化に失敗しました", err);
-            if (emptyMsg) {
-              emptyMsg.textContent = "一覧の表示に失敗しました。ページを再読み込みしてください。";
-              emptyMsg.classList.remove("hidden");
-            }
-            setGridLoading(false);
-          }
-        }
-
-        boot();
-      })();
-    </script>
   </body>
 </html>

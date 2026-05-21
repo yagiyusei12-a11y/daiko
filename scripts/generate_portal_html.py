@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-data/3_enriched_csv/ 内の県別 CSV を統合し、全国対応ポータル index.html を生成する。
+data/3_enriched_csv/ 内の県別 CSV を統合し、ポータル用静的 HTML を 3 階層で生成する。
 
 使い方:
+  pip install pandas pykakasi
   python scripts/generate_portal_html.py
 
-出力（同一内容）:
-  - index.html（プロジェクトルート）
-  - public/portal/index.html
-
-依存:
-  pip install pandas
+出力:
+  - public/portal/index.html（全国トップ）
+  - public/portal/{pref_slug}/index.html（都道府県トップ）
+  - public/portal/{pref_slug}/{city_slug}/index.html（市町村トップ）
+  - public/portal/portal-data.json（全国データ・参照用）
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ import argparse
 import html
 import json
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -28,17 +29,17 @@ import pandas as pd
 from daiko_places_enrich import PREFECTURE_BY_STEM
 
 SITE_URL = "https://daiko.harunoyukoto.jp/"
-PORTAL_URL = "https://daiko.harunoyukoto.jp/portal/"
+PORTAL_BASE = "/portal/"
 PORTAL_DATA_URL = "/portal/portal-data.json"
 PORTAL_CSS_URL = "/portal/portal.css"
 LIVE_API_URL = "/portal-member/api/get_live_info.php"
 MEMBER_REGISTER_URL = "/portal-member/register.php"
 MEMBER_LOGIN_URL = "/portal-member/login.php"
-PAGE_TITLE = "全国の運転代行業者一覧・検索 | はるのゆこと"
-META_DESCRIPTION = (
-    "滋賀県、福井県、岐阜県、大阪府など、各地域の運転代行業者一覧。"
-    "営業時間や電話番号を掲載し、スマホからワンタップで今すぐ代行を呼べます。"
-    "エリアや市区町村での絞り込み対応。"
+
+NATIONAL_TITLE = "【2026年最新】全国の運転代行一覧｜料金・すぐ呼べる代行検索"
+NATIONAL_DESCRIPTION = (
+    "全国の運転代行業者を都道府県・市区町村から探せる一覧ポータル。"
+    "料金・電話番号・公式サイトを掲載。すぐ呼べる代行業者を検索できます。"
 )
 
 ADDRESS_COLUMNS = ("所在地", "主たる営業所の所在地")
@@ -46,9 +47,93 @@ CITY_PATTERN = re.compile(
     r"^(.+?(?:市|区|町|村)|.+?郡.+?(?:町|村))"
 )
 
+# 地方区分（掲載がある都道府県のみリンクを出す）
+REGION_PREFS: list[tuple[str, list[str]]] = [
+    ("北海道", ["北海道"]),
+    ("東北", ["青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県"]),
+    ("関東", ["茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県"]),
+    ("中部", ["新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県", "静岡県", "愛知県"]),
+    ("近畿", ["三重県", "滋賀県", "京都府", "大阪府", "兵庫県", "奈良県", "和歌山県"]),
+    ("中国", ["鳥取県", "島根県", "岡山県", "広島県", "山口県"]),
+    ("四国", ["徳島県", "香川県", "愛媛県", "高知県"]),
+    ("九州・沖縄", ["福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"]),
+]
+
+PREF_TO_REGION: dict[str, str] = {}
+for region_label, region_pref_list in REGION_PREFS:
+    for pref_name in region_pref_list:
+        PREF_TO_REGION[pref_name] = region_label
+
+_kakasi_instance = None
+
 
 def project_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+def get_kakasi():
+    global _kakasi_instance
+    if _kakasi_instance is None:
+        try:
+            import pykakasi
+        except ImportError as exc:
+            print(
+                "エラー: pykakasi がインストールされていません。\n"
+                "  実行前に: pip install pykakasi",
+                file=sys.stderr,
+            )
+            raise SystemExit(1) from exc
+        _kakasi_instance = pykakasi.kakasi()
+    return _kakasi_instance
+
+
+def hepburn_roman(text: str) -> str:
+    kks = get_kakasi()
+    parts: list[str] = []
+    for item in kks.convert(text):
+        h = (item.get("hepburn") or item.get("passport") or "").strip()
+        if h:
+            parts.append(h)
+    roman = "".join(parts).lower()
+    roman = re.sub(r"[^a-z0-9]+", "-", roman).strip("-")
+    return roman or "area"
+
+
+def slug_from_place_name(name: str) -> str:
+    s = name.strip()
+    s = re.sub(r"(都|道|府|県|市|区|町|村)$", "", s)
+    if not s or s == "その他":
+        return "sonota"
+    return hepburn_roman(s)
+
+
+class SlugRegistry:
+    """都道府県・市区町村ごとに一意の URL スラッグを割り当てる。"""
+
+    def __init__(self) -> None:
+        self._pref_used: set[str] = set()
+        self._city_used: dict[str, set[str]] = {}
+
+    def pref_slug(self, prefecture: str) -> str:
+        base = slug_from_place_name(prefecture)
+        slug = base
+        n = 2
+        while slug in self._pref_used:
+            slug = f"{base}-{n}"
+            n += 1
+        self._pref_used.add(slug)
+        return slug
+
+    def city_slug(self, pref_slug: str, city: str) -> str:
+        used = self._city_used.setdefault(pref_slug, set())
+        base = slug_from_place_name(city)
+        slug = base
+        n = 2
+        while slug in used:
+            slug = f"{base}-{n}"
+            n += 1
+        used.add(slug)
+        return slug
 
 
 def cell_str(value: object) -> str:
@@ -77,7 +162,6 @@ def prefecture_from_filename(csv_path: Path, row: pd.Series | None = None) -> st
     stem = csv_path.stem.lower()
     if stem in PREFECTURE_BY_STEM:
         return PREFECTURE_BY_STEM[stem]
-    # 8515_2740104_misc などの非標準名 → 既知の別名
     stem_aliases = {
         "8515_2740104_misc": "岐阜県",
         "daikougyouitirann5matu": "愛知県",
@@ -135,12 +219,23 @@ def load_all_businesses(enriched_dir: Path) -> list[dict[str, str]]:
                     "address": address,
                     "phone": cell_str(row.get("電話番号")),
                     "website": cell_str(row.get("ウェブサイトURL")),
-                    "rating": cell_str(row.get("評価")),
-                    "reviews": cell_str(row.get("レビュー数")),
                 }
             )
 
     return records
+
+
+def assign_slugs(records: list[dict[str, str]]) -> SlugRegistry:
+    registry = SlugRegistry()
+    pref_slug_by_name: dict[str, str] = {}
+    for row in records:
+        pref = row["prefecture"]
+        if pref not in pref_slug_by_name:
+            pref_slug_by_name[pref] = registry.pref_slug(pref)
+        row["pref_slug"] = pref_slug_by_name[pref]
+    for row in records:
+        row["city_slug"] = registry.city_slug(row["pref_slug"], row["city"])
+    return registry
 
 
 def build_prefecture_index(records: list[dict[str, str]]) -> dict[str, list[str]]:
@@ -154,37 +249,102 @@ def build_prefecture_index(records: list[dict[str, str]]) -> dict[str, list[str]
     }
 
 
-def build_html(records: list[dict[str, str]]) -> str:
-    prefectures = sorted({r["prefecture"] for r in records})
-    cities_by_pref = build_prefecture_index(records)
-    pref_options = "\n".join(
-        f'            <option value="{html.escape(p)}">{html.escape(p)}</option>'
-        for p in prefectures
+def portal_path(pref_slug: str | None = None, city_slug: str | None = None) -> str:
+    if not pref_slug:
+        return PORTAL_BASE
+    if not city_slug:
+        return f"{PORTAL_BASE}{pref_slug}/"
+    return f"{PORTAL_BASE}{pref_slug}/{city_slug}/"
+
+
+def canonical_url(pref_slug: str | None = None, city_slug: str | None = None) -> str:
+    return SITE_URL.rstrip("/") + portal_path(pref_slug, city_slug)
+
+
+def tel_href(phone: str) -> str:
+    digits = re.sub(r"[^\d+]", "", phone or "")
+    return f"tel:{digits}" if digits else ""
+
+
+def normalize_website(url: str) -> str:
+    u = (url or "").strip()
+    if not u:
+        return ""
+    if re.match(r"^https?://", u, re.I):
+        return u
+    return f"https://{u}"
+
+
+def card_article_html(rec: dict[str, str]) -> str:
+    cert = html.escape(rec.get("cert") or "")
+    name = html.escape(rec.get("name") or "")
+    pref = html.escape(rec.get("prefecture") or "")
+    city = html.escape(rec.get("city") or "")
+    addr = html.escape(rec.get("address") or "")
+    phone = rec.get("phone") or ""
+    website = normalize_website(rec.get("website") or "")
+    cert_raw = html.escape((rec.get("cert") or "").strip())
+    pref_raw = html.escape((rec.get("prefecture") or "").strip())
+
+    cert_badge = (
+        f'<span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">{cert}</span>'
+        if cert
+        else ""
     )
 
-    return f"""<!DOCTYPE html>
-<html lang="ja">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{html.escape(PAGE_TITLE)}</title>
-    <meta name="description" content="{html.escape(META_DESCRIPTION)}" />
-    <link rel="canonical" href="{html.escape(PORTAL_URL)}" />
-    <meta name="robots" content="index, follow" />
-    <meta property="og:title" content="{html.escape(PAGE_TITLE)}" />
-    <meta property="og:description" content="{html.escape(META_DESCRIPTION)}" />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="{html.escape(PORTAL_URL)}" />
-    <meta property="og:locale" content="ja_JP" />
-    <link rel="stylesheet" href="{html.escape(PORTAL_CSS_URL)}" />
-  </head>
-  <body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
+    call_btn = ""
+    if phone:
+        href = html.escape(tel_href(phone))
+        call_btn = (
+            f'<a href="{href}" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]">'
+            '<svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">'
+            '<path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>'
+            "電話で呼ぶ</a>"
+            f'<p class="mt-1 text-center text-xs text-slate-500">{html.escape(phone)}</p>'
+        )
+
+    site_link = ""
+    if website:
+        site_link = (
+            f'<a href="{html.escape(website)}" target="_blank" rel="noopener noreferrer" '
+            'class="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline">公式HP</a>'
+        )
+
+    return (
+        f'<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" '
+        f'data-prefecture="{pref_raw}" data-cert="{cert_raw}">'
+        f'<div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">{name}</h2>{cert_badge}</div>'
+        f'<p class="mt-1 text-xs font-medium text-brand">{pref} · {city}</p>'
+        f'<p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>{pref} {addr}</span></p>'
+        '<div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div>'
+        f"{site_link}{call_btn}</article>"
+    )
+
+
+def render_cards_grid(records: list[dict[str, str]]) -> str:
+    sorted_recs = sorted(
+        records,
+        key=lambda r: (r.get("city") or "", r.get("name") or ""),
+    )
+    cards = "\n".join(card_article_html(r) for r in sorted_recs)
+    count = len(sorted_recs)
+    return f"""
+      <p class="mb-4 text-sm text-slate-600">
+        掲載 <strong class="text-slate-900">{count}</strong> 件
+      </p>
+      <div id="card-grid" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite">
+{cards}
+      </div>"""
+
+
+def render_header(h1: str, subtitle: str = "全国対応") -> str:
+    return f"""
     <header class="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
       <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
         <div>
-          <p class="text-xs font-semibold tracking-wide text-brand">全国対応</p>
+          <p class="text-xs font-semibold tracking-wide text-brand">{html.escape(subtitle)}</p>
           <h1 class="text-lg font-bold leading-tight sm:text-xl">
-            運転代行ポータル <span class="text-slate-400 font-normal">|</span> はるのゆこと
+            <a href="{html.escape(PORTAL_BASE)}" class="no-underline text-inherit hover:text-brand">{html.escape(h1)}</a>
           </h1>
         </div>
         <nav class="flex flex-wrap items-center gap-2" aria-label="サイトナビゲーション">
@@ -202,9 +362,28 @@ def build_html(records: list[dict[str, str]]) -> str:
           </a>
         </nav>
       </div>
-    </header>
+    </header>"""
 
-    <main id="main" class="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+
+def render_breadcrumbs(items: list[tuple[str, str | None]]) -> str:
+    """items: (label, href or None for current)"""
+    parts: list[str] = []
+    for i, (label, href) in enumerate(items):
+        if href:
+            parts.append(
+                f'<a href="{html.escape(href)}" class="text-brand hover:underline">{html.escape(label)}</a>'
+            )
+        else:
+            parts.append(f'<span aria-current="page" class="text-slate-700">{html.escape(label)}</span>')
+    inner = ' <span class="text-slate-400">/</span> '.join(parts)
+    return f"""
+      <nav class="portal-breadcrumb mb-6 text-sm text-slate-500" aria-label="パンくずリスト">
+        {inner}
+      </nav>"""
+
+
+def render_cta_block() -> str:
+    return f"""
       <section class="mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-brand to-blue-700 p-6 text-white shadow-lg sm:p-8" aria-labelledby="cta-top">
         <h2 id="cta-top" class="text-base font-bold leading-relaxed sm:text-lg">
           【運転代行業者様へ】配車・売上管理をスマートにする最新システムを導入しませんか？初期費用を抑えて業務を効率化。詳しくはこちら
@@ -219,45 +398,11 @@ def build_html(records: list[dict[str, str]]) -> str:
             Daiko（業務管理システム）を見る →
           </a>
         </div>
-      </section>
+      </section>"""
 
-      <section class="mb-6 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-6" aria-labelledby="filter-heading">
-        <h2 id="filter-heading" class="text-sm font-bold text-slate-800">都道府県・市区町村で絞り込み</h2>
 
-        <div class="mt-4">
-          <label for="pref-select" class="mb-1 block text-xs font-semibold text-slate-500">都道府県を選択</label>
-          <select id="pref-select"
-                  class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-medium text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-            <option value="">すべての都道府県</option>
-{pref_options}
-          </select>
-        </div>
-
-        <div id="pref-tabs" class="mt-3 hidden flex-wrap gap-2 sm:flex" role="tablist" aria-label="都道府県タブ"></div>
-
-        <div id="city-wrap" class="mt-4 hidden">
-          <label for="city-select" class="mb-1 block text-xs font-semibold text-slate-500">市区町村を選択</label>
-          <select id="city-select"
-                  class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-            <option value="">すべての市区町村</option>
-          </select>
-        </div>
-
-        <p class="mt-4 text-sm text-slate-600">
-          掲載 <strong id="result-count" class="text-slate-900">0</strong> 件
-          <span class="text-slate-400">（全 <span id="total-count">{len(records)}</span> 件）</span>
-        </p>
-      </section>
-
-      <p id="portal-loading" class="rounded-xl border border-slate-200 bg-white py-10 text-center text-sm text-slate-600">
-        一覧を読み込んでいます…
-      </p>
-      <div id="card-grid" class="hidden grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite"></div>
-      <p id="empty-msg" class="hidden rounded-xl border border-dashed border-slate-300 bg-white py-12 text-center text-sm text-slate-500">
-        条件に一致する業者がありません。都道府県を選ぶか、別の市区町村をお試しください。
-      </p>
-    </main>
-
+def render_footer() -> str:
+    return f"""
     <footer class="mt-12 border-t border-slate-200 bg-white">
       <section class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
         <div class="rounded-2xl border border-blue-100 bg-blue-50 p-6 sm:p-8">
@@ -282,57 +427,207 @@ def build_html(records: list[dict[str, str]]) -> str:
           · <a href="{html.escape(MEMBER_LOGIN_URL)}" class="text-brand hover:underline">会員ログイン</a>
         </p>
       </section>
-    </footer>
+    </footer>"""
 
+
+def page_shell(
+    *,
+    title: str,
+    description: str,
+    canonical: str,
+    h1: str,
+    main_body: str,
+    include_live_js: bool = False,
+    subtitle: str = "全国対応",
+) -> str:
+    live_script = portal_live_listing_js() if include_live_js else ""
+    return f"""<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{html.escape(title)}</title>
+    <meta name="description" content="{html.escape(description)}" />
+    <link rel="canonical" href="{html.escape(canonical)}" />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:title" content="{html.escape(title)}" />
+    <meta property="og:description" content="{html.escape(description)}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="{html.escape(canonical)}" />
+    <meta property="og:locale" content="ja_JP" />
+    <link rel="stylesheet" href="{html.escape(PORTAL_CSS_URL)}" />
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
+{render_header(h1, subtitle)}
+    <main id="main" class="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+{main_body}
+    </main>
+{render_footer()}
+{live_script}
+  </body>
+</html>
+"""
+
+
+def build_national_page(records: list[dict[str, str]]) -> str:
+    pref_meta: dict[str, dict[str, object]] = {}
+    for row in records:
+        pref = row["prefecture"]
+        ps = row["pref_slug"]
+        if pref not in pref_meta:
+            pref_meta[pref] = {
+                "name": pref,
+                "slug": ps,
+                "count": 0,
+                "region": PREF_TO_REGION.get(pref, "その他"),
+            }
+        pref_meta[pref]["count"] = int(pref_meta[pref]["count"]) + 1  # type: ignore[operator]
+
+    region_blocks: list[str] = []
+    for region_name, pref_list in REGION_PREFS:
+        prefs_in_region = [
+            pref_meta[p]
+            for p in pref_list
+            if p in pref_meta
+        ]
+        if not prefs_in_region:
+            continue
+        links = "\n".join(
+            f'          <li><a href="{html.escape(portal_path(str(m["slug"])))}" class="portal-pref-link">'
+            f'{html.escape(str(m["name"]))} <span class="text-slate-400">（{m["count"]}件）</span></a></li>'
+            for m in sorted(prefs_in_region, key=lambda x: str(x["name"]))
+        )
+        region_blocks.append(
+            f"""
+      <section class="portal-region-block mb-8 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+        <h2 class="text-base font-bold text-slate-800">{html.escape(region_name)}</h2>
+        <ul class="portal-pref-list mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+{links}
+        </ul>
+      </section>"""
+        )
+
+    other_prefs = [m for p, m in pref_meta.items() if PREF_TO_REGION.get(p) is None]
+    if other_prefs:
+        links = "\n".join(
+            f'          <li><a href="{html.escape(portal_path(str(m["slug"])))}" class="portal-pref-link">'
+            f'{html.escape(str(m["name"]))} <span class="text-slate-400">（{m["count"]}件）</span></a></li>'
+            for m in sorted(other_prefs, key=lambda x: str(x["name"]))
+        )
+        region_blocks.append(
+            f"""
+      <section class="portal-region-block mb-8 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+        <h2 class="text-base font-bold text-slate-800">その他</h2>
+        <ul class="portal-pref-list mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+{links}
+        </ul>
+      </section>"""
+        )
+
+    total = len(records)
+    main = f"""
+{render_cta_block()}
+      <section aria-labelledby="national-heading">
+        <h2 id="national-heading" class="text-xl font-bold text-slate-900 sm:text-2xl">都道府県から探す</h2>
+        <p class="mt-2 text-sm text-slate-600">掲載業者数 合計 <strong>{total}</strong> 件 · {len(pref_meta)} 都道府県</p>
+        <p class="mt-1 text-sm text-slate-500">お住まいの地域を選ぶと、市区町村別の一覧ページへ移動します。</p>
+      </section>
+{"".join(region_blocks)}
+"""
+    return page_shell(
+        title=NATIONAL_TITLE,
+        description=NATIONAL_DESCRIPTION,
+        canonical=canonical_url(),
+        h1="運転代行ポータル | はるのゆこと",
+        main_body=main,
+        include_live_js=False,
+    )
+
+
+def build_prefecture_page(
+    prefecture: str,
+    pref_slug: str,
+    records: list[dict[str, str]],
+    cities: list[dict[str, str]],
+) -> str:
+    title = f"【2026年最新】{prefecture}の運転代行一覧｜料金・イベント情報"
+    description = (
+        f"{prefecture}の運転代行業者一覧。市区町村別に探せます。"
+        "料金・電話番号・会員のリアルタイム営業情報を掲載。"
+    )
+    city_links = "\n".join(
+        f'          <li><a href="{html.escape(portal_path(pref_slug, c["city_slug"]))}" class="portal-city-link">'
+        f'{html.escape(c["city"])} <span class="text-slate-400">（{c["count"]}件）</span></a></li>'
+        for c in cities
+    )
+    main = f"""
+{render_breadcrumbs([("トップ", PORTAL_BASE), (prefecture, None)])}
+{render_cta_block()}
+      <section class="mb-8 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6" aria-labelledby="city-nav">
+        <h2 id="city-nav" class="text-base font-bold text-slate-800">{html.escape(prefecture)}の市区町村一覧</h2>
+        <ul class="portal-city-list mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+{city_links}
+        </ul>
+      </section>
+      <section aria-labelledby="list-heading">
+        <h2 id="list-heading" class="mb-4 text-xl font-bold text-slate-900">{html.escape(prefecture)}の運転代行業者一覧</h2>
+{render_cards_grid(records)}
+      </section>
+"""
+    return page_shell(
+        title=title,
+        description=description,
+        canonical=canonical_url(pref_slug),
+        h1=f"{prefecture}の運転代行一覧",
+        main_body=main,
+        include_live_js=True,
+        subtitle=prefecture,
+    )
+
+
+def build_city_page(
+    prefecture: str,
+    pref_slug: str,
+    city: str,
+    city_slug: str,
+    records: list[dict[str, str]],
+) -> str:
+    title = f"【2026年最新】{city}の運転代行一覧｜すぐ呼べる代行業者"
+    description = (
+        f"{prefecture}{city}の運転代行業者一覧。"
+        "電話番号・公式サイト・会員のリアルタイム営業情報を掲載。"
+    )
+    main = f"""
+{render_breadcrumbs([
+    ("トップ", PORTAL_BASE),
+    (prefecture, portal_path(pref_slug)),
+    (city, None),
+])}
+{render_cta_block()}
+      <section aria-labelledby="list-heading">
+        <h2 id="list-heading" class="mb-4 text-xl font-bold text-slate-900">{html.escape(city)}の運転代行業者一覧</h2>
+{render_cards_grid(records)}
+      </section>
+"""
+    return page_shell(
+        title=title,
+        description=description,
+        canonical=canonical_url(pref_slug, city_slug),
+        h1=f"{city}の運転代行一覧",
+        main_body=main,
+        include_live_js=True,
+        subtitle=f"{prefecture} · {city}",
+    )
+
+
+def portal_live_listing_js() -> str:
+    """都道府県・市町村ページ用: 静的カード + 会員リアルタイム枠（絶対パス API）。"""
+    return f"""
     <script>
       (function () {{
-        const SITE_URL = {json.dumps(SITE_URL)};
         const LIVE_API_URL = {json.dumps(LIVE_API_URL)};
-        const PORTAL_DATA_URL = {json.dumps(PORTAL_DATA_URL)};
-
-        let DATA = {{ businesses: [], prefectures: [], citiesByPrefecture: {{}}, total: 0 }};
-        let renderGeneration = 0;
-
-        async function loadPortalData() {{
-          const controller = new AbortController();
-          const timer = setTimeout(function () {{ controller.abort(); }}, 20000);
-          try {{
-            const res = await fetch(PORTAL_DATA_URL, {{
-              cache: "no-store",
-              signal: controller.signal,
-            }});
-            if (!res.ok) throw new Error("HTTP " + res.status);
-            const raw = await res.json();
-            DATA = {{
-              businesses: Array.isArray(raw.businesses) ? raw.businesses : [],
-              prefectures: Array.isArray(raw.prefectures) ? raw.prefectures : [],
-              citiesByPrefecture: raw.citiesByPrefecture && typeof raw.citiesByPrefecture === "object"
-                ? raw.citiesByPrefecture
-                : {{}},
-              total: typeof raw.total === "number" ? raw.total : (raw.businesses ? raw.businesses.length : 0),
-            }};
-            return true;
-          }} catch (parseErr) {{
-            console.error("ポータルデータの読み込みに失敗しました", parseErr);
-            return false;
-          }} finally {{
-            clearTimeout(timer);
-          }}
-        }}
-
-        /** API 会員データ（配列検索用。by_key の辞書キーは使わない） */
-        let liveEntries = [];
-
-        const prefSelect = document.getElementById("pref-select");
-        const citySelect = document.getElementById("city-select");
-        const cityWrap = document.getElementById("city-wrap");
-        const prefTabs = document.getElementById("pref-tabs");
         const grid = document.getElementById("card-grid");
-        const emptyMsg = document.getElementById("empty-msg");
-        const portalLoading = document.getElementById("portal-loading");
-        const resultCount = document.getElementById("result-count");
-
-        const state = {{ pref: "", city: "" }};
+        let liveEntries = [];
 
         function esc(s) {{
           if (!s) return "";
@@ -343,90 +638,15 @@ def build_html(records: list[dict[str, str]]) -> str:
             .replace(/"/g, "&quot;");
         }}
 
-        function telHref(phone) {{
-          const d = String(phone).replace(/[^\\d+]/g, "");
-          return d ? "tel:" + d : "";
-        }}
-
-        function normalizeUrl(url) {{
-          if (!url) return "";
-          return /^https?:\\/\\//i.test(url) ? url : "https://" + url;
-        }}
-
-        function starsHtml(rating) {{
-          const r = parseFloat(rating);
-          if (isNaN(r)) return '<span class="text-slate-400 text-sm">評価なし</span>';
-          const full = Math.max(0, Math.min(5, Math.floor(r + 0.25)));
-          const empty = 5 - full;
-          return (
-            '<span class="text-amber-500 tracking-tight" aria-hidden="true">' +
-            "★".repeat(full) + "☆".repeat(empty) +
-            '</span><span class="text-sm font-semibold text-slate-800">' + r.toFixed(1) + "</span>"
-          );
-        }}
-
-        function cardHtml(b) {{
-          const cert = esc(b.cert);
-          const name = esc(b.name);
-          const pref = esc(b.prefecture);
-          const addr = esc(b.address);
-          const phone = b.phone || "";
-          const website = normalizeUrl(b.website || "");
-          const reviews = b.reviews
-            ? '<span class="text-xs text-slate-500">（' + esc(b.reviews) + "件のレビュー）</span>"
-            : "";
-
-          let callBtn = "";
-          if (phone) {{
-            const href = esc(telHref(phone));
-            callBtn =
-              '<a href="' + href + '" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]">' +
-              '<svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>' +
-              "電話で呼ぶ</a><p class=\\"mt-1 text-center text-xs text-slate-500\\">" + esc(phone) + "</p>";
-          }}
-
-          let siteLink = "";
-          if (website) {{
-            const display = esc(website.replace(/^https?:\\/\\//, "").replace(/\\/$/, ""));
-            siteLink =
-              '<a href="' + esc(website) + '" target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline">' +
-              "公式HP</a>";
-          }}
-
-          const certBadge = cert
-            ? '<span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">' + cert + "</span>"
-            : "";
-
-          const certRaw = String(b.cert || "").trim();
-          const prefRaw = String(b.prefecture || "").trim();
-
-          return (
-            '<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"' +
-            ' data-prefecture="' + esc(prefRaw) + '" data-cert="' + esc(certRaw) + '">' +
-            '<div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">' + name + "</h2>" + certBadge + "</div>" +
-            '<p class="mt-1 text-xs font-medium text-brand">' + pref + " · " + esc(b.city) + "</p>" +
-            '<p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>' + pref + " " + addr + "</span></p>" +
-            '<div class="mt-3 flex flex-wrap items-center gap-2">' + starsHtml(b.rating) + reviews + "</div>" +
-            '<div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div>' +
-            siteLink + callBtn + "</article>"
-          );
-        }}
-
-        /** 照合デバッグ（true で【比較】ログを出力） */
         const PORTAL_LIVE_DEBUG = false;
         const LIVE_SLOT_BASE = "portal-live hidden";
 
         function normalizeUnicode(s) {{
           let t = String(s || "").trim();
-          try {{
-            t = t.normalize("NFKC");
-          }} catch (normErr) {{
-            /* IE 等 */
-          }}
+          try {{ t = t.normalize("NFKC"); }} catch (e) {{}}
           return t;
         }}
 
-        /** 都道府県のベース名（末尾の都・道・府・県と空白を除去） */
         function normalizePrefectureBase(prefecture) {{
           let s = normalizeUnicode(prefecture);
           s = s.replace(/[\\s\\u3000]+/g, "");
@@ -434,10 +654,6 @@ def build_html(records: list[dict[str, str]]) -> str:
           return s;
         }}
 
-        /**
-         * 認定番号から数字列を抽出し整数化（「第02号」「2」「公安委員会 第 02 号」→ 2）
-         * 複数ある場合は最後の数字列を採用（「第○号」形式を想定）
-         */
         function extractCertNumber(cert) {{
           const s = normalizeUnicode(cert);
           if (!s) return null;
@@ -445,12 +661,6 @@ def build_html(records: list[dict[str, str]]) -> str:
           if (!matches || matches.length === 0) return null;
           const n = parseInt(matches[matches.length - 1], 10);
           return Number.isFinite(n) ? n : null;
-        }}
-
-        function formatCompareLabel(prefBase, certNum, prefRaw, certRaw) {{
-          const prefLabel = prefRaw || prefBase || "（空）";
-          const certLabel = certNum !== null ? String(certNum) : (certRaw || "（番号なし）");
-          return prefLabel + "/番号" + certLabel;
         }}
 
         function toLiveEntry(item, apiKey) {{
@@ -464,7 +674,6 @@ def build_html(records: list[dict[str, str]]) -> str:
           }};
         }}
 
-        /** by_key の値を配列化（辞書キーは参照用に apiKey のみ保持） */
         function buildLiveIndexFromApi(byKey) {{
           const list = [];
           if (!byKey || typeof byKey !== "object") return list;
@@ -479,72 +688,12 @@ def build_html(records: list[dict[str, str]]) -> str:
         function findLiveForCard(prefecture, cert) {{
           const cardPrefBase = normalizePrefectureBase(prefecture);
           const cardCertNum = extractCertNumber(cert);
-          const cardLabel = formatCompareLabel(cardPrefBase, cardCertNum, prefecture, cert);
-
-          if (!cardPrefBase || cardCertNum === null) {{
-            if (PORTAL_LIVE_DEBUG) {{
-              console.log(
-                "[portal-live] 【比較】カード側の抽出不足 → 検索スキップ カード側:" + cardLabel,
-                {{ prefecture: prefecture, cert: cert }}
-              );
-            }}
-            return null;
-          }}
-
-          if (!liveEntries.length) {{
-            if (PORTAL_LIVE_DEBUG) {{
-              console.log("[portal-live] 【比較】API配列が空 vs カード側:" + cardLabel);
-            }}
-            return null;
-          }}
-
-          if (PORTAL_LIVE_DEBUG) {{
-            liveEntries.forEach(function (entry) {{
-              const apiLabel = formatCompareLabel(
-                entry.prefBase,
-                entry.certNum,
-                entry.prefecture,
-                entry.cert_number
-              );
-              const prefOk = entry.prefBase === cardPrefBase;
-              const certOk = entry.certNum === cardCertNum;
-              console.log(
-                "[portal-live] 【比較】API側:" +
-                  apiLabel +
-                  " vs カード側:" +
-                  cardLabel +
-                  " => " +
-                  (prefOk && certOk ? "★両方一致" : "不一致（県:" + prefOk + " 番号:" + certOk + "）")
-              );
-            }});
-          }}
-
+          if (!cardPrefBase || cardCertNum === null) return null;
+          if (!liveEntries.length) return null;
           const matchedEntry = liveEntries.find(function (entry) {{
             return entry.prefBase === cardPrefBase && entry.certNum === cardCertNum;
           }});
-
-          if (!matchedEntry) {{
-            if (PORTAL_LIVE_DEBUG) {{
-              console.log("[portal-live] 【比較】最終結果: 一致なし カード側:" + cardLabel);
-            }}
-            return null;
-          }}
-
-          if (PORTAL_LIVE_DEBUG) {{
-            console.log(
-              "[portal-live] 【比較】最終結果: 一致しました API側:" +
-                formatCompareLabel(
-                  matchedEntry.prefBase,
-                  matchedEntry.certNum,
-                  matchedEntry.prefecture,
-                  matchedEntry.cert_number
-                ) +
-                " vs カード側:" +
-                cardLabel
-            );
-          }}
-
-          return {{ live: matchedEntry.live, matchedKey: matchedEntry.apiKey }};
+          return matchedEntry ? {{ live: matchedEntry.live, matchedKey: matchedEntry.apiKey }} : null;
         }}
 
         function liveArticle(slot) {{
@@ -579,9 +728,7 @@ def build_html(records: list[dict[str, str]]) -> str:
           if (prices.base_distance != null && prices.base_price != null) {{
             parts.push("初乗り " + prices.base_distance + "km " + prices.base_price + "円");
           }}
-          if (prices.per_km_price != null) {{
-            parts.push("以降 " + prices.per_km_price + "円/km");
-          }}
+          if (prices.per_km_price != null) parts.push("以降 " + prices.per_km_price + "円/km");
           if (prices.note) parts.push(prices.note);
           return parts.join(" · ");
         }}
@@ -640,70 +787,38 @@ def build_html(records: list[dict[str, str]]) -> str:
           return html;
         }}
 
+        function sortLiveCardsToTop() {{
+          if (!grid) return;
+          const live = [];
+          const rest = [];
+          grid.querySelectorAll("article").forEach(function (article) {{
+            if (article.classList.contains("portal-card--live")) live.push(article);
+            else rest.push(article);
+          }});
+          live.concat(rest).forEach(function (node) {{ grid.appendChild(node); }});
+        }}
+
         function applyLiveToGrid() {{
           try {{
             if (!grid) return;
             const articles = grid.querySelectorAll("article[data-prefecture]");
-            let matched = 0;
-            let noMatch = 0;
-            let shown = 0;
-
             articles.forEach(function (article) {{
               const slot = article.querySelector("div.portal-live[data-live-slot]");
               if (!slot) return;
-
               const prefAttr = article.getAttribute("data-prefecture") || "";
               const certAttr = article.getAttribute("data-cert") || "";
-
-              if (PORTAL_LIVE_DEBUG) {{
-                console.log("[portal-live] --- カード照合開始 ---", {{
-                  prefecture: prefAttr,
-                  cert: certAttr,
-                }});
-              }}
-
               const found = findLiveForCard(prefAttr, certAttr);
               const live = found ? found.live : null;
-
-              if (!live) {{
-                noMatch += 1;
+              if (!live || !hasLivePayload(live)) {{
                 hideLiveSlot(slot);
                 return;
               }}
-
-              matched += 1;
-              if (!hasLivePayload(live)) {{
-                hideLiveSlot(slot);
-                if (PORTAL_LIVE_DEBUG) {{
-                  console.log("[portal-live] 一致したが表示データなし:", found.matchedKey, live);
-                }}
-                return;
-              }}
-
               showLiveSlot(slot, live);
-              shown += 1;
-              if (PORTAL_LIVE_DEBUG) {{
-                console.log("[portal-live] 一致しました:", found.matchedKey, live);
-              }}
             }});
-
-            if (PORTAL_LIVE_DEBUG) {{
-              console.log("[portal-live] 反映サマリ", {{
-                cards: articles.length,
-                matched: matched,
-                noMatch: noMatch,
-                shown: shown,
-              }});
-            }}
+            sortLiveCardsToTop();
           }} catch (err) {{
             console.warn("リアルタイム情報の反映に失敗しました", err);
           }}
-        }}
-
-        function appendCardNode(b, frag, template) {{
-          template.innerHTML = cardHtml(b);
-          const node = template.content.firstElementChild;
-          if (node) frag.appendChild(node);
         }}
 
         async function loadLiveInfo() {{
@@ -715,23 +830,10 @@ def build_html(records: list[dict[str, str]]) -> str:
               cache: "no-store",
               signal: controller.signal,
             }});
-            if (!res.ok) {{
-              if (PORTAL_LIVE_DEBUG) {{
-                console.warn("[portal-live] API HTTP", res.status, res.statusText);
-              }}
-              return false;
-            }}
+            if (!res.ok) return false;
             const data = await res.json();
-            if (PORTAL_LIVE_DEBUG) {{
-              const apiKeys = data && data.by_key ? Object.keys(data.by_key) : [];
-              console.log("[portal-live] API 生JSON", data);
-              console.log("[portal-live] API by_key 辞書キー（参考・照合には未使用）", apiKeys);
-            }}
             if (!data || !data.ok || !data.by_key) return false;
             liveEntries = buildLiveIndexFromApi(data.by_key);
-            if (PORTAL_LIVE_DEBUG) {{
-              console.log("[portal-live] API配列化 件数=" + liveEntries.length, liveEntries);
-            }}
             return true;
           }} catch (err) {{
             console.warn("リアルタイム情報の取得に失敗しました", err);
@@ -741,198 +843,92 @@ def build_html(records: list[dict[str, str]]) -> str:
           }}
         }}
 
-        function buildPrefTabs() {{
-          prefTabs.innerHTML = "";
-          DATA.prefectures.forEach(function (p) {{
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "pref-tab rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:border-brand";
-            btn.textContent = p;
-            btn.dataset.pref = p;
-            btn.addEventListener("click", function () {{
-              prefSelect.value = p;
-              onPrefChange();
-            }});
-            prefTabs.appendChild(btn);
-          }});
-          if (DATA.prefectures.length > 0) {{
-            prefTabs.classList.remove("hidden");
-          }}
-        }}
-
-        function syncTabActive() {{
-          prefTabs.querySelectorAll(".pref-tab").forEach(function (btn) {{
-            btn.classList.toggle("active", btn.dataset.pref === state.pref);
-          }});
-        }}
-
-        function updateCityOptions() {{
-          citySelect.innerHTML = '<option value="">すべての市区町村</option>';
-          if (!state.pref) {{
-            cityWrap.classList.add("hidden");
-            state.city = "";
-            return;
-          }}
-          const cities = DATA.citiesByPrefecture[state.pref] || [];
-          cities.forEach(function (c) {{
-            const opt = document.createElement("option");
-            opt.value = c;
-            opt.textContent = c;
-            citySelect.appendChild(opt);
-          }});
-          cityWrap.classList.remove("hidden");
-        }}
-
-        /** 会員リアルタイム情報があり表示対象の業者か */
-        function businessHasLiveDisplay(b) {{
-          const found = findLiveForCard(b.prefecture, b.cert);
-          return !!(found && found.live && hasLivePayload(found.live));
-        }}
-
-        /** エメラルド枠ありのカードを先頭に（同グループ内の元順序は維持） */
-        function sortByLiveFirst(list) {{
-          if (!liveEntries.length || !list.length) return list;
-          const withLive = [];
-          const withoutLive = [];
-          list.forEach(function (b) {{
-            if (businessHasLiveDisplay(b)) withLive.push(b);
-            else withoutLive.push(b);
-          }});
-          return withLive.concat(withoutLive);
-        }}
-
-        function filtered() {{
-          try {{
-            const matched = DATA.businesses.filter(function (b) {{
-              if (state.pref && b.prefecture !== state.pref) return false;
-              if (state.city && b.city !== state.city) return false;
-              return true;
-            }});
-            return sortByLiveFirst(matched);
-          }} catch (err) {{
-            console.warn("filter failed", err);
-            return [];
-          }}
-        }}
-
-        function setGridLoading(isLoading) {{
-          if (portalLoading) portalLoading.classList.toggle("hidden", !isLoading);
-          if (grid) grid.classList.toggle("hidden", isLoading);
-        }}
-
-        function render(onDone) {{
-          const done = typeof onDone === "function" ? onDone : function () {{}};
-          try {{
-            const list = filtered();
-            if (resultCount) resultCount.textContent = String(list.length);
-            if (!grid) {{
-              done();
-              return;
-            }}
-            renderGeneration += 1;
-            const generation = renderGeneration;
-            grid.innerHTML = "";
-            if (list.length === 0) {{
-              if (emptyMsg) emptyMsg.classList.remove("hidden");
-              done();
-              return;
-            }}
-            if (emptyMsg) emptyMsg.classList.add("hidden");
-            const template = document.createElement("template");
-            let index = 0;
-            const chunkSize = 40;
-
-            function appendChunk() {{
-              if (generation !== renderGeneration) return;
-              const frag = document.createDocumentFragment();
-              const end = Math.min(index + chunkSize, list.length);
-              for (; index < end; index += 1) {{
-                try {{
-                  appendCardNode(list[index], frag, template);
-                }} catch (cardErr) {{
-                  console.warn("カード生成をスキップしました", list[index] && list[index].name, cardErr);
-                }}
-              }}
-              grid.appendChild(frag);
-              if (index < list.length) {{
-                requestAnimationFrame(appendChunk);
-              }} else {{
-                done();
-              }}
-            }}
-
-            requestAnimationFrame(appendChunk);
-          }} catch (err) {{
-            console.error("一覧の描画に失敗しました", err);
-            if (emptyMsg) emptyMsg.classList.remove("hidden");
-            done();
-          }}
-        }}
-
-        function onPrefChange() {{
-          state.pref = prefSelect.value;
-          state.city = "";
-          citySelect.value = "";
-          syncTabActive();
-          updateCityOptions();
-          render(applyLiveToGrid);
-        }}
-
-        function onCityChange() {{
-          state.city = citySelect.value;
-          render(applyLiveToGrid);
-        }}
-
-        if (prefSelect) prefSelect.addEventListener("change", onPrefChange);
-        if (citySelect) citySelect.addEventListener("change", onCityChange);
-
         async function boot() {{
-          if (emptyMsg) emptyMsg.classList.add("hidden");
-          setGridLoading(true);
-          try {{
-            const ok = await loadPortalData();
-            if (!ok) {{
-              if (emptyMsg) {{
-                emptyMsg.textContent = "一覧データの読み込みに失敗しました。ページを再読み込みしてください。";
-                emptyMsg.classList.remove("hidden");
-              }}
-              setGridLoading(false);
-              return;
-            }}
-            buildPrefTabs();
-            await loadLiveInfo();
-            render(function () {{
-              setGridLoading(false);
-              applyLiveToGrid();
-            }});
-          }} catch (err) {{
-            console.error("ポータル初期化に失敗しました", err);
-            if (emptyMsg) {{
-              emptyMsg.textContent = "一覧の表示に失敗しました。ページを再読み込みしてください。";
-              emptyMsg.classList.remove("hidden");
-            }}
-            setGridLoading(false);
-          }}
+          await loadLiveInfo();
+          applyLiveToGrid();
         }}
 
         boot();
       }})();
-    </script>
-  </body>
-</html>
-"""
+    </script>"""
 
 
-def write_outputs(html_doc: str, paths: list[Path]) -> None:
-    for path in paths:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(html_doc, encoding="utf-8")
-        print(f"  出力: {path.resolve()}")
+def clean_generated_portal_dirs(portal_dir: Path) -> None:
+    keep_names = {"portal.css", "portal-data.json", "index.html"}
+    if not portal_dir.is_dir():
+        return
+    for child in portal_dir.iterdir():
+        if child.name in keep_names:
+            continue
+        if child.is_dir():
+            shutil.rmtree(child)
+            print(f"  削除（再生成）: {child.name}/")
+
+
+def write_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    print(f"  出力: {path.resolve()}")
+
+
+def generate_all_pages(records: list[dict[str, str]], portal_dir: Path) -> int:
+    clean_generated_portal_dirs(portal_dir)
+
+    national_html = build_national_page(records)
+    write_text(portal_dir / "index.html", national_html)
+
+    by_pref: dict[str, list[dict[str, str]]] = {}
+    for row in records:
+        by_pref.setdefault(row["prefecture"], []).append(row)
+
+    page_count = 1
+    for prefecture in sorted(by_pref.keys()):
+        pref_rows = by_pref[prefecture]
+        pref_slug = pref_rows[0]["pref_slug"]
+
+        city_counts: dict[str, dict[str, object]] = {}
+        for row in pref_rows:
+            city = row["city"]
+            if city not in city_counts:
+                city_counts[city] = {
+                    "city": city,
+                    "city_slug": row["city_slug"],
+                    "count": 0,
+                }
+            city_counts[city]["count"] = int(city_counts[city]["count"]) + 1  # type: ignore[operator]
+
+        cities_sorted = sorted(
+            city_counts.values(),
+            key=lambda c: (str(c["city"]) == "その他", str(c["city"])),
+        )
+
+        pref_html = build_prefecture_page(
+            prefecture, pref_slug, pref_rows, cities_sorted  # type: ignore[arg-type]
+        )
+        write_text(portal_dir / pref_slug / "index.html", pref_html)
+        page_count += 1
+
+        by_city: dict[str, list[dict[str, str]]] = {}
+        for row in pref_rows:
+            by_city.setdefault(row["city"], []).append(row)
+
+        for city in sorted(by_city.keys(), key=lambda c: (c == "その他", c)):
+            city_rows = by_city[city]
+            city_slug = city_rows[0]["city_slug"]
+            city_html = build_city_page(
+                prefecture, pref_slug, city, city_slug, city_rows
+            )
+            write_text(portal_dir / pref_slug / city_slug / "index.html", city_html)
+            page_count += 1
+
+    return page_count
 
 
 def main(argv: list[str] | None = None) -> int:
     root = project_root()
-    parser = argparse.ArgumentParser(description="全国運転代行ポータル HTML を生成します。")
+    parser = argparse.ArgumentParser(
+        description="全国運転代行ポータル HTML を 3 階層で生成します。"
+    )
     parser.add_argument(
         "--input-dir",
         type=Path,
@@ -941,36 +937,37 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    print("依存パッケージ: pip install pandas pykakasi")
+    print(f"読み込み: {args.input_dir}")
+
     if not args.input_dir.is_dir():
         print(f"エラー: フォルダがありません: {args.input_dir}", file=sys.stderr)
         return 1
 
-    print(f"読み込み: {args.input_dir}")
     records = load_all_businesses(args.input_dir)
     if not records:
         print("エラー: 読み込める CSV がありません。", file=sys.stderr)
         return 1
 
+    assign_slugs(records)
     prefs = sorted({r["prefecture"] for r in records})
     print(f"  合計 {len(records)} 件 / {len(prefs)} 都道府県: {', '.join(prefs)}")
 
-    html_doc = build_html(records)
-    outputs = [
-        root / "index.html",
-        root / "public" / "portal" / "index.html",
-    ]
-    write_outputs(html_doc, outputs)
+    portal_dir = root / "public" / "portal"
+    page_count = generate_all_pages(records, portal_dir)
+    print(f"  HTML ページ数: {page_count}")
 
-    data_path = root / "public" / "portal" / "portal-data.json"
-    data_path.parent.mkdir(parents=True, exist_ok=True)
+    data_path = portal_dir / "portal-data.json"
     payload = {
         "businesses": records,
-        "prefectures": sorted({r["prefecture"] for r in records}),
+        "prefectures": prefs,
         "citiesByPrefecture": build_prefecture_index(records),
         "total": len(records),
     }
-    json_text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    data_path.write_text(json_text, encoding="utf-8")
+    data_path.write_text(
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
     print(f"  出力: {data_path.resolve()}")
     return 0
 

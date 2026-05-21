@@ -5,6 +5,7 @@ import jwt from "@fastify/jwt";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import Fastify from "fastify";
+import { existsSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { prisma } from "./db.js";
@@ -118,14 +119,58 @@ app.get("/googlea48fb01297c4ced2.html", async (_, reply) => {
   return reply.type("text/html; charset=utf-8").sendFile("googlea48fb01297c4ced2.html", publicAssetsRoot);
 });
 app.get("/portal", async (_, reply) => reply.redirect("/portal/", 302));
-app.get("/portal/", async (_, reply) => {
-  return reply.type("text/html; charset=utf-8").sendFile("portal/index.html", publicAssetsRoot);
-});
 app.get("/portal/portal-data.json", async (_, reply) => {
   return reply.type("application/json; charset=utf-8").sendFile("portal/portal-data.json", publicAssetsRoot);
 });
 app.get("/portal/portal.css", async (_, reply) => {
   return reply.type("text/css; charset=utf-8").sendFile("portal/portal.css", publicAssetsRoot);
+});
+
+const portalStaticRoot = join(publicAssetsRoot, "portal");
+
+function resolvePortalSendPath(wildcard: string): string | null {
+  const segments = wildcard
+    .replace(/^\/+|\/+$/g, "")
+    .split("/")
+    .filter(Boolean);
+  if (segments.some((s) => s === ".." || s === ".")) return null;
+
+  const base = portalStaticRoot;
+  if (segments.length === 0) {
+    const indexPath = join(base, "index.html");
+    return existsSync(indexPath) ? "portal/index.html" : null;
+  }
+
+  const dirPath = join(base, ...segments);
+  if (!dirPath.startsWith(base)) return null;
+
+  const indexPath = join(dirPath, "index.html");
+  if (existsSync(indexPath) && statSync(indexPath).isFile()) {
+    return join("portal", ...segments, "index.html");
+  }
+
+  const filePath = join(base, ...segments);
+  if (existsSync(filePath) && statSync(filePath).isFile()) {
+    return join("portal", ...segments);
+  }
+
+  return null;
+}
+
+app.get("/portal/", async (_, reply) => {
+  return reply.type("text/html; charset=utf-8").sendFile("portal/index.html", publicAssetsRoot);
+});
+app.get("/portal/*", async (request, reply) => {
+  const wildcard = (request.params as { "*": string })["*"] ?? "";
+  if (wildcard === "portal-data.json" || wildcard === "portal.css") {
+    return reply.callNotFound();
+  }
+  const rel = resolvePortalSendPath(wildcard);
+  if (!rel) return reply.callNotFound();
+  const isHtml = rel.endsWith(".html");
+  return reply
+    .type(isHtml ? "text/html; charset=utf-8" : "application/octet-stream")
+    .sendFile(rel, publicAssetsRoot);
 });
 
 const legalPages: Record<string, string> = {
