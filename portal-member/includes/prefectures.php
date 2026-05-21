@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /** 全国47都道府県（JIS X 0401 都道府県コード順） */
-const PREFECTURES_JIS: array = [
+const PREFECTURES_JIS = [
     '北海道',
     '青森県',
     '岩手県',
