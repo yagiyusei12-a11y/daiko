@@ -48,10 +48,19 @@ const helmetOpts =
           useDefaults: false,
           directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "https://cdn.tailwindcss.com"],
+            scriptSrc: [
+              "'self'",
+              "https://cdn.tailwindcss.com",
+              "https://www.googletagmanager.com",
+            ],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             imgSrc: ["'self'", "data:", "blob:"],
-            connectSrc: ["'self'"],
+            connectSrc: [
+              "'self'",
+              "https://www.google-analytics.com",
+              "https://www.googletagmanager.com",
+              "https://region1.google-analytics.com",
+            ],
             fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
             frameSrc: ["'self'"],
             objectSrc: ["'none'"],
