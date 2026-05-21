@@ -48,7 +48,7 @@ MEMBER_LOGIN_URL = "/portal-member/login.php"
 GA4_MEASUREMENT_ID = "G-KVBE5XF4JN"
 
 # Google Search Console 所有権確認（content の値のみ。未設定時は meta を出力しない）
-GSC_VERIFICATION_CODE = ""
+GSC_VERIFICATION_CODE = "dO_l-HH149K60PPSNLJWT3AWxZsnATg4-_V8b1GOA-U"
 
 
 def render_head_tracking_snippets() -> str:
