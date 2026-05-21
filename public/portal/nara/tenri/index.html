@@ -99,6 +99,33 @@
       </div>
       </section>
 
+      <section class="portal-nearby-section mt-10" aria-labelledby="nearby-areas-heading">
+        <h2 id="nearby-areas-heading" class="text-lg font-bold text-slate-900">
+          奈良県の他のエリアから運転代行を探す
+        </h2>
+        <p class="mt-2 text-sm text-slate-600">同じ都道府県の別エリアの一覧ページです。近隣の市区町村からも業者を探せます。</p>
+        <div class="portal-nearby-cloud mt-4">
+        <a href="/portal/nara/gojou/" class="portal-nearby-link">五條市<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/nara/kitakatsuragigunkouryou/" class="portal-nearby-link">北葛城郡広陵町<span class="portal-nearby-count">（3件）</span></a>
+        <a href="/portal/nara/kitakatsuragigun-outera/" class="portal-nearby-link">北葛城郡王寺町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/nara/yoshinogunyoshino/" class="portal-nearby-link">吉野郡吉野町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/nara/yoshinogunooyodo/" class="portal-nearby-link">吉野郡大淀町<span class="portal-nearby-count">（2件）</span></a>
+        <a href="/portal/nara/yamatokooriyama/" class="portal-nearby-link">大和郡山市<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/nara/yamatotakada/" class="portal-nearby-link">大和高田市<span class="portal-nearby-count">（4件）</span></a>
+        <a href="/portal/nara/nara/" class="portal-nearby-link">奈良市<span class="portal-nearby-count">（12件）</span></a>
+        <a href="/portal/nara/uda/" class="portal-nearby-link">宇陀市<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/nara/gosho/" class="portal-nearby-link">御所市<span class="portal-nearby-count">（8件）</span></a>
+        <a href="/portal/nara/sakurai/" class="portal-nearby-link">桜井市<span class="portal-nearby-count">（3件）</span></a>
+        <a href="/portal/nara/kashihara/" class="portal-nearby-link">橿原市<span class="portal-nearby-count">（8件）</span></a>
+        <a href="/portal/nara/ikoma/" class="portal-nearby-link">生駒市<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/nara/ikomagunmisato/" class="portal-nearby-link">生駒郡三郷町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/nara/shikiguntawaramoto/" class="portal-nearby-link">磯城郡田原本町<span class="portal-nearby-count">（3件）</span></a>
+        <a href="/portal/nara/katsuragi/" class="portal-nearby-link">葛城市<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/nara/kashiba/" class="portal-nearby-link">香芝市<span class="portal-nearby-count">（3件）</span></a>
+        <a href="/portal/nara/taka/" class="portal-nearby-link">高市<span class="portal-nearby-count">（1件）</span></a>
+        </div>
+      </section>
+
     </main>
 
     <footer class="mt-12 border-t border-slate-200 bg-white">
@@ -307,15 +334,24 @@
           return html;
         }
 
-        function sortLiveCardsToTop() {
+        /** 本日営業中（エメラルド枠）カードをリスト先頭へ移動 */
+        function moveLiveCardsToFront() {
           if (!grid) return;
-          const live = [];
-          const rest = [];
+          const liveCards = [];
+          const otherCards = [];
           grid.querySelectorAll("article").forEach(function (article) {
-            if (article.classList.contains("portal-card--live")) live.push(article);
-            else rest.push(article);
+            if (article.classList.contains("portal-card--live")) {
+              liveCards.push(article);
+            } else {
+              otherCards.push(article);
+            }
           });
-          live.concat(rest).forEach(function (node) { grid.appendChild(node); });
+          for (let i = liveCards.length - 1; i >= 0; i -= 1) {
+            grid.insertBefore(liveCards[i], grid.firstChild);
+          }
+          otherCards.forEach(function (article) {
+            grid.appendChild(article);
+          });
         }
 
         function applyLiveOnlyFilter() {
@@ -360,7 +396,7 @@
               }
               showLiveSlot(slot, live);
             });
-            sortLiveCardsToTop();
+            moveLiveCardsToFront();
             applyLiveOnlyFilter();
           } catch (err) {
             console.warn("リアルタイム情報の反映に失敗しました", err);
@@ -368,7 +404,10 @@
         }
 
         if (liveToggle) {
-          liveToggle.addEventListener("change", applyLiveOnlyFilter);
+          liveToggle.addEventListener("change", function () {
+            applyLiveOnlyFilter();
+            if (!liveToggle.checked) moveLiveCardsToFront();
+          });
         }
 
         async function loadLiveInfo() {

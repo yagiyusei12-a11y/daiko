@@ -165,6 +165,14 @@ app.get("/portal/*", async (request, reply) => {
   if (wildcard === "portal-data.json" || wildcard === "portal.css") {
     return reply.callNotFound();
   }
+  if (wildcard === "sitemap.xml") {
+    return reply
+      .type("application/xml; charset=utf-8")
+      .sendFile("portal/sitemap.xml", publicAssetsRoot);
+  }
+  if (wildcard === "robots.txt") {
+    return reply.type("text/plain; charset=utf-8").sendFile("portal/robots.txt", publicAssetsRoot);
+  }
   const rel = resolvePortalSendPath(wildcard);
   if (!rel) return reply.callNotFound();
   const isHtml = rel.endsWith(".html");

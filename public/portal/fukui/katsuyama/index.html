@@ -99,6 +99,28 @@
       </div>
       </section>
 
+      <section class="portal-nearby-section mt-10" aria-labelledby="nearby-areas-heading">
+        <h2 id="nearby-areas-heading" class="text-lg font-bold text-slate-900">
+          福井県の他のエリアから運転代行を探す
+        </h2>
+        <p class="mt-2 text-sm text-slate-600">同じ都道府県の別エリアの一覧ページです。近隣の市区町村からも業者を探せます。</p>
+        <div class="portal-nearby-cloud mt-4">
+        <a href="/portal/fukui/awara/" class="portal-nearby-link">あわら市<span class="portal-nearby-count">（8件）</span></a>
+        <a href="/portal/fukui/ooi/" class="portal-nearby-link">おおい町<span class="portal-nearby-count">（2件）</span></a>
+        <a href="/portal/fukui/minamiechizen/" class="portal-nearby-link">南越前町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/fukui/sakai/" class="portal-nearby-link">坂井市<span class="portal-nearby-count">（16件）</span></a>
+        <a href="/portal/fukui/oono/" class="portal-nearby-link">大野市<span class="portal-nearby-count">（8件）</span></a>
+        <a href="/portal/fukui/obama/" class="portal-nearby-link">小浜市<span class="portal-nearby-count">（4件）</span></a>
+        <a href="/portal/fukui/tsuruga/" class="portal-nearby-link">敦賀市<span class="portal-nearby-count">（7件）</span></a>
+        <a href="/portal/fukui/fukui/" class="portal-nearby-link">福井市<span class="portal-nearby-count">（39件）</span></a>
+        <a href="/portal/fukui/mihama/" class="portal-nearby-link">美浜町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/fukui/echizen-2/" class="portal-nearby-link">越前市<span class="portal-nearby-count">（18件）</span></a>
+        <a href="/portal/fukui/echizen/" class="portal-nearby-link">越前町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/fukui/takahama/" class="portal-nearby-link">高浜町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/fukui/sabae/" class="portal-nearby-link">鯖江市<span class="portal-nearby-count">（9件）</span></a>
+        </div>
+      </section>
+
     </main>
 
     <footer class="mt-12 border-t border-slate-200 bg-white">
@@ -307,15 +329,24 @@
           return html;
         }
 
-        function sortLiveCardsToTop() {
+        /** 本日営業中（エメラルド枠）カードをリスト先頭へ移動 */
+        function moveLiveCardsToFront() {
           if (!grid) return;
-          const live = [];
-          const rest = [];
+          const liveCards = [];
+          const otherCards = [];
           grid.querySelectorAll("article").forEach(function (article) {
-            if (article.classList.contains("portal-card--live")) live.push(article);
-            else rest.push(article);
+            if (article.classList.contains("portal-card--live")) {
+              liveCards.push(article);
+            } else {
+              otherCards.push(article);
+            }
           });
-          live.concat(rest).forEach(function (node) { grid.appendChild(node); });
+          for (let i = liveCards.length - 1; i >= 0; i -= 1) {
+            grid.insertBefore(liveCards[i], grid.firstChild);
+          }
+          otherCards.forEach(function (article) {
+            grid.appendChild(article);
+          });
         }
 
         function applyLiveOnlyFilter() {
@@ -360,7 +391,7 @@
               }
               showLiveSlot(slot, live);
             });
-            sortLiveCardsToTop();
+            moveLiveCardsToFront();
             applyLiveOnlyFilter();
           } catch (err) {
             console.warn("リアルタイム情報の反映に失敗しました", err);
@@ -368,7 +399,10 @@
         }
 
         if (liveToggle) {
-          liveToggle.addEventListener("change", applyLiveOnlyFilter);
+          liveToggle.addEventListener("change", function () {
+            applyLiveOnlyFilter();
+            if (!liveToggle.checked) moveLiveCardsToFront();
+          });
         }
 
         async function loadLiveInfo() {

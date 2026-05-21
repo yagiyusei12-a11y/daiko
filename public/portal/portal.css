@@ -617,3 +617,41 @@ article.portal-card--live {
 }
 
 .portal-main-inner { /* anchor wrapper */ }
+
+/* 近隣エリア内部リンク（SEO） */
+.portal-nearby-section {
+  border-top: 1px solid var(--slate-200);
+  padding-top: 2rem;
+}
+.portal-nearby-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.portal-nearby-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 9999px;
+  border: 1px solid var(--slate-200);
+  background: #fff;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--slate-700);
+  text-decoration: none;
+  transition: border-color 150ms, background-color 150ms, color 150ms;
+}
+.portal-nearby-link:hover {
+  border-color: var(--brand);
+  background: var(--blue-50);
+  color: var(--brand);
+}
+.portal-nearby-count {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--slate-400);
+}
+.portal-nearby-link:hover .portal-nearby-count {
+  color: var(--brand);
+}

@@ -99,6 +99,39 @@
       </div>
       </section>
 
+      <section class="portal-nearby-section mt-10" aria-labelledby="nearby-areas-heading">
+        <h2 id="nearby-areas-heading" class="text-lg font-bold text-slate-900">
+          静岡県の他のエリアから運転代行を探す
+        </h2>
+        <p class="mt-2 text-sm text-slate-600">同じ都道府県の別エリアの一覧ページです。近隣の市区町村からも業者を探せます。</p>
+        <div class="portal-nearby-cloud mt-4">
+        <a href="/portal/shizuoka/mishima/" class="portal-nearby-link">三島市<span class="portal-nearby-count">（7件）</span></a>
+        <a href="/portal/shizuoka/shimoda/" class="portal-nearby-link">下田市<span class="portal-nearby-count">（5件）</span></a>
+        <a href="/portal/shizuoka/itou/" class="portal-nearby-link">伊東市<span class="portal-nearby-count">（3件）</span></a>
+        <a href="/portal/shizuoka/izunokuni/" class="portal-nearby-link">伊豆の国市<span class="portal-nearby-count">（5件）</span></a>
+        <a href="/portal/shizuoka/fujinomiya/" class="portal-nearby-link">富士宮市<span class="portal-nearby-count">（6件）</span></a>
+        <a href="/portal/shizuoka/fuji/" class="portal-nearby-link">富士市<span class="portal-nearby-count">（28件）</span></a>
+        <a href="/portal/shizuoka/shimada/" class="portal-nearby-link">島田市<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/shizuoka/omaezaki/" class="portal-nearby-link">御前崎市<span class="portal-nearby-count">（3件）</span></a>
+        <a href="/portal/shizuoka/gotenba/" class="portal-nearby-link">御殿場市<span class="portal-nearby-count">（10件）</span></a>
+        <a href="/portal/shizuoka/kakegawa/" class="portal-nearby-link">掛川市<span class="portal-nearby-count">（14件）</span></a>
+        <a href="/portal/shizuoka/numazu/" class="portal-nearby-link">沼津市<span class="portal-nearby-count">（11件）</span></a>
+        <a href="/portal/shizuoka/hamamatsu/" class="portal-nearby-link">浜松市<span class="portal-nearby-count">（52件）</span></a>
+        <a href="/portal/shizuoka/kosai/" class="portal-nearby-link">湖西市<span class="portal-nearby-count">（2件）</span></a>
+        <a href="/portal/shizuoka/yaizu/" class="portal-nearby-link">焼津市<span class="portal-nearby-count">（7件）</span></a>
+        <a href="/portal/shizuoka/atami/" class="portal-nearby-link">熱海市<span class="portal-nearby-count">（2件）</span></a>
+        <a href="/portal/shizuoka/makinohara/" class="portal-nearby-link">牧之原市<span class="portal-nearby-count">（2件）</span></a>
+        <a href="/portal/shizuoka/tagatagunkannami/" class="portal-nearby-link">田方郡函南町<span class="portal-nearby-count">（2件）</span></a>
+        <a href="/portal/shizuoka/iwata/" class="portal-nearby-link">磐田市<span class="portal-nearby-count">（11件）</span></a>
+        <a href="/portal/shizuoka/kikugawa/" class="portal-nearby-link">菊川市<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/shizuoka/fujieda/" class="portal-nearby-link">藤枝市<span class="portal-nearby-count">（4件）</span></a>
+        <a href="/portal/shizuoka/fukuroi/" class="portal-nearby-link">袋井市<span class="portal-nearby-count">（12件）</span></a>
+        <a href="/portal/shizuoka/kamogunminamiizu/" class="portal-nearby-link">賀茂郡南伊豆町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/shizuoka/shizuoka/" class="portal-nearby-link">静岡市<span class="portal-nearby-count">（29件）</span></a>
+        <a href="/portal/shizuoka/shuntougunshimizu/" class="portal-nearby-link">駿東郡清水町<span class="portal-nearby-count">（4件）</span></a>
+        </div>
+      </section>
+
     </main>
 
     <footer class="mt-12 border-t border-slate-200 bg-white">
@@ -307,15 +340,24 @@
           return html;
         }
 
-        function sortLiveCardsToTop() {
+        /** 本日営業中（エメラルド枠）カードをリスト先頭へ移動 */
+        function moveLiveCardsToFront() {
           if (!grid) return;
-          const live = [];
-          const rest = [];
+          const liveCards = [];
+          const otherCards = [];
           grid.querySelectorAll("article").forEach(function (article) {
-            if (article.classList.contains("portal-card--live")) live.push(article);
-            else rest.push(article);
+            if (article.classList.contains("portal-card--live")) {
+              liveCards.push(article);
+            } else {
+              otherCards.push(article);
+            }
           });
-          live.concat(rest).forEach(function (node) { grid.appendChild(node); });
+          for (let i = liveCards.length - 1; i >= 0; i -= 1) {
+            grid.insertBefore(liveCards[i], grid.firstChild);
+          }
+          otherCards.forEach(function (article) {
+            grid.appendChild(article);
+          });
         }
 
         function applyLiveOnlyFilter() {
@@ -360,7 +402,7 @@
               }
               showLiveSlot(slot, live);
             });
-            sortLiveCardsToTop();
+            moveLiveCardsToFront();
             applyLiveOnlyFilter();
           } catch (err) {
             console.warn("リアルタイム情報の反映に失敗しました", err);
@@ -368,7 +410,10 @@
         }
 
         if (liveToggle) {
-          liveToggle.addEventListener("change", applyLiveOnlyFilter);
+          liveToggle.addEventListener("change", function () {
+            applyLiveOnlyFilter();
+            if (!liveToggle.checked) moveLiveCardsToFront();
+          });
         }
 
         async function loadLiveInfo() {

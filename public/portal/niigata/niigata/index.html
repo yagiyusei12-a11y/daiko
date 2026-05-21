@@ -168,6 +168,41 @@
       </div>
       </section>
 
+      <section class="portal-nearby-section mt-10" aria-labelledby="nearby-areas-heading">
+        <h2 id="nearby-areas-heading" class="text-lg font-bold text-slate-900">
+          新潟県の他のエリアから運転代行を探す
+        </h2>
+        <p class="mt-2 text-sm text-slate-600">同じ都道府県の別エリアの一覧ページです。近隣の市区町村からも業者を探せます。</p>
+        <div class="portal-nearby-cloud mt-4">
+        <a href="/portal/niigata/kanbaragunyahiko/" class="portal-nearby-link">⻄蒲原郡弥彦村<span class="portal-nearby-count">（2件）</span></a>
+        <a href="/portal/niigata/oka/" class="portal-nearby-link">⻑岡市<span class="portal-nearby-count">（16件）</span></a>
+        <a href="/portal/niigata/area/" class="portal-nearby-link">⼗⽇町<span class="portal-nearby-count">（4件）</span></a>
+        <a href="/portal/niigata/sen/" class="portal-nearby-link">⼩千⾕市<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/niigata/kawa/" class="portal-nearby-link">⽷⿂川市<span class="portal-nearby-count">（2件）</span></a>
+        <a href="/portal/niigata/fu/" class="portal-nearby-link">⾒附市<span class="portal-nearby-count">（3件）</span></a>
+        <a href="/portal/niigata/numa/" class="portal-nearby-link">⿂沼市<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/niigata/sanjou/" class="portal-nearby-link">三条市<span class="portal-nearby-count">（9件）</span></a>
+        <a href="/portal/niigata/jouetsu/" class="portal-nearby-link">上越市<span class="portal-nearby-count">（14件）</span></a>
+        <a href="/portal/niigata/naka-numaguntsunan/" class="portal-nearby-link">中⿂沼郡津南町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/niigata/gosen/" class="portal-nearby-link">五泉市<span class="portal-nearby-count">（9件）</span></a>
+        <a href="/portal/niigata/sado/" class="portal-nearby-link">佐渡市<span class="portal-nearby-count">（8件）</span></a>
+        <a href="/portal/niigata/kamo/" class="portal-nearby-link">加茂市<span class="portal-nearby-count">（4件）</span></a>
+        <a href="/portal/niigata/kitakanbaragunseirou/" class="portal-nearby-link">北蒲原郡聖籠町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/niigata/minami-numa/" class="portal-nearby-link">南⿂沼市<span class="portal-nearby-count">（3件）</span></a>
+        <a href="/portal/niigata/minami-numagunyuzawa/" class="portal-nearby-link">南⿂沼郡湯沢町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/niigata/minamikanbaragun-ue/" class="portal-nearby-link">南蒲原郡⽥上町<span class="portal-nearby-count">（3件）</span></a>
+        <a href="/portal/niigata/myou/" class="portal-nearby-link">妙⾼市<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/niigata/iwafunegunsekigawa/" class="portal-nearby-link">岩船郡関川村<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/niigata/shinhatsu/" class="portal-nearby-link">新発⽥市<span class="portal-nearby-count">（10件）</span></a>
+        <a href="/portal/niigata/murakami/" class="portal-nearby-link">村上市<span class="portal-nearby-count">（3件）</span></a>
+        <a href="/portal/niigata/higashikanbaragunaga/" class="portal-nearby-link">東蒲原郡阿賀町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/niigata/kashiwazaki/" class="portal-nearby-link">柏崎市<span class="portal-nearby-count">（6件）</span></a>
+        <a href="/portal/niigata/tsubame/" class="portal-nearby-link">燕市<span class="portal-nearby-count">（6件）</span></a>
+        <a href="/portal/niigata/tainai/" class="portal-nearby-link">胎内市<span class="portal-nearby-count">（7件）</span></a>
+        <a href="/portal/niigata/agano/" class="portal-nearby-link">阿賀野市<span class="portal-nearby-count">（4件）</span></a>
+        </div>
+      </section>
+
     </main>
 
     <footer class="mt-12 border-t border-slate-200 bg-white">
@@ -376,15 +411,24 @@
           return html;
         }
 
-        function sortLiveCardsToTop() {
+        /** 本日営業中（エメラルド枠）カードをリスト先頭へ移動 */
+        function moveLiveCardsToFront() {
           if (!grid) return;
-          const live = [];
-          const rest = [];
+          const liveCards = [];
+          const otherCards = [];
           grid.querySelectorAll("article").forEach(function (article) {
-            if (article.classList.contains("portal-card--live")) live.push(article);
-            else rest.push(article);
+            if (article.classList.contains("portal-card--live")) {
+              liveCards.push(article);
+            } else {
+              otherCards.push(article);
+            }
           });
-          live.concat(rest).forEach(function (node) { grid.appendChild(node); });
+          for (let i = liveCards.length - 1; i >= 0; i -= 1) {
+            grid.insertBefore(liveCards[i], grid.firstChild);
+          }
+          otherCards.forEach(function (article) {
+            grid.appendChild(article);
+          });
         }
 
         function applyLiveOnlyFilter() {
@@ -429,7 +473,7 @@
               }
               showLiveSlot(slot, live);
             });
-            sortLiveCardsToTop();
+            moveLiveCardsToFront();
             applyLiveOnlyFilter();
           } catch (err) {
             console.warn("リアルタイム情報の反映に失敗しました", err);
@@ -437,7 +481,10 @@
         }
 
         if (liveToggle) {
-          liveToggle.addEventListener("change", applyLiveOnlyFilter);
+          liveToggle.addEventListener("change", function () {
+            applyLiveOnlyFilter();
+            if (!liveToggle.checked) moveLiveCardsToFront();
+          });
         }
 
         async function loadLiveInfo() {

@@ -418,15 +418,24 @@
           return html;
         }
 
-        function sortLiveCardsToTop() {
+        /** 本日営業中（エメラルド枠）カードをリスト先頭へ移動 */
+        function moveLiveCardsToFront() {
           if (!grid) return;
-          const live = [];
-          const rest = [];
+          const liveCards = [];
+          const otherCards = [];
           grid.querySelectorAll("article").forEach(function (article) {
-            if (article.classList.contains("portal-card--live")) live.push(article);
-            else rest.push(article);
+            if (article.classList.contains("portal-card--live")) {
+              liveCards.push(article);
+            } else {
+              otherCards.push(article);
+            }
           });
-          live.concat(rest).forEach(function (node) { grid.appendChild(node); });
+          for (let i = liveCards.length - 1; i >= 0; i -= 1) {
+            grid.insertBefore(liveCards[i], grid.firstChild);
+          }
+          otherCards.forEach(function (article) {
+            grid.appendChild(article);
+          });
         }
 
         function applyLiveOnlyFilter() {
@@ -471,7 +480,7 @@
               }
               showLiveSlot(slot, live);
             });
-            sortLiveCardsToTop();
+            moveLiveCardsToFront();
             applyLiveOnlyFilter();
           } catch (err) {
             console.warn("リアルタイム情報の反映に失敗しました", err);
@@ -479,7 +488,10 @@
         }
 
         if (liveToggle) {
-          liveToggle.addEventListener("change", applyLiveOnlyFilter);
+          liveToggle.addEventListener("change", function () {
+            applyLiveOnlyFilter();
+            if (!liveToggle.checked) moveLiveCardsToFront();
+          });
         }
 
         async function loadLiveInfo() {

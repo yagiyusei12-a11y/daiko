@@ -8,6 +8,8 @@ CSV + MySQL(companies) をマージし、全国47都道府県のポータル HTM
   python scripts/generate_portal_html.py
 
 DB接続: portal-member/config/config.php または環境変数 PORTAL_DB_*
+
+フェーズ3: portal/sitemap.xml・portal/robots.txt 自動生成、営業中カード先頭並び、市町村ページ近隣リンク
 """
 
 from __future__ import annotations
@@ -18,7 +20,9 @@ import json
 import re
 import shutil
 import sys
+from datetime import date
 from pathlib import Path
+from xml.sax.saxutils import escape as xml_escape
 
 import pandas as pd
 
@@ -274,6 +278,93 @@ def portal_path(pref_slug: str | None = None, city_slug: str | None = None) -> s
 
 def canonical_url(pref_slug: str | None = None, city_slug: str | None = None) -> str:
     return SITE_URL.rstrip("/") + portal_path(pref_slug, city_slug)
+
+
+def collect_sitemap_url(
+    pref_slug_map: dict[str, str],
+    city_pages: list[tuple[str, str]],
+) -> list[str]:
+    """全国・47都道府県・市町村ページの絶対URL一覧。"""
+    urls: list[str] = [canonical_url()]
+    for pref in ALL_PREFECTURES:
+        urls.append(canonical_url(pref_slug_map[pref]))
+    for pref_slug, city_slug in city_pages:
+        urls.append(canonical_url(pref_slug, city_slug))
+    return urls
+
+
+def write_portal_sitemap(portal_dir: Path, urls: list[str], lastmod: str) -> None:
+    """public/portal/sitemap.xml を生成。"""
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for loc in urls:
+        safe_loc = xml_escape(loc)
+        lines.append("  <url>")
+        lines.append(f"    <loc>{safe_loc}</loc>")
+        lines.append(f"    <lastmod>{lastmod}</lastmod>")
+        lines.append("    <changefreq>weekly</changefreq>")
+        path_part = loc.replace(SITE_URL.rstrip("/"), "").strip("/")
+        segments = [s for s in path_part.split("/") if s]
+        if segments == ["portal"]:
+            priority = "1.0"
+        elif len(segments) == 2:
+            priority = "0.9"
+        else:
+            priority = "0.8"
+        lines.append(f"    <priority>{priority}</priority>")
+        lines.append("  </url>")
+    lines.append("</urlset>")
+    path = portal_dir / "sitemap.xml"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"  出力: {path.resolve()} ({len(urls)} URL)")
+
+
+def write_portal_robots(portal_dir: Path) -> None:
+    """public/portal/robots.txt（ルート sitemap への参照を含む）。"""
+    root = SITE_URL.rstrip("/")
+    content = f"""User-agent: *
+Allow: /portal/
+
+Sitemap: {root}/sitemap.xml
+Sitemap: {root}/portal/sitemap.xml
+"""
+    path = portal_dir / "robots.txt"
+    path.write_text(content, encoding="utf-8")
+    print(f"  出力: {path.resolve()}")
+
+
+def render_nearby_city_links(
+    prefecture: str,
+    pref_slug: str,
+    current_city_slug: str,
+    cities: list[dict[str, object]],
+) -> str:
+    """同一都道府県内の他市町村への内部リンク（SEO）。"""
+    others = [
+        c
+        for c in cities
+        if str(c.get("city_slug", "")) != current_city_slug
+    ]
+    if not others:
+        return ""
+    tags = "\n".join(
+        f'        <a href="{html.escape(portal_path(pref_slug, str(c["city_slug"])))}" '
+        f'class="portal-nearby-link">{html.escape(str(c["city"]))}'
+        f'<span class="portal-nearby-count">（{c["count"]}件）</span></a>'
+        for c in others
+    )
+    return f"""
+      <section class="portal-nearby-section mt-10" aria-labelledby="nearby-areas-heading">
+        <h2 id="nearby-areas-heading" class="text-lg font-bold text-slate-900">
+          {html.escape(prefecture)}の他のエリアから運転代行を探す
+        </h2>
+        <p class="mt-2 text-sm text-slate-600">同じ都道府県の別エリアの一覧ページです。近隣の市区町村からも業者を探せます。</p>
+        <div class="portal-nearby-cloud mt-4">
+{tags}
+        </div>
+      </section>"""
 
 
 def tel_href(phone: str) -> str:
@@ -758,6 +849,7 @@ def build_city_page(
     city: str,
     city_slug: str,
     records: list[dict[str, str]],
+    cities_in_pref: list[dict[str, object]] | None = None,
 ) -> str:
     title = f"【2026年最新】{city}の運転代行一覧｜すぐ呼べる代行業者"
     description = (
@@ -780,6 +872,7 @@ def build_city_page(
         <h2 id="portal-list-heading" class="mb-4 text-xl font-bold text-slate-900">{html.escape(city)}の運転代行業者一覧</h2>
 {render_listing_section(records, prefecture, city)}
       </section>
+{render_nearby_city_links(prefecture, pref_slug, city_slug, cities_in_pref or [])}
 """
     return page_shell(
         title=title,
@@ -1024,15 +1117,24 @@ def portal_live_listing_js() -> str:
           return html;
         }}
 
-        function sortLiveCardsToTop() {{
+        /** 本日営業中（エメラルド枠）カードをリスト先頭へ移動 */
+        function moveLiveCardsToFront() {{
           if (!grid) return;
-          const live = [];
-          const rest = [];
+          const liveCards = [];
+          const otherCards = [];
           grid.querySelectorAll("article").forEach(function (article) {{
-            if (article.classList.contains("portal-card--live")) live.push(article);
-            else rest.push(article);
+            if (article.classList.contains("portal-card--live")) {{
+              liveCards.push(article);
+            }} else {{
+              otherCards.push(article);
+            }}
           }});
-          live.concat(rest).forEach(function (node) {{ grid.appendChild(node); }});
+          for (let i = liveCards.length - 1; i >= 0; i -= 1) {{
+            grid.insertBefore(liveCards[i], grid.firstChild);
+          }}
+          otherCards.forEach(function (article) {{
+            grid.appendChild(article);
+          }});
         }}
 
         function applyLiveOnlyFilter() {{
@@ -1077,7 +1179,7 @@ def portal_live_listing_js() -> str:
               }}
               showLiveSlot(slot, live);
             }});
-            sortLiveCardsToTop();
+            moveLiveCardsToFront();
             applyLiveOnlyFilter();
           }} catch (err) {{
             console.warn("リアルタイム情報の反映に失敗しました", err);
@@ -1085,7 +1187,10 @@ def portal_live_listing_js() -> str:
         }}
 
         if (liveToggle) {{
-          liveToggle.addEventListener("change", applyLiveOnlyFilter);
+          liveToggle.addEventListener("change", function () {{
+            applyLiveOnlyFilter();
+            if (!liveToggle.checked) moveLiveCardsToFront();
+          }});
         }}
 
         async function loadLiveInfo() {{
@@ -1123,7 +1228,7 @@ def portal_live_listing_js() -> str:
 
 
 def clean_generated_portal_dirs(portal_dir: Path) -> None:
-    keep_names = {"portal.css", "portal-data.json", "index.html"}
+    keep_names = {"portal.css", "portal-data.json", "index.html", "sitemap.xml", "robots.txt"}
     if not portal_dir.is_dir():
         return
     for child in portal_dir.iterdir():
@@ -1144,8 +1249,10 @@ def generate_all_pages(
     records: list[dict[str, str]],
     portal_dir: Path,
     pref_slug_map: dict[str, str],
-) -> int:
+) -> tuple[int, list[tuple[str, str]]]:
     clean_generated_portal_dirs(portal_dir)
+
+    city_pages: list[tuple[str, str]] = []
 
     national_html = build_national_page(records, pref_slug_map)
     write_text(portal_dir / "index.html", national_html)
@@ -1191,12 +1298,18 @@ def generate_all_pages(
             city_rows = by_city[city]
             city_slug = city_rows[0]["city_slug"]
             city_html = build_city_page(
-                prefecture, pref_slug, city, city_slug, city_rows
+                prefecture,
+                pref_slug,
+                city,
+                city_slug,
+                city_rows,
+                cities_in_pref=cities_sorted,  # type: ignore[arg-type]
             )
             write_text(portal_dir / pref_slug / city_slug / "index.html", city_html)
+            city_pages.append((pref_slug, city_slug))
             page_count += 1
 
-    return page_count
+    return page_count, city_pages
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1235,8 +1348,13 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     portal_dir = root / "public" / "portal"
-    page_count = generate_all_pages(records, portal_dir, pref_slug_map)
+    page_count, city_pages = generate_all_pages(records, portal_dir, pref_slug_map)
     print(f"  HTML ページ数: {page_count}")
+
+    lastmod = date.today().isoformat()
+    sitemap_urls = collect_sitemap_url(pref_slug_map, city_pages)
+    write_portal_sitemap(portal_dir, sitemap_urls, lastmod)
+    write_portal_robots(portal_dir)
 
     data_path = portal_dir / "portal-data.json"
     payload = {

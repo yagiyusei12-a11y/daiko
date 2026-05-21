@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /portal/
+
+Sitemap: https://daiko.harunoyukoto.jp/sitemap.xml
+Sitemap: https://daiko.harunoyukoto.jp/portal/sitemap.xml

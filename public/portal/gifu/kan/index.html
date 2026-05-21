@@ -102,6 +102,42 @@
       </div>
       </section>
 
+      <section class="portal-nearby-section mt-10" aria-labelledby="nearby-areas-heading">
+        <h2 id="nearby-areas-heading" class="text-lg font-bold text-slate-900">
+          岐阜県の他のエリアから運転代行を探す
+        </h2>
+        <p class="mt-2 text-sm text-slate-600">同じ都道府県の別エリアの一覧ページです。近隣の市区町村からも業者を探せます。</p>
+        <div class="portal-nearby-cloud mt-4">
+        <a href="/portal/gifu/nakatsugawa/" class="portal-nearby-link">中津川市<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/gifu/hoppou/" class="portal-nearby-link">北方町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/gifu/kani/" class="portal-nearby-link">可児市<span class="portal-nearby-count">（4件）</span></a>
+        <a href="/portal/gifu/kakamigahara/" class="portal-nearby-link">各務原市<span class="portal-nearby-count">（5件）</span></a>
+        <a href="/portal/gifu/tarui/" class="portal-nearby-link">垂井町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/gifu/tajimi/" class="portal-nearby-link">多治見市<span class="portal-nearby-count">（6件）</span></a>
+        <a href="/portal/gifu/oogaki/" class="portal-nearby-link">大垣市<span class="portal-nearby-count">（11件）</span></a>
+        <a href="/portal/gifu/oono/" class="portal-nearby-link">大野町<span class="portal-nearby-count">（2件）</span></a>
+        <a href="/portal/gifu/anpachi/" class="portal-nearby-link">安八町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/gifu/ginan/" class="portal-nearby-link">岐南町<span class="portal-nearby-count">（2件）</span></a>
+        <a href="/portal/gifu/gifu/" class="portal-nearby-link">岐阜市<span class="portal-nearby-count">（18件）</span></a>
+        <a href="/portal/gifu/kawabe/" class="portal-nearby-link">川辺町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/gifu/ena/" class="portal-nearby-link">恵那市<span class="portal-nearby-count">（3件）</span></a>
+        <a href="/portal/gifu/ibigawa/" class="portal-nearby-link">揖斐川町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/gifu/motosu/" class="portal-nearby-link">本巣市<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/gifu/ikeda/" class="portal-nearby-link">池田町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/gifu/kaizu/" class="portal-nearby-link">海津市<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/gifu/mizunami/" class="portal-nearby-link">瑞浪市<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/gifu/mizuho/" class="portal-nearby-link">瑞穂市<span class="portal-nearby-count">（3件）</span></a>
+        <a href="/portal/gifu/koube/" class="portal-nearby-link">神戸町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/gifu/kasamatsu/" class="portal-nearby-link">笠松町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/gifu/minokamo/" class="portal-nearby-link">美濃加茂市<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/gifu/mino/" class="portal-nearby-link">美濃市<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/gifu/haneshima/" class="portal-nearby-link">羽島市<span class="portal-nearby-count">（3件）</span></a>
+        <a href="/portal/gifu/gujou/" class="portal-nearby-link">郡上市<span class="portal-nearby-count">（7件）</span></a>
+        <a href="/portal/gifu/yourou/" class="portal-nearby-link">養老町<span class="portal-nearby-count">（1件）</span></a>
+        <a href="/portal/gifu/kouzan/" class="portal-nearby-link">高山市<span class="portal-nearby-count">（3件）</span></a>
+        </div>
+      </section>
+
     </main>
 
     <footer class="mt-12 border-t border-slate-200 bg-white">
@@ -310,15 +346,24 @@
           return html;
         }
 
-        function sortLiveCardsToTop() {
+        /** 本日営業中（エメラルド枠）カードをリスト先頭へ移動 */
+        function moveLiveCardsToFront() {
           if (!grid) return;
-          const live = [];
-          const rest = [];
+          const liveCards = [];
+          const otherCards = [];
           grid.querySelectorAll("article").forEach(function (article) {
-            if (article.classList.contains("portal-card--live")) live.push(article);
-            else rest.push(article);
+            if (article.classList.contains("portal-card--live")) {
+              liveCards.push(article);
+            } else {
+              otherCards.push(article);
+            }
           });
-          live.concat(rest).forEach(function (node) { grid.appendChild(node); });
+          for (let i = liveCards.length - 1; i >= 0; i -= 1) {
+            grid.insertBefore(liveCards[i], grid.firstChild);
+          }
+          otherCards.forEach(function (article) {
+            grid.appendChild(article);
+          });
         }
 
         function applyLiveOnlyFilter() {
@@ -363,7 +408,7 @@
               }
               showLiveSlot(slot, live);
             });
-            sortLiveCardsToTop();
+            moveLiveCardsToFront();
             applyLiveOnlyFilter();
           } catch (err) {
             console.warn("リアルタイム情報の反映に失敗しました", err);
@@ -371,7 +416,10 @@
         }
 
         if (liveToggle) {
-          liveToggle.addEventListener("change", applyLiveOnlyFilter);
+          liveToggle.addEventListener("change", function () {
+            applyLiveOnlyFilter();
+            if (!liveToggle.checked) moveLiveCardsToFront();
+          });
         }
 
         async function loadLiveInfo() {
