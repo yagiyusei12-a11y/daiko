@@ -311,10 +311,10 @@ def card_article_html(rec: dict[str, str]) -> str:
     if phone:
         href = html.escape(tel_href(phone))
         call_btn = (
-            f'<a href="{href}" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]">'
-            '<svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">'
+            f'<a href="{href}" class="portal-call-now-btn" aria-label="{html.escape(name)}に電話する">'
+            '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">'
             '<path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>'
-            "電話で呼ぶ</a>"
+            "今すぐ電話で呼ぶ</a>"
             f'<p class="mt-1 text-center text-xs text-slate-500">{html.escape(phone)}</p>'
         )
 
@@ -353,16 +353,33 @@ def render_empty_listing_cta(prefecture: str, city: str | None = None) -> str:
       </div>"""
 
 
-def render_cards_grid(records: list[dict[str, str]]) -> str:
+def render_live_only_filter() -> str:
+    return """
+      <div class="portal-live-filter" role="group" aria-labelledby="live-filter-label">
+        <label class="portal-live-filter-label" for="live-only-toggle">
+          <input type="checkbox" id="live-only-toggle" class="portal-live-filter-input" />
+          <span class="portal-live-filter-track" aria-hidden="true"></span>
+          <span id="live-filter-label" class="portal-live-filter-text">今すぐ呼べる（本日営業中）業者だけを表示</span>
+        </label>
+        <p class="portal-live-filter-hint">会員がリアルタイム配信している営業中の店舗のみ表示します</p>
+      </div>
+      <p id="live-filter-empty" class="portal-live-filter-empty hidden" role="status">
+        現在、このエリアでリアルタイム情報を配信している業者はいません。しばらくしてから再度お試しください。
+      </p>"""
+
+
+def render_cards_grid(records: list[dict[str, str]], *, with_live_filter: bool = True) -> str:
     sorted_recs = sorted(
         records,
         key=lambda r: (r.get("city") or "", r.get("name") or ""),
     )
     cards = "\n".join(card_article_html(r) for r in sorted_recs)
     count = len(sorted_recs)
+    filter_block = render_live_only_filter() if with_live_filter else ""
     return f"""
-      <p class="mb-4 text-sm text-slate-600">
-        掲載 <strong class="text-slate-900">{count}</strong> 件
+      {filter_block}
+      <p id="result-count-line" class="mb-4 text-sm text-slate-600">
+        掲載 <strong id="result-count" class="text-slate-900">{count}</strong> 件
       </p>
       <div id="card-grid" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite">
 {cards}
@@ -376,7 +393,103 @@ def render_listing_section(
 ) -> str:
     if not records:
         return render_empty_listing_cta(prefecture, city)
-    return render_cards_grid(records)
+    return render_cards_grid(records, with_live_filter=True)
+
+
+def render_hero(
+    *,
+    level: str,
+    headline: str,
+    subline: str,
+    eyebrow: str = "運転代行ポータル",
+    badge_live: bool = True,
+) -> str:
+    live_badge = (
+        '<span class="portal-hero-badge portal-hero-badge--live">'
+        '<span class="portal-live-dot" aria-hidden="true"></span> 本日営業中をリアルタイム表示</span>'
+        if badge_live
+        else ""
+    )
+    return f"""
+    <section class="portal-hero" aria-labelledby="portal-hero-title">
+      <div class="portal-hero-inner">
+        <p class="portal-hero-eyebrow">{html.escape(eyebrow)}</p>
+        <h2 id="portal-hero-title" class="portal-hero-title">{html.escape(headline)}</h2>
+        <p class="portal-hero-sub">{html.escape(subline)}</p>
+        <div class="portal-hero-badges">
+          <span class="portal-hero-badge">📍 {html.escape(level)}</span>
+          {live_badge}
+        </div>
+      </div>
+    </section>"""
+
+
+def render_sticky_mobile_nav(
+    *,
+    page_kind: str,
+    prefecture: str = "",
+    pref_slug: str = "",
+) -> str:
+    """page_kind: national | prefecture | city"""
+    if page_kind == "national":
+        area_btn = (
+            '<button type="button" class="portal-sticky-nav-btn portal-sticky-nav-btn--primary" '
+            'id="sticky-area-btn" aria-controls="portal-area-sheet" aria-expanded="false">'
+            '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">'
+            '<path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>'
+            '<path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>'
+            "エリアを探す</button>"
+        )
+    elif page_kind == "prefecture":
+        area_btn = (
+            '<a href="#portal-city-nav" class="portal-sticky-nav-btn portal-sticky-nav-btn--primary">'
+            '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">'
+            '<path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>'
+            '<path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>'
+            "市区町村</a>"
+        )
+    else:
+        pref_href = portal_path(pref_slug) if pref_slug else PORTAL_BASE
+        area_btn = (
+            f'<a href="{html.escape(pref_href)}" class="portal-sticky-nav-btn portal-sticky-nav-btn--primary">'
+            '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">'
+            '<path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>'
+            '<path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>'
+            f"{html.escape(prefecture or '県一覧')}</a>"
+        )
+
+    list_anchor = "#portal-regions" if page_kind == "national" else "#portal-list-heading"
+
+    return f"""
+    <nav class="portal-sticky-nav md:hidden" aria-label="スマホ用クイックナビ">
+      <a href="{html.escape(PORTAL_BASE)}" class="portal-sticky-nav-btn">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        トップ</a>
+      {area_btn}
+      <a href="{list_anchor}" class="portal-sticky-nav-btn">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+        一覧へ</a>
+    </nav>"""
+
+
+def render_national_area_sheet(pref_slug_map: dict[str, str]) -> str:
+    links = "\n".join(
+        f'<li><a href="{html.escape(portal_path(pref_slug_map[p]))}" class="portal-pref-link">'
+        f"{html.escape(p)}</a></li>"
+        for p in ALL_PREFECTURES
+    )
+    return f"""
+    <div id="portal-area-sheet" class="portal-area-sheet" role="dialog" aria-modal="true" aria-labelledby="area-sheet-title" hidden>
+      <div class="portal-area-sheet-panel">
+        <button type="button" class="portal-area-sheet-close" id="area-sheet-close" aria-label="閉じる">×</button>
+        <h3 id="area-sheet-title" class="portal-area-sheet-title">都道府県を選ぶ</h3>
+        <ul class="portal-pref-list grid grid-cols-1 gap-2 sm:grid-cols-2">
+{links}
+        </ul>
+      </div>
+    </div>"""
 
 
 def render_header(h1: str, subtitle: str = "全国対応") -> str:
@@ -478,11 +591,13 @@ def page_shell(
     description: str,
     canonical: str,
     h1: str,
+    hero_html: str,
     main_body: str,
-    include_live_js: bool = False,
+    sticky_nav_html: str,
+    extra_html: str = "",
+    page_js: str = "",
     subtitle: str = "全国対応",
 ) -> str:
-    live_script = portal_live_listing_js() if include_live_js else ""
     return f"""<!DOCTYPE html>
 <html lang="ja">
   <head>
@@ -499,13 +614,16 @@ def page_shell(
     <meta property="og:locale" content="ja_JP" />
     <link rel="stylesheet" href="{html.escape(PORTAL_CSS_URL)}" />
   </head>
-  <body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
+  <body class="min-h-screen bg-slate-50 text-slate-900 antialiased portal-body--sticky">
 {render_header(h1, subtitle)}
+{hero_html}
     <main id="main" class="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
 {main_body}
     </main>
 {render_footer()}
-{live_script}
+{sticky_nav_html}
+{extra_html}
+{page_js}
   </body>
 </html>
 """
@@ -550,9 +668,16 @@ def build_national_page(
 
     total = len(records)
     prefs_with_data = sum(1 for c in counts.values() if c > 0)
+    hero = render_hero(
+        level="全国",
+        headline="今夜、全国どこでもすぐ呼べる運転代行を探す",
+        subline="深夜のタクシー代わりに。都道府県・市区町村から業者を選び、本日営業中の店舗はワンタップで電話できます。",
+        eyebrow="全国47都道府県対応",
+    )
     main = f"""
+{render_breadcrumbs([("トップ", None)])}
 {render_cta_block()}
-      <section aria-labelledby="national-heading">
+      <section id="portal-regions" aria-labelledby="national-heading">
         <h2 id="national-heading" class="text-xl font-bold text-slate-900 sm:text-2xl">都道府県から探す</h2>
         <p class="mt-2 text-sm text-slate-600">掲載業者数 合計 <strong>{total}</strong> 件 · 掲載あり {prefs_with_data} / 全国 {len(ALL_PREFECTURES)} 都道府県</p>
         <p class="mt-1 text-sm text-slate-500">お住まいの地域を選ぶと、市区町村別の一覧ページへ移動します。掲載0件の県からも無料登録で掲載開始できます。</p>
@@ -564,8 +689,11 @@ def build_national_page(
         description=NATIONAL_DESCRIPTION,
         canonical=canonical_url(),
         h1="運転代行ポータル | はるのゆこと",
+        hero_html=hero,
         main_body=main,
-        include_live_js=False,
+        sticky_nav_html=render_sticky_mobile_nav(page_kind="national"),
+        extra_html=render_national_area_sheet(pref_slug_map),
+        page_js=portal_national_page_js(),
     )
 
 
@@ -587,8 +715,8 @@ def build_prefecture_page(
             for c in cities
         )
         city_section = f"""
-      <section class="mb-8 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6" aria-labelledby="city-nav">
-        <h2 id="city-nav" class="text-base font-bold text-slate-800">{html.escape(prefecture)}の市区町村一覧</h2>
+      <section id="portal-city-nav" class="mb-8 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6" aria-labelledby="city-nav-heading">
+        <h2 id="city-nav-heading" class="text-base font-bold text-slate-800">{html.escape(prefecture)}の市区町村一覧</h2>
         <ul class="portal-city-list mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
 {city_links}
         </ul>
@@ -596,12 +724,17 @@ def build_prefecture_page(
     else:
         city_section = ""
 
+    hero = render_hero(
+        level=prefecture,
+        headline=f"{prefecture}で今すぐ呼べる運転代行・深夜のタクシー代わりに",
+        subline="本日営業中の店舗をリアルタイム表示。電話番号・料金を確認して、そのまま代行を手配できます。",
+    )
     main = f"""
 {render_breadcrumbs([("トップ", PORTAL_BASE), (prefecture, None)])}
 {render_cta_block()}
 {city_section}
       <section aria-labelledby="list-heading">
-        <h2 id="list-heading" class="mb-4 text-xl font-bold text-slate-900">{html.escape(prefecture)}の運転代行業者一覧</h2>
+        <h2 id="portal-list-heading" class="mb-4 text-xl font-bold text-slate-900">{html.escape(prefecture)}の運転代行業者一覧</h2>
 {render_listing_section(records, prefecture)}
       </section>
 """
@@ -610,9 +743,12 @@ def build_prefecture_page(
         description=description,
         canonical=canonical_url(pref_slug),
         h1=f"{prefecture}の運転代行一覧",
+        hero_html=hero,
         main_body=main,
-        include_live_js=bool(records),
-        subtitle=prefecture,
+        sticky_nav_html=render_sticky_mobile_nav(
+            page_kind="prefecture", prefecture=prefecture, pref_slug=pref_slug
+        ),
+        page_js=portal_live_listing_js() if records else portal_sticky_nav_js(),
     )
 
 
@@ -628,6 +764,11 @@ def build_city_page(
         f"{prefecture}{city}の運転代行業者一覧。"
         "電話番号・公式サイト・会員のリアルタイム営業情報を掲載。"
     )
+    hero = render_hero(
+        level=f"{prefecture} · {city}",
+        headline=f"{city}で今すぐ呼べる運転代行・深夜のタクシー代わりに",
+        subline="飲み会帰り・急な移動にも。営業中の代行店舗から、スマホでそのまま電話できます。",
+    )
     main = f"""
 {render_breadcrumbs([
     ("トップ", PORTAL_BASE),
@@ -636,7 +777,7 @@ def build_city_page(
 ])}
 {render_cta_block()}
       <section aria-labelledby="list-heading">
-        <h2 id="list-heading" class="mb-4 text-xl font-bold text-slate-900">{html.escape(city)}の運転代行業者一覧</h2>
+        <h2 id="portal-list-heading" class="mb-4 text-xl font-bold text-slate-900">{html.escape(city)}の運転代行業者一覧</h2>
 {render_listing_section(records, prefecture, city)}
       </section>
 """
@@ -645,19 +786,84 @@ def build_city_page(
         description=description,
         canonical=canonical_url(pref_slug, city_slug),
         h1=f"{city}の運転代行一覧",
+        hero_html=hero,
         main_body=main,
-        include_live_js=bool(records),
-        subtitle=f"{prefecture} · {city}",
+        sticky_nav_html=render_sticky_mobile_nav(
+            page_kind="city", prefecture=prefecture, pref_slug=pref_slug
+        ),
+        page_js=portal_live_listing_js() if records else portal_sticky_nav_js(),
     )
 
 
+def portal_sticky_nav_js() -> str:
+    return """
+    <script>
+      (function () {
+        document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
+          anchor.addEventListener("click", function (e) {
+            const id = anchor.getAttribute("href");
+            if (!id || id.length < 2) return;
+            const el = document.querySelector(id);
+            if (!el) return;
+            e.preventDefault();
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+        });
+      })();
+    </script>"""
+
+
+def portal_national_page_js() -> str:
+    return """
+    <script>
+      (function () {
+        var sheet = document.getElementById("portal-area-sheet");
+        var openBtn = document.getElementById("sticky-area-btn");
+        var closeBtn = document.getElementById("area-sheet-close");
+        function openSheet() {
+          if (!sheet) return;
+          sheet.hidden = false;
+          sheet.classList.add("portal-area-sheet--open");
+          if (openBtn) openBtn.setAttribute("aria-expanded", "true");
+        }
+        function closeSheet() {
+          if (!sheet) return;
+          sheet.classList.remove("portal-area-sheet--open");
+          sheet.hidden = true;
+          if (openBtn) openBtn.setAttribute("aria-expanded", "false");
+        }
+        if (openBtn) openBtn.addEventListener("click", openSheet);
+        if (closeBtn) closeBtn.addEventListener("click", closeSheet);
+        if (sheet) {
+          sheet.addEventListener("click", function (e) {
+            if (e.target === sheet) closeSheet();
+          });
+        }
+        document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
+          anchor.addEventListener("click", function (e) {
+            var id = anchor.getAttribute("href");
+            if (!id || id.length < 2) return;
+            var el = document.querySelector(id);
+            if (!el) return;
+            e.preventDefault();
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+        });
+      })();
+    </script>"""
+
+
 def portal_live_listing_js() -> str:
-    """都道府県・市町村ページ用: 静的カード + 会員リアルタイム枠（絶対パス API）。"""
+    """都道府県・市町村ページ用: 静的カード + 会員リアルタイム枠 + 営業中フィルター。"""
+    sticky = portal_sticky_nav_js().strip()
     return f"""
     <script>
       (function () {{
         const LIVE_API_URL = {json.dumps(LIVE_API_URL)};
         const grid = document.getElementById("card-grid");
+        const liveToggle = document.getElementById("live-only-toggle");
+        const liveFilterEmpty = document.getElementById("live-filter-empty");
+        const resultCountEl = document.getElementById("result-count");
         let liveEntries = [];
 
         function esc(s) {{
@@ -829,6 +1035,31 @@ def portal_live_listing_js() -> str:
           live.concat(rest).forEach(function (node) {{ grid.appendChild(node); }});
         }}
 
+        function applyLiveOnlyFilter() {{
+          if (!grid) return;
+          const on = liveToggle && liveToggle.checked;
+          let visible = 0;
+          grid.querySelectorAll("article").forEach(function (article) {{
+            const isLive = article.classList.contains("portal-card--live");
+            if (on && !isLive) {{
+              article.classList.add("portal-card-filtered-out");
+            }} else {{
+              article.classList.remove("portal-card-filtered-out");
+              visible += 1;
+            }}
+          }});
+          if (liveFilterEmpty) {{
+            if (on && visible === 0) {{
+              liveFilterEmpty.classList.remove("hidden");
+            }} else {{
+              liveFilterEmpty.classList.add("hidden");
+            }}
+          }}
+          if (resultCountEl) {{
+            resultCountEl.textContent = String(on ? visible : grid.querySelectorAll("article").length);
+          }}
+        }}
+
         function applyLiveToGrid() {{
           try {{
             if (!grid) return;
@@ -847,9 +1078,14 @@ def portal_live_listing_js() -> str:
               showLiveSlot(slot, live);
             }});
             sortLiveCardsToTop();
+            applyLiveOnlyFilter();
           }} catch (err) {{
             console.warn("リアルタイム情報の反映に失敗しました", err);
           }}
+        }}
+
+        if (liveToggle) {{
+          liveToggle.addEventListener("change", applyLiveOnlyFilter);
         }}
 
         async function loadLiveInfo() {{
@@ -881,7 +1117,9 @@ def portal_live_listing_js() -> str:
 
         boot();
       }})();
-    </script>"""
+    </script>
+    {sticky}
+"""
 
 
 def clean_generated_portal_dirs(portal_dir: Path) -> None:

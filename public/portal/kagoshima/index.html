@@ -14,12 +14,12 @@
     <meta property="og:locale" content="ja_JP" />
     <link rel="stylesheet" href="/portal/portal.css" />
   </head>
-  <body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
+  <body class="min-h-screen bg-slate-50 text-slate-900 antialiased portal-body--sticky">
 
     <header class="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
       <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
         <div>
-          <p class="text-xs font-semibold tracking-wide text-brand">鹿児島県</p>
+          <p class="text-xs font-semibold tracking-wide text-brand">全国対応</p>
           <h1 class="text-lg font-bold leading-tight sm:text-xl">
             <a href="/portal/" class="no-underline text-inherit hover:text-brand">鹿児島県の運転代行一覧</a>
           </h1>
@@ -40,6 +40,18 @@
         </nav>
       </div>
     </header>
+
+    <section class="portal-hero" aria-labelledby="portal-hero-title">
+      <div class="portal-hero-inner">
+        <p class="portal-hero-eyebrow">運転代行ポータル</p>
+        <h2 id="portal-hero-title" class="portal-hero-title">鹿児島県で今すぐ呼べる運転代行・深夜のタクシー代わりに</h2>
+        <p class="portal-hero-sub">本日営業中の店舗をリアルタイム表示。電話番号・料金を確認して、そのまま代行を手配できます。</p>
+        <div class="portal-hero-badges">
+          <span class="portal-hero-badge">📍 鹿児島県</span>
+          <span class="portal-hero-badge portal-hero-badge--live"><span class="portal-live-dot" aria-hidden="true"></span> 本日営業中をリアルタイム表示</span>
+        </div>
+      </div>
+    </section>
     <main id="main" class="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
 
 
@@ -64,7 +76,7 @@
       </section>
 
       <section aria-labelledby="list-heading">
-        <h2 id="list-heading" class="mb-4 text-xl font-bold text-slate-900">鹿児島県の運転代行業者一覧</h2>
+        <h2 id="portal-list-heading" class="mb-4 text-xl font-bold text-slate-900">鹿児島県の運転代行業者一覧</h2>
 
       <div class="portal-empty-cta" role="status">
         <p class="portal-empty-cta-title">このエリアの掲載はまだありません</p>
@@ -107,5 +119,32 @@
       </section>
     </footer>
 
+    <nav class="portal-sticky-nav md:hidden" aria-label="スマホ用クイックナビ">
+      <a href="/portal/" class="portal-sticky-nav-btn">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        トップ</a>
+      <a href="#portal-city-nav" class="portal-sticky-nav-btn portal-sticky-nav-btn--primary"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>市区町村</a>
+      <a href="#portal-list-heading" class="portal-sticky-nav-btn">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+        一覧へ</a>
+    </nav>
+
+
+    <script>
+      (function () {
+        document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
+          anchor.addEventListener("click", function (e) {
+            const id = anchor.getAttribute("href");
+            if (!id || id.length < 2) return;
+            const el = document.querySelector(id);
+            if (!el) return;
+            e.preventDefault();
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+        });
+      })();
+    </script>
   </body>
 </html>

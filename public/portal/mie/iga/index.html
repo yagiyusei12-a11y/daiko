@@ -14,12 +14,12 @@
     <meta property="og:locale" content="ja_JP" />
     <link rel="stylesheet" href="/portal/portal.css" />
   </head>
-  <body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
+  <body class="min-h-screen bg-slate-50 text-slate-900 antialiased portal-body--sticky">
 
     <header class="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
       <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
         <div>
-          <p class="text-xs font-semibold tracking-wide text-brand">三重県 · 伊賀市</p>
+          <p class="text-xs font-semibold tracking-wide text-brand">全国対応</p>
           <h1 class="text-lg font-bold leading-tight sm:text-xl">
             <a href="/portal/" class="no-underline text-inherit hover:text-brand">伊賀市の運転代行一覧</a>
           </h1>
@@ -40,6 +40,18 @@
         </nav>
       </div>
     </header>
+
+    <section class="portal-hero" aria-labelledby="portal-hero-title">
+      <div class="portal-hero-inner">
+        <p class="portal-hero-eyebrow">運転代行ポータル</p>
+        <h2 id="portal-hero-title" class="portal-hero-title">伊賀市で今すぐ呼べる運転代行・深夜のタクシー代わりに</h2>
+        <p class="portal-hero-sub">飲み会帰り・急な移動にも。営業中の代行店舗から、スマホでそのまま電話できます。</p>
+        <div class="portal-hero-badges">
+          <span class="portal-hero-badge">📍 三重県 · 伊賀市</span>
+          <span class="portal-hero-badge portal-hero-badge--live"><span class="portal-live-dot" aria-hidden="true"></span> 本日営業中をリアルタイム表示</span>
+        </div>
+      </div>
+    </section>
     <main id="main" class="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
 
 
@@ -63,23 +75,35 @@
         </div>
       </section>
       <section aria-labelledby="list-heading">
-        <h2 id="list-heading" class="mb-4 text-xl font-bold text-slate-900">伊賀市の運転代行業者一覧</h2>
+        <h2 id="portal-list-heading" class="mb-4 text-xl font-bold text-slate-900">伊賀市の運転代行業者一覧</h2>
 
-      <p class="mb-4 text-sm text-slate-600">
-        掲載 <strong class="text-slate-900">11</strong> 件
+      
+      <div class="portal-live-filter" role="group" aria-labelledby="live-filter-label">
+        <label class="portal-live-filter-label" for="live-only-toggle">
+          <input type="checkbox" id="live-only-toggle" class="portal-live-filter-input" />
+          <span class="portal-live-filter-track" aria-hidden="true"></span>
+          <span id="live-filter-label" class="portal-live-filter-text">今すぐ呼べる（本日営業中）業者だけを表示</span>
+        </label>
+        <p class="portal-live-filter-hint">会員がリアルタイム配信している営業中の店舗のみ表示します</p>
+      </div>
+      <p id="live-filter-empty" class="portal-live-filter-empty hidden" role="status">
+        現在、このエリアでリアルタイム情報を配信している業者はいません。しばらくしてから再度お試しください。
+      </p>
+      <p id="result-count-line" class="mb-4 text-sm text-slate-600">
+        掲載 <strong id="result-count" class="text-slate-900">11</strong> 件
       </p>
       <div id="card-grid" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite">
-<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="75"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">888運転代行</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">75</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:08043060888" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]"><svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">080-4306-0888</p></article>
-<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="65"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">スマイル運転代行サービス</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">65</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:0595220355" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]"><svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">0595-22-0355</p></article>
-<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="72"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">タカオ代行</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">72</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:09076800971" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]"><svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">090-7680-0971</p></article>
-<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="68"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">運転代行みっきぃ</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">68</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:09076800971" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]"><svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">090-7680-0971</p></article>
-<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="67"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">運転代行エース</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">67</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="http://acemie.com/" target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline">公式HP</a><a href="tel:0598304280" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]"><svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">0598-30-4280</p></article>
-<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="70"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">運転代行グッド</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">70</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:09076800971" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]"><svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">090-7680-0971</p></article>
-<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="69"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">運転代行ノア</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">69</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:09076800971" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]"><svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">090-7680-0971</p></article>
-<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="66"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">運転代行社にんにん</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">66</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:09076800971" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]"><svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">090-7680-0971</p></article>
-<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="71"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">運転代行ＮＥＸＴ</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">71</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:09076800971" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]"><svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">090-7680-0971</p></article>
-<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="73"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">ＫＤサービス</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">73</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="https://ndy-system.jimdofree.com/" target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline">公式HP</a><a href="tel:0595486759" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]"><svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">0595-48-6759</p></article>
-<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="74"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">ＬＧ代行</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">74</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:09076800971" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-base font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-[0.98]"><svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">090-7680-0971</p></article>
+<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="75"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">888運転代行</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">75</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:08043060888" class="portal-call-now-btn" aria-label="888運転代行に電話する"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>今すぐ電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">080-4306-0888</p></article>
+<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="65"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">スマイル運転代行サービス</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">65</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:0595220355" class="portal-call-now-btn" aria-label="スマイル運転代行サービスに電話する"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>今すぐ電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">0595-22-0355</p></article>
+<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="72"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">タカオ代行</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">72</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:09076800971" class="portal-call-now-btn" aria-label="タカオ代行に電話する"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>今すぐ電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">090-7680-0971</p></article>
+<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="68"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">運転代行みっきぃ</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">68</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:09076800971" class="portal-call-now-btn" aria-label="運転代行みっきぃに電話する"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>今すぐ電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">090-7680-0971</p></article>
+<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="67"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">運転代行エース</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">67</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="http://acemie.com/" target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline">公式HP</a><a href="tel:0598304280" class="portal-call-now-btn" aria-label="運転代行エースに電話する"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>今すぐ電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">0598-30-4280</p></article>
+<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="70"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">運転代行グッド</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">70</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:09076800971" class="portal-call-now-btn" aria-label="運転代行グッドに電話する"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>今すぐ電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">090-7680-0971</p></article>
+<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="69"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">運転代行ノア</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">69</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:09076800971" class="portal-call-now-btn" aria-label="運転代行ノアに電話する"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>今すぐ電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">090-7680-0971</p></article>
+<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="66"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">運転代行社にんにん</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">66</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:09076800971" class="portal-call-now-btn" aria-label="運転代行社にんにんに電話する"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>今すぐ電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">090-7680-0971</p></article>
+<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="71"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">運転代行ＮＥＸＴ</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">71</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:09076800971" class="portal-call-now-btn" aria-label="運転代行ＮＥＸＴに電話する"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>今すぐ電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">090-7680-0971</p></article>
+<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="73"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">ＫＤサービス</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">73</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="https://ndy-system.jimdofree.com/" target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline">公式HP</a><a href="tel:0595486759" class="portal-call-now-btn" aria-label="ＫＤサービスに電話する"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>今すぐ電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">0595-48-6759</p></article>
+<article class="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" data-prefecture="三重県" data-cert="74"><div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-lg font-bold leading-snug text-slate-900">ＬＧ代行</h2><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">74</span></div><p class="mt-1 text-xs font-medium text-brand">三重県 · 伊賀市</p><p class="mt-2 flex items-start gap-1.5 text-sm text-slate-600"><span>三重県 伊賀市（１１）</span></p><div class="portal-live hidden" data-live-slot="1" aria-live="polite" hidden></div><a href="tel:09076800971" class="portal-call-now-btn" aria-label="ＬＧ代行に電話する"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>今すぐ電話で呼ぶ</a><p class="mt-1 text-center text-xs text-slate-500">090-7680-0971</p></article>
       </div>
       </section>
 
@@ -111,10 +135,26 @@
       </section>
     </footer>
 
+    <nav class="portal-sticky-nav md:hidden" aria-label="スマホ用クイックナビ">
+      <a href="/portal/" class="portal-sticky-nav-btn">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        トップ</a>
+      <a href="/portal/mie/" class="portal-sticky-nav-btn portal-sticky-nav-btn--primary"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>三重県</a>
+      <a href="#portal-list-heading" class="portal-sticky-nav-btn">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+        一覧へ</a>
+    </nav>
+
+
     <script>
       (function () {
         const LIVE_API_URL = "/portal-member/api/get_live_info.php";
         const grid = document.getElementById("card-grid");
+        const liveToggle = document.getElementById("live-only-toggle");
+        const liveFilterEmpty = document.getElementById("live-filter-empty");
+        const resultCountEl = document.getElementById("result-count");
         let liveEntries = [];
 
         function esc(s) {
@@ -286,6 +326,31 @@
           live.concat(rest).forEach(function (node) { grid.appendChild(node); });
         }
 
+        function applyLiveOnlyFilter() {
+          if (!grid) return;
+          const on = liveToggle && liveToggle.checked;
+          let visible = 0;
+          grid.querySelectorAll("article").forEach(function (article) {
+            const isLive = article.classList.contains("portal-card--live");
+            if (on && !isLive) {
+              article.classList.add("portal-card-filtered-out");
+            } else {
+              article.classList.remove("portal-card-filtered-out");
+              visible += 1;
+            }
+          });
+          if (liveFilterEmpty) {
+            if (on && visible === 0) {
+              liveFilterEmpty.classList.remove("hidden");
+            } else {
+              liveFilterEmpty.classList.add("hidden");
+            }
+          }
+          if (resultCountEl) {
+            resultCountEl.textContent = String(on ? visible : grid.querySelectorAll("article").length);
+          }
+        }
+
         function applyLiveToGrid() {
           try {
             if (!grid) return;
@@ -304,9 +369,14 @@
               showLiveSlot(slot, live);
             });
             sortLiveCardsToTop();
+            applyLiveOnlyFilter();
           } catch (err) {
             console.warn("リアルタイム情報の反映に失敗しました", err);
           }
+        }
+
+        if (liveToggle) {
+          liveToggle.addEventListener("change", applyLiveOnlyFilter);
         }
 
         async function loadLiveInfo() {
@@ -339,5 +409,20 @@
         boot();
       })();
     </script>
+    <script>
+      (function () {
+        document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
+          anchor.addEventListener("click", function (e) {
+            const id = anchor.getAttribute("href");
+            if (!id || id.length < 2) return;
+            const el = document.querySelector(id);
+            if (!el) return;
+            e.preventDefault();
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+        });
+      })();
+    </script>
+
   </body>
 </html>

@@ -14,7 +14,7 @@
     <meta property="og:locale" content="ja_JP" />
     <link rel="stylesheet" href="/portal/portal.css" />
   </head>
-  <body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
+  <body class="min-h-screen bg-slate-50 text-slate-900 antialiased portal-body--sticky">
 
     <header class="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
       <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
@@ -40,8 +40,24 @@
         </nav>
       </div>
     </header>
+
+    <section class="portal-hero" aria-labelledby="portal-hero-title">
+      <div class="portal-hero-inner">
+        <p class="portal-hero-eyebrow">全国47都道府県対応</p>
+        <h2 id="portal-hero-title" class="portal-hero-title">今夜、全国どこでもすぐ呼べる運転代行を探す</h2>
+        <p class="portal-hero-sub">深夜のタクシー代わりに。都道府県・市区町村から業者を選び、本日営業中の店舗はワンタップで電話できます。</p>
+        <div class="portal-hero-badges">
+          <span class="portal-hero-badge">📍 全国</span>
+          <span class="portal-hero-badge portal-hero-badge--live"><span class="portal-live-dot" aria-hidden="true"></span> 本日営業中をリアルタイム表示</span>
+        </div>
+      </div>
+    </section>
     <main id="main" class="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
 
+
+      <nav class="portal-breadcrumb mb-6 text-sm text-slate-500" aria-label="パンくずリスト">
+        <span aria-current="page" class="text-slate-700">トップ</span>
+      </nav>
 
       <section class="mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-brand to-blue-700 p-6 text-white shadow-lg sm:p-8" aria-labelledby="cta-top">
         <h2 id="cta-top" class="text-base font-bold leading-relaxed sm:text-lg">
@@ -58,7 +74,7 @@
           </a>
         </div>
       </section>
-      <section aria-labelledby="national-heading">
+      <section id="portal-regions" aria-labelledby="national-heading">
         <h2 id="national-heading" class="text-xl font-bold text-slate-900 sm:text-2xl">都道府県から探す</h2>
         <p class="mt-2 text-sm text-slate-600">掲載業者数 合計 <strong>1887</strong> 件 · 掲載あり 16 / 全国 47 都道府県</p>
         <p class="mt-1 text-sm text-slate-500">お住まいの地域を選ぶと、市区町村別の一覧ページへ移動します。掲載0件の県からも無料登録で掲載開始できます。</p>
@@ -180,5 +196,109 @@
       </section>
     </footer>
 
+    <nav class="portal-sticky-nav md:hidden" aria-label="スマホ用クイックナビ">
+      <a href="/portal/" class="portal-sticky-nav-btn">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        トップ</a>
+      <button type="button" class="portal-sticky-nav-btn portal-sticky-nav-btn--primary" id="sticky-area-btn" aria-controls="portal-area-sheet" aria-expanded="false"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>エリアを探す</button>
+      <a href="#portal-regions" class="portal-sticky-nav-btn">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+        一覧へ</a>
+    </nav>
+
+    <div id="portal-area-sheet" class="portal-area-sheet" role="dialog" aria-modal="true" aria-labelledby="area-sheet-title" hidden>
+      <div class="portal-area-sheet-panel">
+        <button type="button" class="portal-area-sheet-close" id="area-sheet-close" aria-label="閉じる">×</button>
+        <h3 id="area-sheet-title" class="portal-area-sheet-title">都道府県を選ぶ</h3>
+        <ul class="portal-pref-list grid grid-cols-1 gap-2 sm:grid-cols-2">
+<li><a href="/portal/hokkaido/" class="portal-pref-link">北海道</a></li>
+<li><a href="/portal/aomori/" class="portal-pref-link">青森県</a></li>
+<li><a href="/portal/iwate/" class="portal-pref-link">岩手県</a></li>
+<li><a href="/portal/miyagi/" class="portal-pref-link">宮城県</a></li>
+<li><a href="/portal/akita/" class="portal-pref-link">秋田県</a></li>
+<li><a href="/portal/yamagata/" class="portal-pref-link">山形県</a></li>
+<li><a href="/portal/fukushima/" class="portal-pref-link">福島県</a></li>
+<li><a href="/portal/ibaraki/" class="portal-pref-link">茨城県</a></li>
+<li><a href="/portal/tochigi/" class="portal-pref-link">栃木県</a></li>
+<li><a href="/portal/gunma/" class="portal-pref-link">群馬県</a></li>
+<li><a href="/portal/saitama/" class="portal-pref-link">埼玉県</a></li>
+<li><a href="/portal/chiba/" class="portal-pref-link">千葉県</a></li>
+<li><a href="/portal/tokyo/" class="portal-pref-link">東京都</a></li>
+<li><a href="/portal/kanagawa/" class="portal-pref-link">神奈川県</a></li>
+<li><a href="/portal/niigata/" class="portal-pref-link">新潟県</a></li>
+<li><a href="/portal/toyama/" class="portal-pref-link">富山県</a></li>
+<li><a href="/portal/ishikawa/" class="portal-pref-link">石川県</a></li>
+<li><a href="/portal/fukui/" class="portal-pref-link">福井県</a></li>
+<li><a href="/portal/yamanashi/" class="portal-pref-link">山梨県</a></li>
+<li><a href="/portal/nagano/" class="portal-pref-link">長野県</a></li>
+<li><a href="/portal/gifu/" class="portal-pref-link">岐阜県</a></li>
+<li><a href="/portal/shizuoka/" class="portal-pref-link">静岡県</a></li>
+<li><a href="/portal/aichi/" class="portal-pref-link">愛知県</a></li>
+<li><a href="/portal/mie/" class="portal-pref-link">三重県</a></li>
+<li><a href="/portal/shiga/" class="portal-pref-link">滋賀県</a></li>
+<li><a href="/portal/kyouto/" class="portal-pref-link">京都府</a></li>
+<li><a href="/portal/oosaka/" class="portal-pref-link">大阪府</a></li>
+<li><a href="/portal/hyougo/" class="portal-pref-link">兵庫県</a></li>
+<li><a href="/portal/nara/" class="portal-pref-link">奈良県</a></li>
+<li><a href="/portal/wakayama/" class="portal-pref-link">和歌山県</a></li>
+<li><a href="/portal/tottori/" class="portal-pref-link">鳥取県</a></li>
+<li><a href="/portal/shimane/" class="portal-pref-link">島根県</a></li>
+<li><a href="/portal/okayama/" class="portal-pref-link">岡山県</a></li>
+<li><a href="/portal/hiroshima/" class="portal-pref-link">広島県</a></li>
+<li><a href="/portal/yamaguchi/" class="portal-pref-link">山口県</a></li>
+<li><a href="/portal/tokushima/" class="portal-pref-link">徳島県</a></li>
+<li><a href="/portal/kagawa/" class="portal-pref-link">香川県</a></li>
+<li><a href="/portal/ehime/" class="portal-pref-link">愛媛県</a></li>
+<li><a href="/portal/kouchi/" class="portal-pref-link">高知県</a></li>
+<li><a href="/portal/fukuoka/" class="portal-pref-link">福岡県</a></li>
+<li><a href="/portal/saga/" class="portal-pref-link">佐賀県</a></li>
+<li><a href="/portal/nagasaki/" class="portal-pref-link">長崎県</a></li>
+<li><a href="/portal/kumamoto/" class="portal-pref-link">熊本県</a></li>
+<li><a href="/portal/ooita/" class="portal-pref-link">大分県</a></li>
+<li><a href="/portal/miyazaki/" class="portal-pref-link">宮崎県</a></li>
+<li><a href="/portal/kagoshima/" class="portal-pref-link">鹿児島県</a></li>
+<li><a href="/portal/okinawa/" class="portal-pref-link">沖縄県</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var sheet = document.getElementById("portal-area-sheet");
+        var openBtn = document.getElementById("sticky-area-btn");
+        var closeBtn = document.getElementById("area-sheet-close");
+        function openSheet() {
+          if (!sheet) return;
+          sheet.hidden = false;
+          sheet.classList.add("portal-area-sheet--open");
+          if (openBtn) openBtn.setAttribute("aria-expanded", "true");
+        }
+        function closeSheet() {
+          if (!sheet) return;
+          sheet.classList.remove("portal-area-sheet--open");
+          sheet.hidden = true;
+          if (openBtn) openBtn.setAttribute("aria-expanded", "false");
+        }
+        if (openBtn) openBtn.addEventListener("click", openSheet);
+        if (closeBtn) closeBtn.addEventListener("click", closeSheet);
+        if (sheet) {
+          sheet.addEventListener("click", function (e) {
+            if (e.target === sheet) closeSheet();
+          });
+        }
+        document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
+          anchor.addEventListener("click", function (e) {
+            var id = anchor.getAttribute("href");
+            if (!id || id.length < 2) return;
+            var el = document.querySelector(id);
+            if (!el) return;
+            e.preventDefault();
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+        });
+      })();
+    </script>
   </body>
 </html>
