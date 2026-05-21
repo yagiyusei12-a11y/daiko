@@ -10,6 +10,7 @@ CSV + MySQL(companies) をマージし、全国47都道府県のポータル HTM
 DB接続: portal-member/config/config.php または環境変数 PORTAL_DB_*
 
 フェーズ3: portal/sitemap.xml・portal/robots.txt 自動生成、営業中カード先頭並び、市町村ページ近隣リンク
+GA4 / Search Console 確認 meta の全ページ自動埋め込み
 """
 
 from __future__ import annotations
@@ -42,6 +43,33 @@ PORTAL_CSS_URL = "/portal/portal.css"
 LIVE_API_URL = "/portal-member/api/get_live_info.php"
 MEMBER_REGISTER_URL = "/portal-member/register.php"
 MEMBER_LOGIN_URL = "/portal-member/login.php"
+
+# Google Analytics 4（全ポータルページの <head> に埋め込み）
+GA4_MEASUREMENT_ID = "G-KVBE5XF4JN"
+
+# Google Search Console 所有権確認（content の値のみ。未設定時は meta を出力しない）
+GSC_VERIFICATION_CODE = ""
+
+
+def render_head_tracking_snippets() -> str:
+    """GA4 グローバルタグと（設定時のみ）GSC 確認 meta。"""
+    parts: list[str] = []
+    gsc_code = (GSC_VERIFICATION_CODE or "").strip()
+    if gsc_code:
+        parts.append(
+            f'    <meta name="google-site-verification" content="{html.escape(gsc_code)}" />'
+        )
+    parts.append(
+        f'    <script async src="https://www.googletagmanager.com/gtag/js?id={html.escape(GA4_MEASUREMENT_ID)}"></script>'
+    )
+    parts.append(f"""    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){{dataLayer.push(arguments);}}
+      gtag('js', new Date());
+      gtag('config', {json.dumps(GA4_MEASUREMENT_ID)});
+    </script>""")
+    return "\n".join(parts) + "\n"
+
 
 NATIONAL_TITLE = "【2026年最新】全国の運転代行一覧｜料金・すぐ呼べる代行検索"
 NATIONAL_DESCRIPTION = (
@@ -694,7 +722,7 @@ def page_shell(
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{html.escape(title)}</title>
+{render_head_tracking_snippets()}    <title>{html.escape(title)}</title>
     <meta name="description" content="{html.escape(description)}" />
     <link rel="canonical" href="{html.escape(canonical)}" />
     <meta name="robots" content="index, follow" />
