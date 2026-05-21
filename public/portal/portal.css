@@ -230,6 +230,47 @@ select {
   padding: 0;
 }
 
+/* 掲載0件エリアの案内 */
+.portal-empty-cta {
+  border-radius: 1rem;
+  border: 1px dashed var(--slate-300);
+  background: linear-gradient(135deg, var(--blue-50) 0%, #fff 55%);
+  padding: 1.5rem 1.25rem;
+  text-align: center;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+.portal-empty-cta-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--slate-900);
+}
+.portal-empty-cta-text {
+  margin: 0.75rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--slate-600);
+}
+.portal-empty-cta-btn {
+  display: inline-flex;
+  margin-top: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  background-color: var(--brand);
+  padding: 0.75rem 1.5rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #fff;
+  text-decoration: none;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  transition: background-color 150ms, transform 150ms;
+}
+.portal-empty-cta-btn:hover {
+  background-color: var(--blue-800);
+  transform: translateY(-1px);
+}
+
 #card-grid article {
   display: flex;
   flex-direction: column;

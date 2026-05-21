@@ -7,12 +7,17 @@ if (auth_user()) {
     redirect('dashboard.php');
 }
 
+$initialPref = prefecture_from_query((string) ($_GET['pref'] ?? ''));
+
 $errors = [];
 $old = [
     'email' => '',
     'cert_number' => '',
-    'prefecture' => '',
+    'prefecture' => $initialPref,
     'name' => '',
+    'tel' => '',
+    'city' => '',
+    'address' => '',
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -25,8 +30,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $certNumber = trim((string) ($_POST['cert_number'] ?? ''));
         $prefecture = trim((string) ($_POST['prefecture'] ?? ''));
         $name = trim((string) ($_POST['name'] ?? ''));
+        $tel = trim((string) ($_POST['tel'] ?? ''));
+        $city = trim((string) ($_POST['city'] ?? ''));
+        $address = trim((string) ($_POST['address'] ?? ''));
 
-        $old = compact('email', 'cert_number', 'prefecture', 'name');
+        $old = compact('email', 'cert_number', 'prefecture', 'name', 'tel', 'city', 'address');
 
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $errors[] = '有効なメールアドレスを入力してください。';
@@ -43,17 +51,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($name === '') {
             $errors[] = '業者名を入力してください。';
         }
+        if ($prefecture === '' || !prefecture_is_valid($prefecture)) {
+            $errors[] = '都道府県を選択してください。';
+        }
         if ($errors === [] && find_user_by_email($email)) {
             $errors[] = 'このメールアドレスは既に登録されています。';
         }
+        if ($errors === [] && find_company_by_cert($certNumber, $prefecture)) {
+            $errors[] = 'この認定番号は既に掲載登録されています。ログインするか、別の番号をご確認ください。';
+        }
 
         if ($errors === []) {
-            $seed = find_enriched_row_by_cert($certNumber, $prefecture !== '' ? $prefecture : null) ?? [];
+            $seed = find_enriched_row_by_cert($certNumber, $prefecture) ?? [];
+
             if ($seed !== []) {
                 $name = ($seed['name'] ?? '') ?: $name;
+                $tel = $tel !== '' ? $tel : (string) ($seed['tel'] ?? '');
+                $city = $city !== '' ? $city : (string) ($seed['city'] ?? '');
+                $address = $address !== '' ? $address : (string) ($seed['address'] ?? '');
                 $prefecture = ($seed['prefecture'] ?? '') ?: $prefecture;
             }
 
+            if ($tel === '') {
+                $errors[] = '電話番号を入力してください。';
+            }
+            if ($city === '') {
+                $errors[] = '市区町村を入力してください。';
+            }
+        }
+
+        if ($errors === []) {
             $pdo = db();
             $pdo->beginTransaction();
             try {
@@ -73,11 +100,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $userId,
                     $certNumber,
                     $name,
-                    $seed['tel'] ?? null,
+                    $tel,
                     $seed['website'] ?? null,
                     $prefecture,
-                    $seed['city'] ?? '',
-                    $seed['address'] ?? '',
+                    $city,
+                    $address,
                     isset($seed['rating']) ? (float) $seed['rating'] : null,
                     $seed['review_count'] ?? null,
                 ]);
@@ -92,9 +119,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($user) {
                     auth_login($user);
                 }
-                flash_set('success', $seed !== []
-                    ? '登録完了。公開CSVの情報を認定番号で取り込みました。'
-                    : '登録完了。基本情報はダッシュボードから編集できます。');
+                $msg = $seed !== []
+                    ? '登録完了。公開CSVの情報を認定番号で取り込みました。掲載反映はポータル再生成後に表示されます。'
+                    : '登録完了。新規掲載として登録しました。ポータル再生成後に一覧へ表示されます。';
+                flash_set('success', $msg);
                 redirect('dashboard.php');
             } catch (Throwable $e) {
                 $pdo->rollBack();
@@ -110,7 +138,7 @@ layout_head('新規会員登録');
   <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
     <h1 class="text-xl font-bold text-slate-900">業者会員 新規登録</h1>
     <p class="mt-2 text-sm text-slate-600">
-      認定番号で <code class="rounded bg-slate-100 px-1">data/3_enriched_csv/</code> の公開データと自動マージできます（都道府県を指定すると精度向上）。
+      CSVに未掲載のエリアでも登録できます。認定番号が公開CSVにある場合は住所・電話などを自動で取り込みます。
     </p>
 
     <?php if ($errors !== []): ?>
@@ -125,21 +153,44 @@ layout_head('新規会員登録');
       <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>" />
 
       <div>
-        <label class="block text-xs font-semibold text-slate-600">認定番号 *</label>
-        <input name="cert_number" required value="<?= e($old['cert_number']) ?>"
-               class="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5" placeholder="例: 第２号 / 199" />
+        <label class="block text-xs font-semibold text-slate-600">都道府県 *</label>
+        <select name="prefecture" required
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base">
+          <option value="">選択してください</option>
+          <?php foreach (PREFECTURES_JIS as $pref): ?>
+            <option value="<?= e($pref) ?>"<?= $old['prefecture'] === $pref ? ' selected' : '' ?>><?= e($pref) ?></option>
+          <?php endforeach; ?>
+        </select>
       </div>
 
       <div>
-        <label class="block text-xs font-semibold text-slate-600">都道府県（マージ用・任意）</label>
-        <input name="prefecture" value="<?= e($old['prefecture']) ?>"
-               class="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5" placeholder="例: 滋賀県" />
+        <label class="block text-xs font-semibold text-slate-600">認定番号 *</label>
+        <input name="cert_number" required value="<?= e($old['cert_number']) ?>"
+               class="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5" placeholder="例: 第２２号 / 199" />
       </div>
 
       <div>
         <label class="block text-xs font-semibold text-slate-600">業者名 *</label>
         <input name="name" required value="<?= e($old['name']) ?>"
                class="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5" />
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-600">市区町村 *</label>
+        <input name="city" required value="<?= e($old['city']) ?>"
+               class="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5" placeholder="例: 長浜市" />
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-600">電話番号 *</label>
+        <input name="tel" required value="<?= e($old['tel']) ?>"
+               class="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5" placeholder="例: 090-1234-5678" />
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-600">所在地（任意）</label>
+        <input name="address" value="<?= e($old['address']) ?>"
+               class="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5" placeholder="例: 長浜市○○町1-2" />
       </div>
 
       <div>
@@ -162,7 +213,7 @@ layout_head('新規会員登録');
 
       <button type="submit"
               class="w-full rounded-xl bg-brand py-3 text-sm font-bold text-white hover:bg-blue-800">
-        登録する
+        無料で掲載登録する
       </button>
     </form>
 

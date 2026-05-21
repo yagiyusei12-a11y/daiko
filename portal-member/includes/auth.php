@@ -60,6 +60,25 @@ function find_company_by_user_id(int $userId): ?array
     return $row ?: null;
 }
 
+function find_company_by_cert(string $certNumber, ?string $prefecture = null): ?array
+{
+    $certNumber = trim($certNumber);
+    if ($certNumber === '') {
+        return null;
+    }
+    if ($prefecture !== null && $prefecture !== '') {
+        $stmt = db()->prepare(
+            'SELECT * FROM companies WHERE cert_number = ? AND prefecture = ? LIMIT 1'
+        );
+        $stmt->execute([$certNumber, $prefecture]);
+    } else {
+        $stmt = db()->prepare('SELECT * FROM companies WHERE cert_number = ? LIMIT 1');
+        $stmt->execute([$certNumber]);
+    }
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
 function find_price_by_company_id(int $companyId): ?array
 {
     $stmt = db()->prepare('SELECT * FROM prices WHERE company_id = ? LIMIT 1');

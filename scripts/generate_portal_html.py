@@ -1,17 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-data/3_enriched_csv/ 内の県別 CSV を統合し、ポータル用静的 HTML を 3 階層で生成する。
+CSV + MySQL(companies) をマージし、全国47都道府県のポータル HTML を 3 階層で生成する。
 
 使い方:
-  pip install pandas pykakasi
+  pip install pandas pykakasi pymysql
   python scripts/generate_portal_html.py
 
-出力:
-  - public/portal/index.html（全国トップ）
-  - public/portal/{pref_slug}/index.html（都道府県トップ）
-  - public/portal/{pref_slug}/{city_slug}/index.html（市町村トップ）
-  - public/portal/portal-data.json（全国データ・参照用）
+DB接続: portal-member/config/config.php または環境変数 PORTAL_DB_*
 """
 
 from __future__ import annotations
@@ -27,6 +23,13 @@ from pathlib import Path
 import pandas as pd
 
 from daiko_places_enrich import PREFECTURE_BY_STEM
+from portal_data_sources import (
+    ALL_PREFECTURES,
+    PREF_SLUG_OVERRIDES,
+    load_companies_from_mysql,
+    merge_business_records,
+    register_url_for_prefecture,
+)
 
 SITE_URL = "https://daiko.harunoyukoto.jp/"
 PORTAL_BASE = "/portal/"
@@ -47,7 +50,7 @@ CITY_PATTERN = re.compile(
     r"^(.+?(?:市|区|町|村)|.+?郡.+?(?:町|村))"
 )
 
-# 地方区分（掲載がある都道府県のみリンクを出す）
+# 地方区分（47都道府県すべてをリンク表示）
 REGION_PREFS: list[tuple[str, list[str]]] = [
     ("北海道", ["北海道"]),
     ("東北", ["青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県"]),
@@ -114,8 +117,8 @@ class SlugRegistry:
         self._pref_used: set[str] = set()
         self._city_used: dict[str, set[str]] = {}
 
-    def pref_slug(self, prefecture: str) -> str:
-        base = slug_from_place_name(prefecture)
+    def pref_slug(self, prefecture: str, fixed: str | None = None) -> str:
+        base = fixed if fixed else slug_from_place_name(prefecture)
         slug = base
         n = 2
         while slug in self._pref_used:
@@ -225,17 +228,29 @@ def load_all_businesses(enriched_dir: Path) -> list[dict[str, str]]:
     return records
 
 
-def assign_slugs(records: list[dict[str, str]]) -> SlugRegistry:
+def build_pref_slug_map() -> dict[str, str]:
+    """全国47都道府県の URL スラッグ（既存本番 URL 互換を優先）。"""
     registry = SlugRegistry()
-    pref_slug_by_name: dict[str, str] = {}
+    slug_map: dict[str, str] = {}
+    for pref in ALL_PREFECTURES:
+        fixed = PREF_SLUG_OVERRIDES.get(pref)
+        slug_map[pref] = registry.pref_slug(pref, fixed=fixed)
+    return slug_map
+
+
+def assign_slugs_to_records(
+    records: list[dict[str, str]],
+    pref_slug_map: dict[str, str],
+) -> None:
+    city_registries: dict[str, SlugRegistry] = {}
     for row in records:
-        pref = row["prefecture"]
-        if pref not in pref_slug_by_name:
-            pref_slug_by_name[pref] = registry.pref_slug(pref)
-        row["pref_slug"] = pref_slug_by_name[pref]
-    for row in records:
-        row["city_slug"] = registry.city_slug(row["pref_slug"], row["city"])
-    return registry
+        pref = row.get("prefecture", "")
+        if pref not in pref_slug_map:
+            continue
+        ps = pref_slug_map[pref]
+        row["pref_slug"] = ps
+        reg = city_registries.setdefault(ps, SlugRegistry())
+        row["city_slug"] = reg.city_slug(ps, row.get("city") or "その他")
 
 
 def build_prefecture_index(records: list[dict[str, str]]) -> dict[str, list[str]]:
@@ -321,6 +336,23 @@ def card_article_html(rec: dict[str, str]) -> str:
     )
 
 
+def render_empty_listing_cta(prefecture: str, city: str | None = None) -> str:
+    area_label = f"{prefecture} · {city}" if city else prefecture
+    reg_url = register_url_for_prefecture(prefecture)
+    return f"""
+      <div class="portal-empty-cta" role="status">
+        <p class="portal-empty-cta-title">このエリアの掲載はまだありません</p>
+        <p class="portal-empty-cta-text">
+          現在、<strong>{html.escape(area_label)}</strong>で掲載されている運転代行業者はありません。
+          掲載を希望される業者様は、今すぐ無料で会員登録して情報を掲載できます！
+        </p>
+        <a href="{html.escape(reg_url)}"
+           class="portal-empty-cta-btn">
+          無料で掲載登録する（{html.escape(prefecture)}）→
+        </a>
+      </div>"""
+
+
 def render_cards_grid(records: list[dict[str, str]]) -> str:
     sorted_recs = sorted(
         records,
@@ -335,6 +367,16 @@ def render_cards_grid(records: list[dict[str, str]]) -> str:
       <div id="card-grid" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite">
 {cards}
       </div>"""
+
+
+def render_listing_section(
+    records: list[dict[str, str]],
+    prefecture: str,
+    city: str | None = None,
+) -> str:
+    if not records:
+        return render_empty_listing_cta(prefecture, city)
+    return render_cards_grid(records)
 
 
 def render_header(h1: str, subtitle: str = "全国対応") -> str:
@@ -469,33 +511,32 @@ def page_shell(
 """
 
 
-def build_national_page(records: list[dict[str, str]]) -> str:
-    pref_meta: dict[str, dict[str, object]] = {}
+def build_national_page(
+    records: list[dict[str, str]],
+    pref_slug_map: dict[str, str],
+) -> str:
+    counts: dict[str, int] = {pref: 0 for pref in ALL_PREFECTURES}
     for row in records:
-        pref = row["prefecture"]
-        ps = row["pref_slug"]
-        if pref not in pref_meta:
-            pref_meta[pref] = {
-                "name": pref,
-                "slug": ps,
-                "count": 0,
-                "region": PREF_TO_REGION.get(pref, "その他"),
-            }
-        pref_meta[pref]["count"] = int(pref_meta[pref]["count"]) + 1  # type: ignore[operator]
+        pref = row.get("prefecture", "")
+        if pref in counts:
+            counts[pref] += 1
+
+    pref_meta = {
+        pref: {
+            "name": pref,
+            "slug": pref_slug_map[pref],
+            "count": counts[pref],
+        }
+        for pref in ALL_PREFECTURES
+    }
 
     region_blocks: list[str] = []
     for region_name, pref_list in REGION_PREFS:
-        prefs_in_region = [
-            pref_meta[p]
-            for p in pref_list
-            if p in pref_meta
-        ]
-        if not prefs_in_region:
-            continue
+        prefs_in_region = [pref_meta[p] for p in pref_list]
         links = "\n".join(
             f'          <li><a href="{html.escape(portal_path(str(m["slug"])))}" class="portal-pref-link">'
             f'{html.escape(str(m["name"]))} <span class="text-slate-400">（{m["count"]}件）</span></a></li>'
-            for m in sorted(prefs_in_region, key=lambda x: str(x["name"]))
+            for m in prefs_in_region
         )
         region_blocks.append(
             f"""
@@ -507,30 +548,14 @@ def build_national_page(records: list[dict[str, str]]) -> str:
       </section>"""
         )
 
-    other_prefs = [m for p, m in pref_meta.items() if PREF_TO_REGION.get(p) is None]
-    if other_prefs:
-        links = "\n".join(
-            f'          <li><a href="{html.escape(portal_path(str(m["slug"])))}" class="portal-pref-link">'
-            f'{html.escape(str(m["name"]))} <span class="text-slate-400">（{m["count"]}件）</span></a></li>'
-            for m in sorted(other_prefs, key=lambda x: str(x["name"]))
-        )
-        region_blocks.append(
-            f"""
-      <section class="portal-region-block mb-8 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
-        <h2 class="text-base font-bold text-slate-800">その他</h2>
-        <ul class="portal-pref-list mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-{links}
-        </ul>
-      </section>"""
-        )
-
     total = len(records)
+    prefs_with_data = sum(1 for c in counts.values() if c > 0)
     main = f"""
 {render_cta_block()}
       <section aria-labelledby="national-heading">
         <h2 id="national-heading" class="text-xl font-bold text-slate-900 sm:text-2xl">都道府県から探す</h2>
-        <p class="mt-2 text-sm text-slate-600">掲載業者数 合計 <strong>{total}</strong> 件 · {len(pref_meta)} 都道府県</p>
-        <p class="mt-1 text-sm text-slate-500">お住まいの地域を選ぶと、市区町村別の一覧ページへ移動します。</p>
+        <p class="mt-2 text-sm text-slate-600">掲載業者数 合計 <strong>{total}</strong> 件 · 掲載あり {prefs_with_data} / 全国 {len(ALL_PREFECTURES)} 都道府県</p>
+        <p class="mt-1 text-sm text-slate-500">お住まいの地域を選ぶと、市区町村別の一覧ページへ移動します。掲載0件の県からも無料登録で掲載開始できます。</p>
       </section>
 {"".join(region_blocks)}
 """
@@ -555,23 +580,29 @@ def build_prefecture_page(
         f"{prefecture}の運転代行業者一覧。市区町村別に探せます。"
         "料金・電話番号・会員のリアルタイム営業情報を掲載。"
     )
-    city_links = "\n".join(
-        f'          <li><a href="{html.escape(portal_path(pref_slug, c["city_slug"]))}" class="portal-city-link">'
-        f'{html.escape(c["city"])} <span class="text-slate-400">（{c["count"]}件）</span></a></li>'
-        for c in cities
-    )
-    main = f"""
-{render_breadcrumbs([("トップ", PORTAL_BASE), (prefecture, None)])}
-{render_cta_block()}
+    if cities:
+        city_links = "\n".join(
+            f'          <li><a href="{html.escape(portal_path(pref_slug, str(c["city_slug"])))}" class="portal-city-link">'
+            f'{html.escape(str(c["city"]))} <span class="text-slate-400">（{c["count"]}件）</span></a></li>'
+            for c in cities
+        )
+        city_section = f"""
       <section class="mb-8 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6" aria-labelledby="city-nav">
         <h2 id="city-nav" class="text-base font-bold text-slate-800">{html.escape(prefecture)}の市区町村一覧</h2>
         <ul class="portal-city-list mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
 {city_links}
         </ul>
-      </section>
+      </section>"""
+    else:
+        city_section = ""
+
+    main = f"""
+{render_breadcrumbs([("トップ", PORTAL_BASE), (prefecture, None)])}
+{render_cta_block()}
+{city_section}
       <section aria-labelledby="list-heading">
         <h2 id="list-heading" class="mb-4 text-xl font-bold text-slate-900">{html.escape(prefecture)}の運転代行業者一覧</h2>
-{render_cards_grid(records)}
+{render_listing_section(records, prefecture)}
       </section>
 """
     return page_shell(
@@ -580,7 +611,7 @@ def build_prefecture_page(
         canonical=canonical_url(pref_slug),
         h1=f"{prefecture}の運転代行一覧",
         main_body=main,
-        include_live_js=True,
+        include_live_js=bool(records),
         subtitle=prefecture,
     )
 
@@ -606,7 +637,7 @@ def build_city_page(
 {render_cta_block()}
       <section aria-labelledby="list-heading">
         <h2 id="list-heading" class="mb-4 text-xl font-bold text-slate-900">{html.escape(city)}の運転代行業者一覧</h2>
-{render_cards_grid(records)}
+{render_listing_section(records, prefecture, city)}
       </section>
 """
     return page_shell(
@@ -615,7 +646,7 @@ def build_city_page(
         canonical=canonical_url(pref_slug, city_slug),
         h1=f"{city}の運転代行一覧",
         main_body=main,
-        include_live_js=True,
+        include_live_js=bool(records),
         subtitle=f"{prefecture} · {city}",
     )
 
@@ -871,20 +902,26 @@ def write_text(path: Path, content: str) -> None:
     print(f"  出力: {path.resolve()}")
 
 
-def generate_all_pages(records: list[dict[str, str]], portal_dir: Path) -> int:
+def generate_all_pages(
+    records: list[dict[str, str]],
+    portal_dir: Path,
+    pref_slug_map: dict[str, str],
+) -> int:
     clean_generated_portal_dirs(portal_dir)
 
-    national_html = build_national_page(records)
+    national_html = build_national_page(records, pref_slug_map)
     write_text(portal_dir / "index.html", national_html)
 
-    by_pref: dict[str, list[dict[str, str]]] = {}
+    by_pref: dict[str, list[dict[str, str]]] = {pref: [] for pref in ALL_PREFECTURES}
     for row in records:
-        by_pref.setdefault(row["prefecture"], []).append(row)
+        pref = row.get("prefecture", "")
+        if pref in by_pref:
+            by_pref[pref].append(row)
 
     page_count = 1
-    for prefecture in sorted(by_pref.keys()):
+    for prefecture in ALL_PREFECTURES:
         pref_rows = by_pref[prefecture]
-        pref_slug = pref_rows[0]["pref_slug"]
+        pref_slug = pref_slug_map[prefecture]
 
         city_counts: dict[str, dict[str, object]] = {}
         for row in pref_rows:
@@ -937,30 +974,37 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    print("依存パッケージ: pip install pandas pykakasi")
-    print(f"読み込み: {args.input_dir}")
+    print("依存パッケージ: pip install pandas pykakasi pymysql")
+    pref_slug_map = build_pref_slug_map()
 
-    if not args.input_dir.is_dir():
-        print(f"エラー: フォルダがありません: {args.input_dir}", file=sys.stderr)
-        return 1
+    csv_records: list[dict[str, str]] = []
+    if args.input_dir.is_dir():
+        print(f"CSV 読み込み: {args.input_dir}")
+        csv_records = load_all_businesses(args.input_dir)
+        print(f"  CSV: {len(csv_records)} 件")
+    else:
+        print(f"  注意: CSV フォルダなし ({args.input_dir}) — MySQL のみで生成します")
 
-    records = load_all_businesses(args.input_dir)
-    if not records:
-        print("エラー: 読み込める CSV がありません。", file=sys.stderr)
-        return 1
+    print("MySQL 読み込み（companies）...")
+    mysql_records = load_companies_from_mysql(root)
+    records = merge_business_records(csv_records, mysql_records)
+    assign_slugs_to_records(records, pref_slug_map)
 
-    assign_slugs(records)
-    prefs = sorted({r["prefecture"] for r in records})
-    print(f"  合計 {len(records)} 件 / {len(prefs)} 都道府県: {', '.join(prefs)}")
+    prefs_with_data = sorted({r["prefecture"] for r in records if r.get("prefecture")})
+    print(
+        f"  マージ後 合計 {len(records)} 件 / 掲載あり {len(prefs_with_data)} 都道府県"
+        f"（全ページは {len(ALL_PREFECTURES)} 都道府県）"
+    )
 
     portal_dir = root / "public" / "portal"
-    page_count = generate_all_pages(records, portal_dir)
+    page_count = generate_all_pages(records, portal_dir, pref_slug_map)
     print(f"  HTML ページ数: {page_count}")
 
     data_path = portal_dir / "portal-data.json"
     payload = {
         "businesses": records,
-        "prefectures": prefs,
+        "prefectures": list(ALL_PREFECTURES),
+        "prefectureSlugs": pref_slug_map,
         "citiesByPrefecture": build_prefecture_index(records),
         "total": len(records),
     }
