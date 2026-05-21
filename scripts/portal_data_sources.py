@@ -148,6 +148,67 @@ def merge_business_records(
     return list(merged.values())
 
 
+def load_suspended_dedupe_keys_from_db(project_root: Path) -> set[tuple]:
+    """停止中業者のマージキー（CSV 重複分もポータルから除外）。"""
+    cfg = load_portal_db_config(project_root)
+    if not cfg:
+        return set()
+    try:
+        import pymysql
+    except ImportError:
+        return set()
+    keys: set[tuple] = set()
+    try:
+        conn = pymysql.connect(
+            host=cfg["host"],
+            port=int(cfg.get("port", 3306)),
+            user=cfg["username"],
+            password=cfg.get("password", ""),
+            database=cfg["database"],
+            charset=cfg.get("charset", "utf8mb4"),
+            cursorclass=pymysql.cursors.DictCursor,
+        )
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT cert_number, prefecture, tel, name, city
+                FROM companies
+                WHERE is_suspended = 1
+                """
+            )
+            rows = cur.fetchall()
+        conn.close()
+    except Exception:
+        return set()
+    for row in rows:
+        keys.add(
+            merge_dedupe_key(
+                {
+                    "cert": normalize_unicode(str(row.get("cert_number") or "")),
+                    "prefecture": normalize_unicode(str(row.get("prefecture") or "")),
+                    "phone": normalize_unicode(str(row.get("tel") or "")),
+                    "name": normalize_unicode(str(row.get("name") or "")),
+                    "city": normalize_unicode(str(row.get("city") or "")),
+                }
+            )
+        )
+    return keys
+
+
+def filter_suspended_portal_records(
+    records: list[dict[str, str]],
+    project_root: Path,
+) -> list[dict[str, str]]:
+    """is_suspended=1 の業者をポータル生成対象から除外。"""
+    suspended_keys = load_suspended_dedupe_keys_from_db(project_root)
+    return [
+        r
+        for r in records
+        if str(r.get("is_suspended") or "0") != "1"
+        and merge_dedupe_key(r) not in suspended_keys
+    ]
+
+
 def load_dotenv_file(path: Path) -> None:
     if not path.is_file():
         return
@@ -251,10 +312,13 @@ def load_companies_from_mysql(project_root: Path) -> list[dict[str, str]]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT cert_number, name, tel, website, prefecture, city, address
+                SELECT id, cert_number, name, tel, website, prefecture, city, address,
+                       wait_time_minutes, accept_cashless, is_invoice_registered,
+                       has_female_driver, left_hand_drive_ok, is_premium, is_suspended
                 FROM companies
                 WHERE TRIM(name) <> ''
                   AND TRIM(prefecture) <> ''
+                  AND COALESCE(is_suspended, 0) = 0
                 """
             )
             rows = cur.fetchall()
@@ -267,8 +331,11 @@ def load_companies_from_mysql(project_root: Path) -> list[dict[str, str]]:
         pref = normalize_unicode(str(row.get("prefecture") or ""))
         if pref not in ALL_PREFECTURES:
             continue
+        wait_val = row.get("wait_time_minutes")
+        wait_str = str(int(wait_val)) if wait_val is not None and str(wait_val).strip() != "" else ""
         records.append(
             {
+                "mysql_company_id": str(int(row["id"])),
                 "prefecture": pref,
                 "city": normalize_unicode(str(row.get("city") or "")) or "その他",
                 "cert": normalize_unicode(str(row.get("cert_number") or "")),
@@ -276,12 +343,86 @@ def load_companies_from_mysql(project_root: Path) -> list[dict[str, str]]:
                 "address": normalize_unicode(str(row.get("address") or "")),
                 "phone": normalize_unicode(str(row.get("tel") or "")),
                 "website": normalize_unicode(str(row.get("website") or "")),
+                "wait_time_minutes": wait_str,
+                "accept_cashless": "1" if int(row.get("accept_cashless") or 0) else "0",
+                "is_invoice_registered": "1" if int(row.get("is_invoice_registered") or 0) else "0",
+                "has_female_driver": "1" if int(row.get("has_female_driver") or 0) else "0",
+                "left_hand_drive_ok": "1" if int(row.get("left_hand_drive_ok") or 0) else "0",
+                "is_premium": "1" if int(row.get("is_premium") or 0) else "0",
+                "is_suspended": "1" if int(row.get("is_suspended") or 0) else "0",
                 "source": "mysql",
             }
         )
 
     print(f"  MySQL companies: {len(records)} 件", flush=True)
     return records
+
+
+def load_company_rating_aggregates_from_mysql(
+    project_root: Path,
+) -> dict[str, dict[str, str]]:
+    """reviews テーブルから業者別平均評価を取得。キーは mysql company id 文字列。"""
+    cfg = load_portal_db_config(project_root)
+    if not cfg:
+        return {}
+    try:
+        import pymysql
+    except ImportError:
+        return {}
+    out: dict[str, dict[str, str]] = {}
+    try:
+        conn = pymysql.connect(
+            host=cfg["host"],
+            port=int(cfg.get("port", 3306)),
+            user=cfg["username"],
+            password=cfg.get("password", ""),
+            database=cfg["database"],
+            charset=cfg.get("charset", "utf8mb4"),
+            cursorclass=pymysql.cursors.DictCursor,
+        )
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT company_id,
+                       ROUND(AVG(rating), 1) AS avg_rating,
+                       COUNT(*) AS review_count
+                FROM reviews
+                GROUP BY company_id
+                """
+            )
+            rows = cur.fetchall()
+        conn.close()
+    except Exception as exc:
+        print(f"  警告: レビュー集計読み込み失敗 ({exc})", flush=True)
+        return {}
+    for row in rows:
+        cid = str(int(row["company_id"]))
+        count = int(row.get("review_count") or 0)
+        if count <= 0:
+            continue
+        avg = float(row.get("avg_rating") or 0)
+        out[cid] = {
+            "portal_avg_rating": f"{avg:.1f}",
+            "portal_review_count": str(count),
+        }
+    print(f"  MySQL reviews 集計: {len(out)} 社", flush=True)
+    return out
+
+
+def apply_rating_aggregates_to_records(
+    records: list[dict[str, str]],
+    aggregates: dict[str, dict[str, str]],
+) -> None:
+    """mysql_company_id に紐づくレコードへポータル評価フィールドを付与。"""
+    if not aggregates:
+        return
+    for row in records:
+        mysql_id = (row.get("mysql_company_id") or "").strip()
+        if not mysql_id or mysql_id not in aggregates:
+            continue
+        agg = aggregates[mysql_id]
+        row["portal_avg_rating"] = agg.get("portal_avg_rating", "")
+        row["portal_review_count"] = agg.get("portal_review_count", "")
 
 
 def register_url_for_prefecture(prefecture: str) -> str:
