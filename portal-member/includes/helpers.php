@@ -53,18 +53,26 @@ function layout_head(string $title): void
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title><?= e($title) ?> | <?= e($appName) ?></title>
+  <link rel="stylesheet" href="/portal-member/assets/member-neo.css" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
+      darkMode: "class",
       theme: {
         extend: {
-          colors: { brand: { DEFAULT: '#2563eb', dark: '#1d4ed8' } },
+          colors: {
+            brand: { DEFAULT: "#10b981", dark: "#059669" },
+            neo: { bg: "#020617", panel: "#0f172a", border: "#1e293b" },
+          },
+          fontFamily: {
+            mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
+          },
         },
       },
     };
   </script>
 </head>
-<body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
+<body class="member-neo min-h-screen bg-slate-950 text-slate-100 antialiased">
 <?php
 }
 

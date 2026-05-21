@@ -1,0 +1,404 @@
+/* =============================================================================
+   Neo-Dark Design System 2026 — ポータル全体（ロジック非依存・見た目のみ）
+   ============================================================================= */
+
+:root {
+  --neo-midnight: #020617;
+  --neo-slate-950: #020617;
+  --neo-slate-900: #0f172a;
+  --neo-slate-800: #1e293b;
+  --neo-emerald: #34d399;
+  --neo-emerald-400: #34d399;
+  --neo-amber-400: #fbbf24;
+  --neo-glass: rgba(15, 23, 42, 0.8);
+  --neo-glass-border: #1e293b;
+}
+
+/* ユーティリティ（生成HTMLのクラス用） */
+.bg-slate-950 { background-color: var(--neo-slate-950) !important; }
+.bg-slate-900 { background-color: var(--neo-slate-900) !important; }
+.bg-slate-900\/80 { background-color: var(--neo-glass) !important; }
+.bg-black { background-color: #000 !important; }
+.text-slate-100 { color: #f1f5f9 !important; }
+.text-slate-200 { color: #e2e8f0 !important; }
+.text-slate-300 { color: #cbd5e1 !important; }
+.text-slate-400 { color: #94a3b8 !important; }
+.text-slate-500 { color: #64748b !important; }
+.text-slate-600 { color: #94a3b8 !important; }
+.text-slate-700 { color: #cbd5e1 !important; }
+.text-slate-800 { color: #e2e8f0 !important; }
+.text-slate-900 { color: #f8fafc !important; }
+.text-emerald-400 { color: var(--neo-emerald-400) !important; }
+.text-amber-400 { color: var(--neo-amber-400) !important; }
+.text-brand { color: var(--neo-emerald) !important; }
+.border-slate-800 { border-color: var(--neo-slate-800) !important; }
+.border-slate-700 { border-color: #334155 !important; }
+.border-slate-200,
+.border-slate-200\/80 { border-color: var(--neo-glass-border) !important; }
+.bg-white { background-color: var(--neo-glass) !important; }
+.bg-slate-50 { background-color: rgba(15, 23, 42, 0.5) !important; }
+.bg-slate-100 { background-color: rgba(30, 41, 59, 0.6) !important; }
+.hover\:text-brand:hover { color: var(--neo-emerald) !important; }
+
+body.portal-body--sticky,
+body.min-h-screen {
+  background: var(--neo-midnight) !important;
+  color: #e2e8f0 !important;
+}
+
+/* グローバルインタラクション */
+button,
+.portal-call-now-btn,
+.portal-ride-open-btn,
+.portal-ride-pay-btn,
+.portal-ride-submit-btn,
+.portal-ride-coupon-apply-btn,
+.portal-review-submit,
+.portal-gps-hero-btn,
+.portal-empty-cta-btn,
+.portal-pwa-install-btn,
+.portal-feature-chip,
+.portal-favorite-btn,
+a.portal-detail-link {
+  transition: all 200ms ease !important;
+}
+button:active,
+.portal-call-now-btn:active,
+.portal-ride-open-btn:active,
+.portal-ride-pay-btn:active,
+.portal-ride-submit-btn:active,
+.portal-ride-coupon-apply-btn:active,
+.portal-review-submit:active,
+.portal-gps-hero-btn:active,
+.portal-empty-cta-btn:active {
+  transform: scale(0.95) !important;
+}
+
+/* ヘッダー — グラスモルフィズム */
+.portal-site-header {
+  border-bottom: 1px solid var(--neo-glass-border) !important;
+  background: var(--neo-glass) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+.portal-site-header a.rounded-xl.bg-brand {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  border: 1px solid rgba(52, 211, 153, 0.35);
+}
+.portal-site-header a.rounded-xl.border {
+  background: rgba(15, 23, 42, 0.6) !important;
+  border-color: var(--neo-glass-border) !important;
+  color: #e2e8f0 !important;
+}
+
+/* ヒーロー — 夜の街グラデーション */
+.portal-hero {
+  background: linear-gradient(
+    135deg,
+    #1e1b4b 0%,
+    var(--neo-slate-950) 42%,
+    rgba(6, 78, 59, 0.35) 100%
+  ) !important;
+}
+.portal-hero::before {
+  background:
+    radial-gradient(ellipse 70% 55% at 15% 25%, rgba(99, 102, 241, 0.22), transparent),
+    radial-gradient(ellipse 55% 45% at 88% 70%, rgba(16, 185, 129, 0.18), transparent) !important;
+}
+.portal-hero-title {
+  color: #fff !important;
+  text-shadow: 0 2px 32px rgba(0, 0, 0, 0.5);
+}
+.portal-hero-eyebrow {
+  color: var(--neo-emerald) !important;
+}
+
+/* カード — グラス + ライブネオン */
+#card-grid article,
+.portal-glass-card {
+  border: 1px solid var(--neo-glass-border) !important;
+  background: var(--neo-glass) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35) !important;
+  color: #e2e8f0;
+}
+#card-grid article h2 a {
+  color: #f8fafc !important;
+}
+#card-grid article:hover {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(51, 65, 85, 0.8) !important;
+}
+
+article.portal-card--live {
+  border-color: rgba(16, 185, 129, 0.55) !important;
+  background: linear-gradient(165deg, rgba(6, 78, 59, 0.35) 0%, var(--neo-glass) 55%) !important;
+  box-shadow:
+    0 0 0 1px rgba(16, 185, 129, 0.35),
+    0 0 15px rgba(16, 185, 129, 0.2),
+    0 8px 28px rgba(0, 0, 0, 0.4) !important;
+}
+article.portal-card--live .portal-live-dot {
+  animation: portal-neo-pulse 2s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
+}
+@keyframes portal-neo-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.65; transform: scale(1.15); }
+}
+
+/* プレミアム — ゴールドボーダー */
+article.portal-card--premium {
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(var(--neo-glass), var(--neo-glass)) padding-box,
+    linear-gradient(135deg, #fcd34d, #b45309, #fde68a) border-box !important;
+  box-shadow:
+    0 0 0 1px rgba(251, 191, 36, 0.25),
+    0 12px 36px rgba(180, 83, 9, 0.2) !important;
+}
+.portal-premium-badge {
+  background: linear-gradient(120deg, #fde68a, #f59e0b, #d97706) !important;
+  border: 1px solid rgba(253, 224, 71, 0.5);
+  padding: 0.25rem 0.75rem !important;
+  font-size: 0.7rem !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
+}
+
+/* レーティング */
+.portal-rating,
+.portal-rating--inline {
+  margin: 0.4rem 0 0.15rem !important;
+  font-size: 0.9375rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.02em;
+  color: var(--neo-amber-400) !important;
+}
+.portal-rating--hero {
+  color: #fde68a !important;
+}
+.portal-rating-stars {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.portal-rating-star {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.portal-rating-value {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.portal-rating-count {
+  font-weight: 600;
+  opacity: 0.85;
+  font-size: 0.85em;
+}
+
+/* ライブバナー（カード内） */
+.portal-live.portal-live--visible {
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  background: rgba(6, 78, 59, 0.35) !important;
+  color: #a7f3d0 !important;
+}
+.portal-live--visible .portal-live-title {
+  color: var(--neo-emerald) !important;
+}
+
+/* フィルター・地域ブロック */
+.portal-listing-filters,
+.portal-region-block,
+.portal-empty-cta,
+.portal-detail-card,
+.portal-breadcrumb,
+footer {
+  border-color: var(--neo-glass-border) !important;
+}
+.portal-region-block,
+.portal-detail-card {
+  background: var(--neo-glass) !important;
+  backdrop-filter: blur(10px);
+}
+.portal-pref-link,
+.portal-city-link {
+  background: rgba(15, 23, 42, 0.65) !important;
+  border-color: var(--neo-glass-border) !important;
+  color: #e2e8f0 !important;
+}
+.portal-pref-link:hover,
+.portal-city-link:hover {
+  border-color: var(--neo-emerald) !important;
+  background: rgba(6, 78, 59, 0.25) !important;
+}
+
+.portal-detail-hero {
+  background: linear-gradient(135deg, #1e1b4b 0%, var(--neo-slate-950) 50%, rgba(6, 78, 59, 0.3) 100%) !important;
+}
+
+/* 地図 — ダーク枠 */
+.portal-ride-track-map {
+  border-radius: 1rem !important;
+  overflow: hidden;
+  border: 1px solid var(--neo-glass-border);
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.45);
+}
+.portal-ride-track-map .leaflet-container {
+  background: #0f172a !important;
+  filter: saturate(0.85) brightness(0.92);
+}
+.portal-ride-car-marker {
+  background: transparent !important;
+  border: none !important;
+}
+.portal-ride-car-marker span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  font-size: 1.5rem;
+  filter: drop-shadow(0 0 8px rgba(52, 211, 153, 0.9));
+  position: relative;
+}
+.portal-ride-car-marker span::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid rgba(52, 211, 153, 0.5);
+  animation: portal-marker-ripple 1.8s ease-out infinite;
+}
+@keyframes portal-marker-ripple {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+.portal-ride-pickup-marker span {
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+}
+
+/* モーダル — ボトムシート */
+.portal-ride-modal,
+.portal-review-modal {
+  align-items: flex-end !important;
+  padding: 0 !important;
+}
+.portal-ride-modal-backdrop,
+.portal-review-modal-backdrop {
+  background: rgba(2, 6, 23, 0.75) !important;
+  backdrop-filter: blur(8px);
+}
+.portal-ride-modal-panel,
+.portal-review-modal-panel {
+  width: 100% !important;
+  max-width: 28rem !important;
+  margin: 0 auto;
+  border-radius: 1.25rem 1.25rem 0 0 !important;
+  border: 1px solid var(--neo-glass-border) !important;
+  background: var(--neo-glass) !important;
+  backdrop-filter: blur(16px);
+  color: #e2e8f0;
+  animation: portal-sheet-up 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transform: translateY(0);
+}
+@keyframes portal-sheet-up {
+  from { transform: translateY(100%); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.portal-ride-modal.hidden .portal-ride-modal-panel,
+.portal-review-modal.hidden .portal-review-modal-panel {
+  animation: none;
+}
+.portal-ride-input,
+.portal-review-textarea {
+  background: rgba(2, 6, 23, 0.6) !important;
+  border-color: var(--neo-glass-border) !important;
+  color: #f1f5f9 !important;
+}
+.portal-ride-coupon-wrap {
+  background: rgba(88, 28, 135, 0.15) !important;
+  border-color: rgba(167, 139, 250, 0.35) !important;
+}
+.portal-ride-coupon-label {
+  color: #c4b5fd !important;
+}
+
+/* 飲食店モード — 超高コントラスト */
+html.portal--shop-mode {
+  font-size: 130%;
+}
+html.portal--shop-mode body,
+html.portal--shop-mode #main {
+  background: #000 !important;
+  color: #fff !important;
+}
+html.portal--shop-mode .portal-site-header {
+  background: #000 !important;
+  border-bottom: 1px solid #333 !important;
+}
+html.portal--shop-mode .portal-site-header h1 a {
+  color: #fff !important;
+  font-size: 1.35rem;
+}
+html.portal--shop-mode .portal-shop-banner {
+  border: 2px solid var(--neo-emerald) !important;
+  background: rgba(6, 78, 59, 0.4) !important;
+}
+html.portal--shop-mode .portal-shop-banner-title {
+  color: var(--neo-emerald) !important;
+  font-size: 1.5rem !important;
+}
+html.portal--shop-mode .portal-shop-banner-sub {
+  color: #d1fae5 !important;
+  font-size: 1.05rem !important;
+}
+html.portal--shop-mode #card-grid {
+  gap: 1.75rem !important;
+}
+html.portal--shop-mode #card-grid article.portal-card--live {
+  padding: 1.75rem !important;
+  border-width: 3px !important;
+  border-color: var(--neo-emerald) !important;
+  box-shadow:
+    0 0 20px rgba(16, 185, 129, 0.35),
+    0 0 15px rgba(16, 185, 129, 0.2) !important;
+  background: #0a0a0a !important;
+}
+html.portal--shop-mode #card-grid article.portal-card--live h2 {
+  font-size: 1.75rem !important;
+}
+html.portal--shop-mode .portal-call-now-btn {
+  min-height: 50vh !important;
+  max-height: 52vh;
+  margin-top: 1.25rem !important;
+  padding: 2rem 1.5rem !important;
+  font-size: 1.85rem !important;
+  border-radius: 1.25rem !important;
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  color: #fff !important;
+  box-shadow:
+    0 0 28px rgba(16, 185, 129, 0.55),
+    0 8px 32px rgba(0, 0, 0, 0.5) !important;
+  border: 2px solid rgba(52, 211, 153, 0.6);
+}
+html.portal--shop-mode .portal-call-now-btn svg {
+  width: 3rem !important;
+  height: 3rem !important;
+}
+html.portal--shop-mode .portal-live.portal-live--visible {
+  font-size: 1.2rem !important;
+  padding: 1rem !important;
+}
+
+/* スティッキー・FAB */
+.portal-sticky-nav {
+  background: var(--neo-glass) !important;
+  border-top: 1px solid var(--neo-glass-border) !important;
+  backdrop-filter: blur(12px);
+}
+.portal-ride-fab {
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.45) !important;
+}

@@ -1,0 +1,119 @@
+/* 2026 Neo-Dark SaaS — portal-member 管理画面 */
+:root {
+  --neo-bg: #020617;
+  --neo-surface: rgba(15, 23, 42, 0.82);
+  --neo-border: #1e293b;
+  --neo-emerald: #34d399;
+  --neo-amber: #fbbf24;
+}
+
+body.member-neo {
+  background: var(--neo-bg) !important;
+  color: #e2e8f0 !important;
+}
+
+.member-neo-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.member-neo-sidebar {
+  width: 15rem;
+  flex-shrink: 0;
+  border-right: 1px solid var(--neo-border);
+  background: rgba(2, 6, 23, 0.95);
+  padding: 1.25rem 1rem;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  min-height: 100vh;
+}
+
+.member-neo-sidebar-brand {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--neo-emerald);
+}
+
+.member-neo-sidebar-title {
+  margin: 0.35rem 0 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.member-neo-nav a {
+  display: block;
+  border-radius: 0.65rem;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-decoration: none;
+  transition: all 200ms;
+}
+.member-neo-nav a:hover {
+  background: rgba(51, 65, 85, 0.5);
+  color: #f1f5f9;
+}
+
+.member-neo-main {
+  flex: 1;
+  min-width: 0;
+  padding: 1.5rem;
+}
+
+.member-neo-header {
+  border-bottom: 1px solid var(--neo-border);
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+}
+
+.member-neo-glass {
+  border-radius: 1rem;
+  border: 1px solid var(--neo-border);
+  background: var(--neo-surface);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.member-neo-metric {
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--neo-emerald);
+}
+
+.member-neo-metric-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.member-neo-btn {
+  transition: all 200ms;
+}
+.member-neo-btn:active {
+  transform: scale(0.95);
+}
+
+@media (max-width: 1023px) {
+  .member-neo-layout {
+    flex-direction: column;
+  }
+  .member-neo-sidebar {
+    width: 100%;
+    min-height: auto;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid var(--neo-border);
+  }
+  .member-neo-nav ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+}

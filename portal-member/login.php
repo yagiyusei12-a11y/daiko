@@ -4,7 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/includes/bootstrap.php';
 
 if (auth_user()) {
-    redirect('dashboard.php');
+    redirect(auth_home_path());
 }
 
 $errors = [];
@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'メールアドレスまたはパスワードが正しくありません。';
         } else {
             auth_login($user);
-            redirect('dashboard.php');
+            redirect(auth_home_path($user));
         }
     }
 }
@@ -62,8 +62,31 @@ layout_head('ログイン');
     <p class="mt-6 text-center text-sm text-slate-600">
       <a href="register.php" class="font-semibold text-brand hover:underline">新規会員登録</a>
       ·
+      <a href="shop-register.php" class="font-semibold text-amber-700 hover:underline">飲食店提携登録</a>
+      ·
       <a href="/portal/" class="text-slate-500 hover:underline">ポータルTOP</a>
     </p>
+
+    <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+      <p class="font-semibold">✨ ポータル掲載のプレミアム枠</p>
+      <p class="mt-1 text-xs leading-relaxed text-amber-900/90">
+        ログイン後のマイページから、一覧最上位・ゴールド枠の有料プランへお申し込みいただけます。
+      </p>
+    </div>
+
+    <div class="mt-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-950">
+      <p class="font-semibold">📱 LINEから営業ステータス更新</p>
+      <p class="mt-1 text-xs leading-relaxed text-green-900/90">
+        ログイン後、マイページの「LINE連携」から公式アカウントと紐付けると、トークで「営業開始」「20分」「終了」を送るだけで掲載情報を更新できます。
+      </p>
+    </div>
+
+    <div class="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950">
+      <p class="font-semibold">💰 オンライン決済・売上管理</p>
+      <p class="mt-1 text-xs leading-relaxed text-indigo-900/90">
+        ログイン後のマイページ「売上管理」タブで、プラットフォーム経由の決済売上・手数料・次回振込プールを確認できます。
+      </p>
+    </div>
   </div>
 </main>
 <?php layout_foot(); ?>

@@ -6,6 +6,17 @@ function auth_user(): ?array
     return $_SESSION['user'] ?? null;
 }
 
+function auth_is_shop(?array $user = null): bool
+{
+    $user ??= auth_user();
+    return is_array($user) && ($user['role'] ?? '') === 'shop';
+}
+
+function auth_home_path(?array $user = null): string
+{
+    return auth_is_shop($user) ? 'shop-dashboard.php' : 'dashboard.php';
+}
+
 function auth_require(): array
 {
     $user = auth_user();
