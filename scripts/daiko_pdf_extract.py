@@ -71,6 +71,8 @@ class ColumnMap:
     cert: int = 0
     name: int = 1
     address: int = 2
+    """認定番号列が無い PDF（三重県一覧など）"""
+    auto_cert: bool = False
 
     def pick(self, cells: list[str], key: str) -> str:
         index = getattr(self, key)
@@ -135,6 +137,15 @@ def parse_header_map(cells: list[str]) -> ColumnMap | None:
     if cert_idx is not None and name_idx is not None and address_idx is not None:
         return ColumnMap(cert=cert_idx, name=name_idx, address=address_idx)
 
+    # 三重県など: 所在地・営業所名の2列のみ（認定番号なし）
+    if name_idx is not None and address_idx is not None:
+        return ColumnMap(
+            cert=-1,
+            name=name_idx,
+            address=address_idx,
+            auto_cert=True,
+        )
+
     first_three = {normalize_cell(c) for c in cells[:3]}
     if LEGACY_HEADER_MARKERS.issubset(first_three):
         return ColumnMap(0, 1, 2)
@@ -154,10 +165,31 @@ def matches_cert_number(value: str) -> bool:
     return any(pattern.match(value) for pattern in CERT_PATTERNS)
 
 
-def is_data_row(cells: list[str], col_map: ColumnMap) -> bool:
-    cert = col_map.pick(cells, "cert")
+def is_footer_or_note(name: str) -> bool:
+    if not name:
+        return True
+    if name.startswith("※") or "法律違反" in name:
+        return True
+    if "随伴用自動車" in name:
+        return True
+    return False
+
+
+def is_data_row(cells: list[str], col_map: ColumnMap, *, last_address: str = "") -> bool:
     name = col_map.pick(cells, "name")
-    address = col_map.pick(cells, "address")
+    address = col_map.pick(cells, "address") or last_address
+    if col_map.auto_cert:
+        if not name or not address:
+            return False
+        if is_footer_or_note(name):
+            return False
+        if is_header_row(cells):
+            return False
+        if normalize_header_label(name) in NAME_HEADER_ALIASES | ADDRESS_HEADER_ALIASES:
+            return False
+        return True
+
+    cert = col_map.pick(cells, "cert")
     if not cert or not name or not address:
         return False
     if is_header_row(cells):
@@ -185,6 +217,8 @@ def row_from_cells(cells: list[str], col_map: ColumnMap) -> dict[str, str]:
 def extract_rows_from_pdf(pdf_path: Path) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     col_map = ColumnMap()
+    last_address = ""
+    auto_cert_seq = 0
 
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
@@ -200,12 +234,23 @@ def extract_rows_from_pdf(pdf_path: Path) -> list[dict[str, str]]:
                     header_map = parse_header_map(cells)
                     if header_map is not None:
                         col_map = header_map
+                        if col_map.auto_cert:
+                            last_address = ""
                         continue
 
-                    if not is_data_row(cells, col_map):
+                    addr_cell = col_map.pick(cells, "address")
+                    if addr_cell:
+                        last_address = addr_cell
+
+                    if not is_data_row(cells, col_map, last_address=last_address):
                         continue
 
-                    rows.append(row_from_cells(cells, col_map))
+                    row = row_from_cells(cells, col_map)
+                    if col_map.auto_cert:
+                        auto_cert_seq += 1
+                        row["認定番号"] = str(auto_cert_seq)
+                        row["所在地"] = col_map.pick(cells, "address") or last_address
+                    rows.append(row)
 
     return rows
 
