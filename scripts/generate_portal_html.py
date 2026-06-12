@@ -1329,7 +1329,7 @@ def render_header(h1: str, subtitle: str = "全国対応") -> str:
         </div>
         <nav class="flex flex-wrap items-center gap-2" aria-label="サイトナビゲーション">
           <a href="{html.escape(MEMBER_REGISTER_URL)}"
-             class="whitespace-nowrap rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white no-underline shadow-sm transition hover:bg-blue-800">
+             class="portal-header-register-btn whitespace-nowrap rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white no-underline transition hover:opacity-90">
             業者会員登録
           </a>
           <a href="{html.escape(MEMBER_LOGIN_URL)}"
@@ -2692,7 +2692,7 @@ def build_prefecture_page(
 {render_cta_block()}
 {city_section}
       <section aria-labelledby="list-heading">
-        <h2 id="portal-list-heading" class="mb-4 text-xl font-bold text-slate-100">{html.escape(prefecture)}の運転代行業者一覧</h2>
+        <h2 id="portal-list-heading" class="sr-only">{html.escape(prefecture)}の運転代行業者一覧</h2>
 {render_listing_section(records, prefecture)}
       </section>
 """
@@ -2738,7 +2738,7 @@ def build_city_page(
 ])}
 {render_cta_block()}
       <section aria-labelledby="list-heading">
-        <h2 id="portal-list-heading" class="mb-4 text-xl font-bold text-slate-100">{html.escape(city)}の運転代行業者一覧</h2>
+        <h2 id="portal-list-heading" class="sr-only">{html.escape(city)}の運転代行業者一覧</h2>
 {render_listing_section(records, prefecture, city)}
       </section>
 {render_nearby_city_links(prefecture, pref_slug, city_slug, cities_in_pref or [])}
@@ -3630,15 +3630,15 @@ def portal_live_listing_js() -> str:
             }}
             if (hasValue(ev.title) || hasValue(ev.body)) {{
               const label = (ev.title || ev.body || "").trim();
-              html += '<p class="mt-1 portal-live-muted"><span class="font-semibold text-emerald-900">イベント:</span> ' + esc(label) + "</p>";
+              html += '<p class="mt-1 portal-live-muted"><span class="font-semibold portal-live-accent">イベント:</span> ' + esc(label) + "</p>";
               if (hasValue(ev.title) && hasValue(ev.body) && ev.body.trim() !== ev.title.trim()) {{
-                html += '<p class="mt-0.5 text-xs text-slate-600">' + esc(ev.body.trim()) + "</p>";
+                html += '<p class="mt-0.5 text-xs text-slate-300">' + esc(ev.body.trim()) + "</p>";
               }}
             }}
           }}
           const priceLine = formatPriceLine(live.prices);
           if (priceLine) {{
-            html += '<p class="mt-2 border-t border-emerald-100 pt-2 portal-live-muted"><span class="font-semibold">料金:</span> ' + esc(priceLine) + "</p>";
+            html += '<p class="mt-2 border-t border-emerald-500/30 pt-2 portal-live-muted"><span class="font-semibold">料金:</span> ' + esc(priceLine) + "</p>";
           }}
           if (!html.trim() && waitLabel) {{
             html = '<p class="portal-live-title"><span class="portal-live-dot" aria-hidden="true"></span> お迎え目安：' + esc(waitLabel) + "</p>";

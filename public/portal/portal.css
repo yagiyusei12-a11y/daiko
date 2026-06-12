@@ -79,6 +79,7 @@ a { color: inherit; }
 .border-white\/40 { border-color: rgba(255, 255, 255, 0.4); }
 .border-blue-100 { border-color: #dbeafe; }
 .border-emerald-100 { border-color: var(--emerald-100); }
+.border-emerald-500\/30 { border-color: rgba(16, 185, 129, 0.3); }
 .hover\:border-brand:hover { border-color: var(--brand); }
 
 .from-brand { --tw-from: var(--brand); }
@@ -1976,10 +1977,34 @@ button:active,
   white-space: nowrap;
   line-height: 1.35;
 }
+.portal-site-header,
+header.portal-site-header {
+  background: rgba(15, 23, 42, 0.92) !important;
+}
+.portal-site-header a.rounded-xl.bg-brand {
+  color: #fff !important;
+  text-shadow: none !important;
+  box-shadow: 0 2px 12px rgba(16, 185, 129, 0.35) !important;
+}
+.portal-site-header a.rounded-xl.bg-brand:hover {
+  background: linear-gradient(135deg, #059669, #047857) !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 section[aria-labelledby="cta-top"],
 .portal-cta-block {
-  background: linear-gradient(to bottom right, var(--brand), var(--blue-700)) !important;
+  background: linear-gradient(135deg, #1e3a8a 0%, var(--brand) 45%, var(--blue-700) 100%) !important;
   color: #fff !important;
 }
 section[aria-labelledby="cta-top"] h2,
@@ -2099,6 +2124,92 @@ article.portal-card--premium {
 }
 .portal-live--visible .portal-live-title {
   color: var(--neo-emerald) !important;
+}
+.portal-live--visible .portal-live-muted,
+.portal-live--visible .portal-live-muted .font-semibold {
+  color: #d1fae5 !important;
+}
+.portal-live--visible .text-slate-600,
+.portal-live--visible .text-xs {
+  color: #94a3b8 !important;
+}
+.portal-live--visible .border-emerald-100,
+.portal-live--visible .border-t {
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+.portal-live--visible .text-emerald-900,
+.portal-live-accent {
+  color: var(--neo-emerald) !important;
+}
+
+.portal-live-filter {
+  background: rgba(15, 23, 42, 0.75) !important;
+  border-color: var(--neo-glass-border) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+}
+.portal-live-filter-text {
+  color: #a7f3d0 !important;
+}
+.portal-live-filter-hint {
+  color: #94a3b8 !important;
+}
+.portal-feature-filters {
+  background: rgba(15, 23, 42, 0.75) !important;
+  border-color: var(--neo-glass-border) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.portal-feature-filters-label {
+  color: #94a3b8 !important;
+}
+.portal-feature-chip {
+  background: rgba(30, 41, 59, 0.8) !important;
+  border-color: var(--neo-glass-border) !important;
+  color: #cbd5e1 !important;
+}
+.portal-feature-chip:hover,
+.portal-feature-chip--active {
+  border-color: var(--neo-emerald) !important;
+  color: var(--neo-emerald) !important;
+  background: rgba(6, 78, 59, 0.35) !important;
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25) !important;
+}
+.portal-live-filter-empty {
+  background: rgba(15, 23, 42, 0.5) !important;
+  border-color: var(--neo-glass-border) !important;
+  color: #94a3b8 !important;
+}
+.portal-favorite-btn {
+  background: rgba(30, 41, 59, 0.85) !important;
+  border-color: var(--neo-glass-border) !important;
+  color: #cbd5e1 !important;
+}
+.portal-favorite-btn:hover,
+.portal-favorite-btn--active,
+.portal-favorite-btn[aria-pressed="true"] {
+  background: rgba(120, 53, 15, 0.35) !important;
+  border-color: var(--neo-amber-400) !important;
+  color: var(--neo-amber-400) !important;
+}
+.portal-feature-badge {
+  background: rgba(30, 41, 59, 0.9) !important;
+  border-color: var(--neo-glass-border) !important;
+  color: #cbd5e1 !important;
+}
+a.portal-detail-link,
+.portal-detail-link {
+  color: var(--neo-emerald) !important;
+}
+#card-grid a.text-brand {
+  color: var(--neo-emerald) !important;
+}
+#card-grid .text-slate-600 {
+  color: #94a3b8 !important;
+}
+#result-count-line {
+  color: #94a3b8 !important;
 }
 
 /* 繝輔ぅ繝ｫ繧ｿ繝ｼ繝ｻ蝨ｰ蝓溘ヶ繝ｭ繝・け */
