@@ -81,11 +81,17 @@ a { color: inherit; }
 .border-emerald-100 { border-color: var(--emerald-100); }
 .hover\:border-brand:hover { border-color: var(--brand); }
 
+.from-brand { --tw-from: var(--brand); }
+.to-blue-700 { --tw-to: var(--blue-700); }
+.from-amber-50 { --tw-from: #fffbeb; }
+.to-white { --tw-to: #fff; }
 .bg-gradient-to-br {
-  background-image: linear-gradient(to bottom right, var(--brand), var(--blue-700));
+  background-image: linear-gradient(
+    to bottom right,
+    var(--tw-from, var(--brand)),
+    var(--tw-to, var(--blue-700))
+  );
 }
-.from-brand { /* gradient anchor */ }
-.to-blue-700 { /* gradient anchor */ }
 
 .rounded-xl { border-radius: 0.75rem; }
 .rounded-2xl { border-radius: 1rem; }
@@ -374,9 +380,6 @@ article.portal-card--favorite {
   color: var(--slate-700);
 }
 .portal-terms-list { margin: 0; }
-.bg-gradient-to-br { background-image: linear-gradient(to bottom right, var(--tw-from, #fffbeb), var(--tw-to, #fff)); }
-.from-amber-50 { --tw-from: #fffbeb; }
-.to-white { --tw-to: #fff; }
 .ring-2 { box-shadow: 0 0 0 2px var(--ring-color, #fef3c7); }
 .ring-amber-100 { --ring-color: #fef3c7; }
 .border-amber-200\/90 { border-color: rgba(253, 230, 138, 0.9); }
@@ -1960,6 +1963,43 @@ button:active,
   background: rgba(15, 23, 42, 0.6) !important;
   border-color: var(--neo-glass-border) !important;
   color: #e2e8f0 !important;
+}
+.portal-site-header.bg-white\/95,
+.portal-site-header .bg-white\/95 {
+  background: var(--neo-glass) !important;
+}
+.portal-site-header h1,
+.portal-site-header h1 a {
+  color: #f1f5f9 !important;
+}
+.portal-site-header nav a {
+  white-space: nowrap;
+  line-height: 1.35;
+}
+
+section[aria-labelledby="cta-top"],
+.portal-cta-block {
+  background: linear-gradient(to bottom right, var(--brand), var(--blue-700)) !important;
+  color: #fff !important;
+}
+section[aria-labelledby="cta-top"] h2,
+.portal-cta-block h2 {
+  color: #fff !important;
+}
+section[aria-labelledby="cta-top"] .portal-cta-btn-primary,
+.portal-cta-block .portal-cta-btn-primary {
+  background-color: #fff !important;
+  color: var(--brand) !important;
+}
+section[aria-labelledby="cta-top"] .portal-cta-btn-primary:hover,
+.portal-cta-block .portal-cta-btn-primary:hover {
+  background-color: #eff6ff !important;
+}
+section[aria-labelledby="cta-top"] .portal-cta-btn-secondary,
+.portal-cta-block .portal-cta-btn-secondary {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
 }
 
 /* 繝偵・繝ｭ繝ｼ 窶・螟懊・陦励げ繝ｩ繝・・繧ｷ繝ｧ繝ｳ */

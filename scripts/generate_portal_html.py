@@ -1323,17 +1323,17 @@ def render_header(h1: str, subtitle: str = "全国対応") -> str:
       <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
         <div>
           <p class="text-xs font-semibold tracking-wide text-brand">{html.escape(subtitle)}</p>
-          <h1 class="text-lg font-bold leading-tight sm:text-xl">
-            <a href="{html.escape(PORTAL_BASE)}" class="no-underline text-inherit hover:text-brand">{html.escape(h1)}</a>
+          <h1 class="text-lg font-bold leading-tight text-slate-100 sm:text-xl">
+            <a href="{html.escape(PORTAL_BASE)}" class="no-underline text-slate-100 hover:text-brand">{html.escape(h1)}</a>
           </h1>
         </div>
         <nav class="flex flex-wrap items-center gap-2" aria-label="サイトナビゲーション">
           <a href="{html.escape(MEMBER_REGISTER_URL)}"
-             class="rounded-xl bg-brand px-4 py-2 text-sm font-bold text-white no-underline shadow-sm transition hover:bg-blue-800">
+             class="whitespace-nowrap rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white no-underline shadow-sm transition hover:bg-blue-800">
             業者会員登録
           </a>
           <a href="{html.escape(MEMBER_LOGIN_URL)}"
-             class="rounded-xl border border-brand/30 bg-white px-4 py-2 text-sm font-semibold text-brand no-underline shadow-sm hover:bg-blue-50">
+             class="whitespace-nowrap rounded-xl border border-slate-700 bg-slate-800/80 px-4 py-2.5 text-sm font-semibold text-slate-100 no-underline shadow-sm hover:border-emerald-500/50 hover:text-emerald-400">
             会員ログイン
           </a>
           <a href="{html.escape(SITE_URL)}"
@@ -1354,7 +1354,7 @@ def render_breadcrumbs(items: list[tuple[str, str | None]]) -> str:
                 f'<a href="{html.escape(href)}" class="text-brand hover:underline">{html.escape(label)}</a>'
             )
         else:
-            parts.append(f'<span aria-current="page" class="text-slate-700">{html.escape(label)}</span>')
+            parts.append(f'<span aria-current="page" class="text-slate-300">{html.escape(label)}</span>')
     inner = ' <span class="text-slate-400">/</span> '.join(parts)
     return f"""
       <nav class="portal-breadcrumb mb-6 text-sm text-slate-500" aria-label="パンくずリスト">
@@ -1364,17 +1364,17 @@ def render_breadcrumbs(items: list[tuple[str, str | None]]) -> str:
 
 def render_cta_block() -> str:
     return f"""
-      <section class="mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-brand to-blue-700 p-6 text-white shadow-lg sm:p-8" aria-labelledby="cta-top">
-        <h2 id="cta-top" class="text-base font-bold leading-relaxed sm:text-lg">
+      <section class="portal-cta-block mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-brand to-blue-700 p-6 text-white shadow-lg sm:p-8" aria-labelledby="cta-top">
+        <h2 id="cta-top" class="text-base font-bold leading-relaxed text-white sm:text-lg">
           【運転代行業者様へ】配車・売上管理をスマートにする最新システムを導入しませんか？初期費用を抑えて業務を効率化。詳しくはこちら
         </h2>
         <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <a href="{html.escape(MEMBER_REGISTER_URL)}"
-             class="inline-flex items-center justify-center rounded-xl bg-white px-6 py-3 text-sm font-bold text-brand shadow-md transition hover:bg-blue-50 sm:text-base">
+             class="portal-cta-btn-primary inline-flex items-center justify-center rounded-xl bg-white px-6 py-3 text-sm font-bold text-brand shadow-md transition hover:bg-blue-50 sm:text-base">
             掲載情報を更新する（無料会員登録）→
           </a>
           <a href="{html.escape(SITE_URL)}"
-             class="inline-flex items-center justify-center rounded-xl border border-white/40 bg-white/10 px-6 py-3 text-sm font-bold text-white no-underline transition hover:bg-white/20 sm:text-base">
+             class="portal-cta-btn-secondary inline-flex items-center justify-center rounded-xl border border-white/40 bg-white/10 px-6 py-3 text-sm font-bold text-white no-underline transition hover:bg-white/20 sm:text-base">
             Daiko（業務管理システム）を見る →
           </a>
         </div>
