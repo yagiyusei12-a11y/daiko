@@ -15,8 +15,16 @@ ALTER TABLE transactions
   ADD COLUMN transaction_type ENUM('ride_fare', 'cancellation_fee') NOT NULL DEFAULT 'ride_fare'
     COMMENT '取引種別' AFTER company_id;
 
+-- UNIQUE を差し替える前に FK を一時解除（MySQL は参照中 INDEX を DROP できない）
+ALTER TABLE transactions DROP FOREIGN KEY fk_transactions_ride_request;
+
 ALTER TABLE transactions
   DROP INDEX uq_transactions_ride_request;
 
 ALTER TABLE transactions
   ADD UNIQUE KEY uq_transactions_ride_type (ride_request_id, transaction_type);
+
+ALTER TABLE transactions
+  ADD CONSTRAINT fk_transactions_ride_request
+    FOREIGN KEY (ride_request_id) REFERENCES ride_requests (id)
+    ON DELETE CASCADE ON UPDATE CASCADE;
