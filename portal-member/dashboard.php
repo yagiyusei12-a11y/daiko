@@ -40,118 +40,123 @@ const WAIT_TIME_OPTIONS = [
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify($_POST['csrf_token'] ?? null)) {
     $action = (string) ($_POST['action'] ?? '');
 
-    if ($action === 'profile') {
-        $stmt = db()->prepare(
-            'UPDATE companies SET name = ?, tel = ?, website = ?, prefecture = ?, city = ?, address = ?, description = ? WHERE id = ? AND user_id = ?'
-        );
-        $stmt->execute([
-            trim((string) ($_POST['name'] ?? '')),
-            trim((string) ($_POST['tel'] ?? '')) ?: null,
-            trim((string) ($_POST['website'] ?? '')) ?: null,
-            trim((string) ($_POST['prefecture'] ?? '')),
-            trim((string) ($_POST['city'] ?? '')),
-            trim((string) ($_POST['address'] ?? '')),
-            trim((string) ($_POST['description'] ?? '')) ?: null,
-            $companyId,
-            (int) $user['id'],
-        ]);
-        flash_set('success', '基本情報を保存しました。');
-    }
-
-    if ($action === 'prices') {
-        $stmt = db()->prepare(
-            'UPDATE prices SET base_distance = ?, base_price = ?, per_km_price = ?, note = ? WHERE company_id = ?'
-        );
-        $stmt->execute([
-            $_POST['base_distance'] !== '' ? (float) $_POST['base_distance'] : null,
-            $_POST['base_price'] !== '' ? (int) $_POST['base_price'] : null,
-            $_POST['per_km_price'] !== '' ? (int) $_POST['per_km_price'] : null,
-            trim((string) ($_POST['note'] ?? '')) ?: null,
-            $companyId,
-        ]);
-        flash_set('success', '料金体制を保存しました。');
-    }
-
-    if ($action === 'event') {
-        $expires = trim((string) ($_POST['expires_at'] ?? ''));
-        $expiresAt = $expires !== '' ? date('Y-m-d H:i:s', strtotime($expires)) : null;
-        $stmt = db()->prepare(
-            'UPDATE events SET is_active = ?, drivers_available = ?, event_title = ?, event_body = ?, expires_at = ? WHERE company_id = ?'
-        );
-        $stmt->execute([
-            isset($_POST['is_active']) ? 1 : 0,
-            max(0, (int) ($_POST['drivers_available'] ?? 0)),
-            trim((string) ($_POST['event_title'] ?? '')) ?: null,
-            trim((string) ($_POST['event_body'] ?? '')) ?: null,
-            $expiresAt,
-            $companyId,
-        ]);
-        flash_set('success', '本日のイベント・待機状況を保存しました。');
-    }
-
-    if ($action === 'portal_features') {
-        $waitRaw = trim((string) ($_POST['wait_time_minutes'] ?? ''));
-        $allowedWait = ['10', '20', '30', '45', '60'];
-        $waitMinutes = in_array($waitRaw, $allowedWait, true) ? (int) $waitRaw : null;
-
-        $stmt = db()->prepare(
-            'UPDATE companies SET wait_time_minutes = ?, accept_cashless = ?, is_invoice_registered = ?, has_female_driver = ?, left_hand_drive_ok = ? WHERE id = ? AND user_id = ?'
-        );
-        $stmt->execute([
-            $waitMinutes,
-            isset($_POST['accept_cashless']) ? 1 : 0,
-            isset($_POST['is_invoice_registered']) ? 1 : 0,
-            isset($_POST['has_female_driver']) ? 1 : 0,
-            isset($_POST['left_hand_drive_ok']) ? 1 : 0,
-            $companyId,
-            (int) $user['id'],
-        ]);
-        flash_set('success', 'お迎え目安・こだわり条件を保存しました。');
-    }
-
-    if ($action === 'premium_apply') {
-        $companyFresh = find_company_by_user_id((int) $user['id']) ?: $company;
-        $billingResult = invoice_create_portal_premium_billing($companyFresh, $user);
-        if ($billingResult['ok']) {
-            $slipNote = isset($billingResult['slip_id'])
-                ? '（請求伝票 ID: ' . (int) $billingResult['slip_id'] . '）'
-                : '';
-            flash_set('success', $billingResult['message'] . $slipNote);
-        } else {
-            flash_set('error', $billingResult['message']);
+    try {
+        if ($action === 'profile') {
+            $stmt = db()->prepare(
+                'UPDATE companies SET name = ?, tel = ?, website = ?, prefecture = ?, city = ?, address = ?, description = ? WHERE id = ? AND user_id = ?'
+            );
+            $stmt->execute([
+                trim((string) ($_POST['name'] ?? '')),
+                trim((string) ($_POST['tel'] ?? '')) ?: null,
+                trim((string) ($_POST['website'] ?? '')) ?: null,
+                trim((string) ($_POST['prefecture'] ?? '')),
+                trim((string) ($_POST['city'] ?? '')),
+                trim((string) ($_POST['address'] ?? '')),
+                trim((string) ($_POST['description'] ?? '')) ?: null,
+                $companyId,
+                (int) $user['id'],
+            ]);
+            flash_set('success', '基本情報を保存しました。');
         }
-    }
 
-    if ($action === 'line_link_generate') {
-        $code = line_generate_link_code($companyId);
-        flash_set('success', 'LINE連携コードを発行しました。公式アカウントに「連携 ' . $code . '」と送信してください（24時間有効）。');
-    }
+        if ($action === 'prices') {
+            $stmt = db()->prepare(
+                'UPDATE prices SET base_distance = ?, base_price = ?, per_km_price = ?, note = ? WHERE company_id = ?'
+            );
+            $stmt->execute([
+                $_POST['base_distance'] !== '' ? (float) $_POST['base_distance'] : null,
+                $_POST['base_price'] !== '' ? (int) $_POST['base_price'] : null,
+                $_POST['per_km_price'] !== '' ? (int) $_POST['per_km_price'] : null,
+                trim((string) ($_POST['note'] ?? '')) ?: null,
+                $companyId,
+            ]);
+            flash_set('success', '料金体制を保存しました。');
+        }
 
-    if ($action === 'line_save_manual') {
-        $lineUid = trim((string) ($_POST['line_user_id'] ?? ''));
-        if ($lineUid === '') {
-            flash_set('error', 'LINEユーザーIDを入力してください。');
-        } else {
-            $bind = line_bind_user_to_company($companyId, $lineUid);
-            if ($bind['ok']) {
-                flash_set('success', $bind['message']);
+        if ($action === 'event') {
+            $expires = trim((string) ($_POST['expires_at'] ?? ''));
+            $expiresAt = $expires !== '' ? date('Y-m-d H:i:s', strtotime($expires)) : null;
+            $stmt = db()->prepare(
+                'UPDATE events SET is_active = ?, drivers_available = ?, event_title = ?, event_body = ?, expires_at = ? WHERE company_id = ?'
+            );
+            $stmt->execute([
+                isset($_POST['is_active']) ? 1 : 0,
+                max(0, (int) ($_POST['drivers_available'] ?? 0)),
+                trim((string) ($_POST['event_title'] ?? '')) ?: null,
+                trim((string) ($_POST['event_body'] ?? '')) ?: null,
+                $expiresAt,
+                $companyId,
+            ]);
+            flash_set('success', '本日のイベント・待機状況を保存しました。');
+        }
+
+        if ($action === 'portal_features') {
+            $waitRaw = trim((string) ($_POST['wait_time_minutes'] ?? ''));
+            $allowedWait = ['10', '20', '30', '45', '60'];
+            $waitMinutes = in_array($waitRaw, $allowedWait, true) ? (int) $waitRaw : null;
+
+            $stmt = db()->prepare(
+                'UPDATE companies SET wait_time_minutes = ?, accept_cashless = ?, is_invoice_registered = ?, has_female_driver = ?, left_hand_drive_ok = ? WHERE id = ? AND user_id = ?'
+            );
+            $stmt->execute([
+                $waitMinutes,
+                isset($_POST['accept_cashless']) ? 1 : 0,
+                isset($_POST['is_invoice_registered']) ? 1 : 0,
+                isset($_POST['has_female_driver']) ? 1 : 0,
+                isset($_POST['left_hand_drive_ok']) ? 1 : 0,
+                $companyId,
+                (int) $user['id'],
+            ]);
+            flash_set('success', 'お迎え目安・こだわり条件を保存しました。');
+        }
+
+        if ($action === 'premium_apply') {
+            $companyFresh = find_company_by_user_id((int) $user['id']) ?: $company;
+            $billingResult = invoice_create_portal_premium_billing($companyFresh, $user);
+            if ($billingResult['ok']) {
+                $slipNote = isset($billingResult['slip_id'])
+                    ? '（請求伝票 ID: ' . (int) $billingResult['slip_id'] . '）'
+                    : '';
+                flash_set('success', $billingResult['message'] . $slipNote);
             } else {
-                flash_set('error', $bind['message']);
+                flash_set('error', $billingResult['message']);
             }
         }
-    }
 
-    if ($action === 'line_unlink') {
-        line_unbind_company($companyId);
-        flash_set('success', 'LINE連携を解除しました。');
-    }
+        if ($action === 'line_link_generate') {
+            $code = line_generate_link_code($companyId);
+            flash_set('success', 'LINE連携コードを発行しました。公式アカウントに「連携 ' . $code . '」と送信してください（24時間有効）。');
+        }
 
-    if ($action === 'user_manner') {
-        $rideRequestId = (int) ($_POST['ride_request_id'] ?? 0);
-        $manner = (string) ($_POST['user_manner_rating'] ?? '');
-        $notes = (string) ($_POST['driver_notes'] ?? '');
-        $result = review_save_user_manner($companyId, $rideRequestId, $manner, $notes);
-        flash_set($result['ok'] ? 'success' : 'error', $result['message'] ?? '保存に失敗しました。');
+        if ($action === 'line_save_manual') {
+            $lineUid = trim((string) ($_POST['line_user_id'] ?? ''));
+            if ($lineUid === '') {
+                flash_set('error', 'LINEユーザーIDを入力してください。');
+            } else {
+                $bind = line_bind_user_to_company($companyId, $lineUid);
+                if ($bind['ok']) {
+                    flash_set('success', $bind['message']);
+                } else {
+                    flash_set('error', $bind['message']);
+                }
+            }
+        }
+
+        if ($action === 'line_unlink') {
+            line_unbind_company($companyId);
+            flash_set('success', 'LINE連携を解除しました。');
+        }
+
+        if ($action === 'user_manner') {
+            $rideRequestId = (int) ($_POST['ride_request_id'] ?? 0);
+            $manner = (string) ($_POST['user_manner_rating'] ?? '');
+            $notes = (string) ($_POST['driver_notes'] ?? '');
+            $result = review_save_user_manner($companyId, $rideRequestId, $manner, $notes);
+            flash_set($result['ok'] ? 'success' : 'error', $result['message'] ?? '保存に失敗しました。');
+        }
+    } catch (Throwable $e) {
+        error_log('dashboard save [' . $action . ']: ' . $e->getMessage());
+        flash_set('error', '保存に失敗しました。時間をおいて再度お試しください。');
     }
 
     redirect('dashboard.php');
