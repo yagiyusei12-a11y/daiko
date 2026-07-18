@@ -567,19 +567,32 @@ export default function SettingsMenuPage(): JSX.Element {
 
   async function deleteEmployee(): Promise<void> {
     if (!empSel || empSel === "new") return;
-    if (!window.confirm("この従業員を削除しますか？（日報に紐づく場合は削除できません）")) return;
+    if (
+      !window.confirm(
+        "この従業員を完全に削除しますか？\n日報に一度でも紐づいている場合は削除できません。そのときは「退社年月日」を入れて保存してください。",
+      )
+    ) {
+      return;
+    }
     setBusy(true);
     setErr(null);
+    setMsg(null);
     const r = await apiFetch(`/settings/employees/${empSel}`, { method: "DELETE" });
     setBusy(false);
-    if (!r.ok) setErr(r.error);
-    else {
-      setMsg("削除しました。");
-      setEmpSel(null);
-      fillEmpForm(null);
-      await loadEmployees();
-      await loadEmployeeCompensation();
+    if (!r.ok) {
+      const msg = r.error || "削除に失敗しました。";
+      setErr(msg);
+      const retireLabel = Array.from(document.querySelectorAll("label")).find((el) =>
+        el.textContent?.includes("退社年月日"),
+      );
+      retireLabel?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
     }
+    setMsg("削除しました。");
+    setEmpSel(null);
+    fillEmpForm(null);
+    await loadEmployees();
+    await loadEmployeeCompensation();
   }
 
   async function saveEmployeeCompensation(): Promise<void> {
@@ -1019,6 +1032,9 @@ export default function SettingsMenuPage(): JSX.Element {
             <input type="date" value={empForm.hiredOn} onChange={(e) => setEmpForm({ ...empForm, hiredOn: e.target.value })} />
             <label>退社年月日</label>
             <input type="date" value={empForm.retiredOn} onChange={(e) => setEmpForm({ ...empForm, retiredOn: e.target.value })} />
+            <p className="settings-hint">
+              日報に紐づく従業員は削除できません。退職する場合はここに日付を入れて「保存」してください。
+            </p>
             <label>主な出勤日</label>
             <input
               value={empForm.usualWorkDays}

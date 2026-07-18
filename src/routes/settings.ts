@@ -516,7 +516,10 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
       where: { tenantId, OR: [{ mainEmployeeId: id }, { partnerEmployeeId: id }] },
     });
     if (tripCount > 0) {
-      return reply.code(409).send({ error: "employee has daily reports; retire instead of delete" });
+      return reply.code(409).send({
+        error:
+          "この従業員は日報に紐づいているため削除できません。「退社年月日」を入力して保存し、退職扱いにしてください。",
+      });
     }
 
     await prisma.$transaction([
@@ -702,7 +705,11 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const n = await prisma.dailyReport.count({
       where: { tenantId, OR: [{ vehicleId: id }, { escortVehicleId: id }] },
     });
-    if (n > 0) return reply.code(409).send({ error: "vehicle has daily reports" });
+    if (n > 0) {
+      return reply.code(409).send({
+        error: "この車両は日報に紐づいているため削除できません。",
+      });
+    }
     await prisma.vehicle.delete({ where: { id } });
     return { ok: true };
   });
