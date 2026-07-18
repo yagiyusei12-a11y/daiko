@@ -510,23 +510,31 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const { tenantId } = jwtUser(req);
     const id = String(req.params.id || "");
     const emp = await prisma.employee.findFirst({ where: { id, tenantId } });
-    if (!emp) return reply.code(404).send({ error: "not found" });
+    if (!emp) return reply.code(404).send({ error: "従業員が見つかりません" });
 
-    const tripCount = await prisma.dailyReport.count({
-      where: { tenantId, OR: [{ mainEmployeeId: id }, { partnerEmployeeId: id }] },
+    const asMain = await prisma.dailyReport.count({ where: { tenantId, mainEmployeeId: id } });
+    const asPartner = await prisma.dailyReport.count({ where: { tenantId, partnerEmployeeId: id } });
+
+    await prisma.$transaction(async (tx) => {
+      if (asPartner > 0) {
+        await tx.dailyReport.updateMany({
+          where: { tenantId, partnerEmployeeId: id },
+          data: { partnerEmployeeId: null },
+        });
+      }
+      if (asMain > 0) {
+        // TripLeg 等は DailyReport onDelete: Cascade
+        await tx.dailyReport.deleteMany({ where: { tenantId, mainEmployeeId: id } });
+      }
+      await tx.user.deleteMany({ where: { tenantId, employeeId: id } });
+      await tx.employee.delete({ where: { id } });
     });
-    if (tripCount > 0) {
-      return reply.code(409).send({
-        error:
-          "この従業員は日報に紐づいているため削除できません。「退社年月日」を入力して保存し、退職扱いにしてください。",
-      });
-    }
 
-    await prisma.$transaction([
-      prisma.user.deleteMany({ where: { tenantId, employeeId: id } }),
-      prisma.employee.delete({ where: { id } }),
-    ]);
-    return { ok: true };
+    return {
+      ok: true,
+      deletedDailyReportsAsMain: asMain,
+      clearedPartnerOnDailyReports: asPartner,
+    };
   });
 
   app.get("/vehicles", async (req) => {

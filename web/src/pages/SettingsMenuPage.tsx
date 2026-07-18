@@ -567,9 +567,10 @@ export default function SettingsMenuPage(): JSX.Element {
 
   async function deleteEmployee(): Promise<void> {
     if (!empSel || empSel === "new") return;
+    const name = `${empForm.familyName} ${empForm.givenName}`.trim() || "この従業員";
     if (
       !window.confirm(
-        "この従業員を完全に削除しますか？\n日報に一度でも紐づいている場合は削除できません。そのときは「退社年月日」を入れて保存してください。",
+        `「${name}」を名簿から完全に削除します。\n\n関連する日報も一緒に削除されます（取り消せません）。\nテストデータ掃除向けです。退職だけなら「退社年月日」を入れて保存してください。`,
       )
     ) {
       return;
@@ -577,18 +578,18 @@ export default function SettingsMenuPage(): JSX.Element {
     setBusy(true);
     setErr(null);
     setMsg(null);
-    const r = await apiFetch(`/settings/employees/${empSel}`, { method: "DELETE" });
+    const r = await apiFetch<{
+      ok: boolean;
+      deletedDailyReportsAsMain?: number;
+      clearedPartnerOnDailyReports?: number;
+    }>(`/settings/employees/${empSel}`, { method: "DELETE" });
     setBusy(false);
     if (!r.ok) {
-      const msg = r.error || "削除に失敗しました。";
-      setErr(msg);
-      const retireLabel = Array.from(document.querySelectorAll("label")).find((el) =>
-        el.textContent?.includes("退社年月日"),
-      );
-      retireLabel?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setErr(r.error || "削除に失敗しました。");
       return;
     }
-    setMsg("削除しました。");
+    const n = r.data?.deletedDailyReportsAsMain ?? 0;
+    setMsg(n > 0 ? `削除しました（関連日報 ${n} 件も削除）。` : "削除しました。");
     setEmpSel(null);
     fillEmpForm(null);
     await loadEmployees();
@@ -1033,7 +1034,7 @@ export default function SettingsMenuPage(): JSX.Element {
             <label>退社年月日</label>
             <input type="date" value={empForm.retiredOn} onChange={(e) => setEmpForm({ ...empForm, retiredOn: e.target.value })} />
             <p className="settings-hint">
-              日報に紐づく従業員は削除できません。退職する場合はここに日付を入れて「保存」してください。
+              退職するだけならここに日付を入れて「保存」。テストなどで名簿から消す場合は下の「完全削除」を使います。
             </p>
             <label>主な出勤日</label>
             <input
@@ -1129,7 +1130,7 @@ export default function SettingsMenuPage(): JSX.Element {
               </button>
               {empSel && empSel !== "new" ? (
                 <button type="button" className="settings-danger" disabled={busy} onClick={() => void deleteEmployee()}>
-                  削除
+                  完全削除
                 </button>
               ) : null}
             </div>
