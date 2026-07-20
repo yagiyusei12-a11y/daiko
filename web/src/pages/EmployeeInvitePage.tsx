@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { fileToCompressedDataUrl } from "../lib/image-data-url";
 import { publicFetch } from "../lib/public-api";
 
 type InviteInfo = {
@@ -8,15 +9,6 @@ type InviteInfo = {
   licenseConditionOptions: string[];
   licenseConditionOptionsByKind: Record<string, string[]>;
 };
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result as string);
-    r.onerror = reject;
-    r.readAsDataURL(file);
-  });
-}
 
 export default function EmployeeInvitePage(): JSX.Element {
   const { token } = useParams<{ token: string }>();
@@ -74,9 +66,13 @@ export default function EmployeeInvitePage(): JSX.Element {
 
   async function onPhotoFile(side: "front" | "back", file: File | null): Promise<void> {
     if (!file) return;
-    const url = await fileToDataUrl(file);
-    if (side === "front") setLicenseFrontDataUrl(url);
-    else setLicenseBackDataUrl(url);
+    try {
+      const url = await fileToCompressedDataUrl(file);
+      if (side === "front") setLicenseFrontDataUrl(url);
+      else setLicenseBackDataUrl(url);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "画像の読み込みに失敗しました");
+    }
   }
 
   async function handleSubmit(e: React.FormEvent): Promise<void> {
@@ -84,35 +80,40 @@ export default function EmployeeInvitePage(): JSX.Element {
     if (!token) return;
     setErr(null);
     setBusy(true);
-    const r = await publicFetch<{ ok: boolean }>(`/public/employee-invite/${encodeURIComponent(token)}`, {
-      method: "POST",
-      json: {
-        loginEmail: loginEmail.trim() || undefined,
-        password: password || undefined,
-        familyName,
-        givenName,
-        furigana,
-        birthDate,
-        address,
-        phone,
-        mobile,
-        usualWorkDays,
-        emergencyName,
-        emergencyTel,
-        licenseKind,
-        licenseNumber,
-        licenseExpiresOn,
-        licenseConditions,
-        licensePhotoFrontDataUrl: licenseFrontDataUrl || undefined,
-        licensePhotoBackDataUrl: licenseBackDataUrl || undefined,
-      },
-    });
-    setBusy(false);
-    if (!r.ok) {
-      setErr(r.error);
-      return;
+    try {
+      const r = await publicFetch<{ ok: boolean }>(`/public/employee-invite/${encodeURIComponent(token)}`, {
+        method: "POST",
+        json: {
+          loginEmail: loginEmail.trim() || undefined,
+          password: password || undefined,
+          familyName,
+          givenName,
+          furigana,
+          birthDate,
+          address,
+          phone,
+          mobile,
+          usualWorkDays,
+          emergencyName,
+          emergencyTel,
+          licenseKind,
+          licenseNumber,
+          licenseExpiresOn,
+          licenseConditions,
+          licensePhotoFrontDataUrl: licenseFrontDataUrl || undefined,
+          licensePhotoBackDataUrl: licenseBackDataUrl || undefined,
+        },
+      });
+      if (!r.ok) {
+        setErr(r.error);
+        return;
+      }
+      setDone(true);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "送信に失敗しました");
+    } finally {
+      setBusy(false);
     }
-    setDone(true);
   }
 
   if (!token) {
@@ -239,6 +240,7 @@ export default function EmployeeInvitePage(): JSX.Element {
             accept="image/*"
             onChange={(e) => void onPhotoFile("front", e.target.files?.[0] ?? null)}
           />
+          <p className="settings-hint">スマホ写真は自動で縮小して送信します。</p>
           {licenseFrontDataUrl ? (
             <img className="settings-photo-preview" src={licenseFrontDataUrl} alt="免許証表面" />
           ) : null}

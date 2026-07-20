@@ -9,6 +9,7 @@ import BasicSettingsPanel from "./BasicSettingsPanel";
 import TillSettingsPanel from "./TillSettingsPanel";
 import OnlineBookingSettingsPanel from "./OnlineBookingSettingsPanel";
 import { filterSubTabsForMe } from "../lib/staff-menu-client";
+import { fileToCompressedDataUrl } from "../lib/image-data-url";
 
 const JP_PREFECTURES = [
   "北海道",
@@ -697,19 +698,16 @@ export default function SettingsMenuPage(): JSX.Element {
     }
   }
 
-  function onLicensePhotoSide(side: "front" | "back", f: File | null): void {
+  async function onLicensePhotoSide(side: "front" | "back", f: File | null): Promise<void> {
     if (!f) return;
-    if (f.size > 900_000) {
-      setErr("画像が大きすぎます（900KB 以下にしてください）");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const s = typeof reader.result === "string" ? reader.result : "";
+    setErr(null);
+    try {
+      const s = await fileToCompressedDataUrl(f);
       if (side === "front") setEmpForm((p) => ({ ...p, licensePhotoFrontDataUrl: s }));
       else setEmpForm((p) => ({ ...p, licensePhotoBackDataUrl: s }));
-    };
-    reader.readAsDataURL(f);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "画像の読み込みに失敗しました");
+    }
   }
 
   function toggleLicenseCondition(label: string): void {
@@ -1115,12 +1113,12 @@ export default function SettingsMenuPage(): JSX.Element {
               ))}
             </div>
             <label>免許証の写真（表面）</label>
-            <input type="file" accept="image/*" onChange={(e) => onLicensePhotoSide("front", e.target.files?.[0] ?? null)} />
+            <input type="file" accept="image/*" onChange={(e) => void onLicensePhotoSide("front", e.target.files?.[0] ?? null)} />
             {empForm.licensePhotoFrontDataUrl ? (
               <img className="settings-photo-preview" src={empForm.licensePhotoFrontDataUrl} alt="免許証表面" />
             ) : null}
             <label>免許証の写真（裏面）</label>
-            <input type="file" accept="image/*" onChange={(e) => onLicensePhotoSide("back", e.target.files?.[0] ?? null)} />
+            <input type="file" accept="image/*" onChange={(e) => void onLicensePhotoSide("back", e.target.files?.[0] ?? null)} />
             {empForm.licensePhotoBackDataUrl ? (
               <img className="settings-photo-preview" src={empForm.licensePhotoBackDataUrl} alt="免許証裏面" />
             ) : null}

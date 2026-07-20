@@ -4,6 +4,18 @@
  */
 const API = "/api/v1";
 
+function errorFromBody(body: unknown, fallback: string): string {
+  if (typeof body === "object" && body !== null) {
+    const o = body as { error?: unknown; message?: unknown; code?: unknown };
+    if (o.code === "FST_ERR_CTP_BODY_TOO_LARGE" || (typeof o.message === "string" && /too large/i.test(o.message))) {
+      return "送信データが大きすぎます。免許証写真は小さめの画像にして再度お試しください。";
+    }
+    if (typeof o.error === "string" && o.error.trim()) return o.error;
+    if (typeof o.message === "string" && o.message.trim()) return o.message;
+  }
+  return fallback;
+}
+
 export async function publicFetch<T>(
   path: string,
   init: RequestInit & { json?: unknown } = {},
@@ -16,7 +28,12 @@ export async function publicFetch<T>(
   }
 
   const url = path.startsWith("http") ? path : `${API}${path.startsWith("/") ? path : `/${path}`}`;
-  const res = await fetch(url, { ...rest, headers });
+  let res: Response;
+  try {
+    res = await fetch(url, { ...rest, headers });
+  } catch {
+    return { ok: false, status: 0, error: "通信に失敗しました。通信環境を確認して再度お試しください。" };
+  }
 
   const text = await res.text();
   let body: unknown = null;
@@ -29,11 +46,11 @@ export async function publicFetch<T>(
   }
 
   if (!res.ok) {
-    const err =
-      typeof body === "object" && body !== null && "error" in body
-        ? String((body as { error: unknown }).error)
-        : res.statusText;
-    return { ok: false, status: res.status, error: err };
+    return {
+      ok: false,
+      status: res.status,
+      error: errorFromBody(body, res.statusText || "リクエストに失敗しました"),
+    };
   }
   return { ok: true, data: body as T };
 }

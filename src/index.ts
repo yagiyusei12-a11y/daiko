@@ -29,7 +29,11 @@ import { registerBillingWebhook } from "./routes/billing-webhook.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const app = Fastify({ logger: true });
+const app = Fastify({
+  logger: true,
+  // 免許証写真（data URL）付きの従業員招待・名簿保存向け
+  bodyLimit: 12 * 1024 * 1024,
+});
 
 /** CORS: LIFF から API を呼ぶ場合は CORS_ALLOWED_ORIGINS に LINE のオリジン（例: https://liff.line.me,https://miniapp.line.me）を追加。未設定かつ本番以外は origin: true。 */
 const origins = process.env.CORS_ALLOWED_ORIGINS?.split(",")
