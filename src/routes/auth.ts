@@ -9,6 +9,7 @@ import { hashToken, randomRefreshToken } from "../lib/tokens.js";
 import { demoTenantEnv, isDemoTenantSession } from "../lib/demo-tenant.js";
 import { isPlatformAdminEmail } from "../lib/platform-admin.js";
 import { evaluateTenantBillingAccess, trialEndsAtFrom } from "../lib/tenant-billing.js";
+import { earlyTesterAutoEnrollEnabled, earlyTesterLockedPriceYen } from "../lib/early-tester.js";
 import {
   computeLicenseExpiryNotice,
   registerExtensionStr,
@@ -104,6 +105,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const displayName = `${familyName} ${givenName}`.trim();
     const now = new Date();
     const trialEnd = trialEndsAtFrom(now);
+    const enrollEarlyTester = earlyTesterAutoEnrollEnabled();
+    const earlyPrice = earlyTesterLockedPriceYen();
     const tenant = await prisma.$transaction(async (tx) => {
       const t = await tx.tenant.create({
         data: {
@@ -113,6 +116,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           trialEndsAt: trialEnd,
           paidThroughAt: trialEnd,
           billingStatus: "TRIALING",
+          isEarlyTester: enrollEarlyTester,
+          earlyTesterPriceYen: enrollEarlyTester ? earlyPrice : null,
+          earlyTesterMarkedAt: enrollEarlyTester ? now : null,
         },
       });
       await tx.tenantSettings.create({

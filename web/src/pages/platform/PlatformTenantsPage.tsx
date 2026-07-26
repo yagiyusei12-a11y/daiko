@@ -19,6 +19,9 @@ type TenantBillingFields = {
   trialEndsAt: string | null;
   billingUpdatedAt?: string;
   stripeCustomerId?: string | null;
+  isEarlyTester?: boolean;
+  earlyTesterPriceYen?: number | null;
+  earlyTesterMarkedAt?: string | null;
 };
 
 type TenantRow = {
@@ -92,12 +95,16 @@ export default function PlatformTenantsPage(): JSX.Element {
   const [editBillingStatus, setEditBillingStatus] = useState<BillingStatus>("TRIALING");
   const [editPaidThrough, setEditPaidThrough] = useState("");
   const [editTrialEnds, setEditTrialEnds] = useState("");
+  const [editEarlyTester, setEditEarlyTester] = useState(false);
+  const [editEarlyPrice, setEditEarlyPrice] = useState("2980");
   const [billingBusy, setBillingBusy] = useState(false);
+  const [earlyTesterOnly, setEarlyTesterOnly] = useState(false);
 
   const loadList = useCallback(async () => {
     setErr(null);
     const params = new URLSearchParams({ page: String(page), limit: "50" });
     if (search) params.set("q", search);
+    if (earlyTesterOnly) params.set("earlyTester", "1");
     const r = await apiFetch<{ items: TenantRow[]; totalPages: number }>(`/platform/tenants?${params}`);
     if (!r.ok) {
       setErr(r.error);
@@ -105,7 +112,7 @@ export default function PlatformTenantsPage(): JSX.Element {
     }
     setItems(r.data.items);
     setTotalPages(r.data.totalPages);
-  }, [page, search]);
+  }, [page, search, earlyTesterOnly]);
 
   const loadDetail = useCallback(async (id: string) => {
     const r = await apiFetch<{ tenant: TenantDetail }>(`/platform/tenants/${id}`);
@@ -122,6 +129,8 @@ export default function PlatformTenantsPage(): JSX.Element {
     setEditBillingStatus(t.billingStatus ?? "TRIALING");
     setEditPaidThrough(toDatetimeLocalValue(t.paidThroughAt));
     setEditTrialEnds(toDatetimeLocalValue(t.trialEndsAt));
+    setEditEarlyTester(Boolean(t.isEarlyTester));
+    setEditEarlyPrice(String(t.earlyTesterPriceYen ?? 2980));
   }, []);
 
   useEffect(() => {
@@ -144,6 +153,8 @@ export default function PlatformTenantsPage(): JSX.Element {
         legalTradeName: editTradeName,
         legalPhone: editPhone,
         planTier: editPlan,
+        isEarlyTester: editEarlyTester,
+        earlyTesterPriceYen: editEarlyTester ? Number(editEarlyPrice) || 2980 : undefined,
       },
     });
     setBusy(false);
@@ -208,6 +219,17 @@ export default function PlatformTenantsPage(): JSX.Element {
         >
           検索
         </button>
+        <label className="platform-inline-check" style={{ marginLeft: "0.5rem" }}>
+          <input
+            type="checkbox"
+            checked={earlyTesterOnly}
+            onChange={(e) => {
+              setEarlyTesterOnly(e.target.checked);
+              setPage(1);
+            }}
+          />{" "}
+          テスターのみ
+        </label>
       </div>
 
       <div className="platform-table-wrap">
@@ -216,6 +238,7 @@ export default function PlatformTenantsPage(): JSX.Element {
             <tr>
               <th>店舗名</th>
               <th>スラッグ</th>
+              <th>テスター</th>
               <th>課金</th>
               <th>利用期限</th>
               <th>プラン</th>
@@ -237,6 +260,7 @@ export default function PlatformTenantsPage(): JSX.Element {
                 <td>
                   <code>{row.slug}</code>
                 </td>
+                <td>{row.isEarlyTester ? `✓ ${row.earlyTesterPriceYen ?? 2980}円` : "—"}</td>
                 <td>
                   <span className={`platform-billing-badge platform-billing-badge--${row.billingStatus.toLowerCase()}`}>
                     {row.billingStatus}
@@ -252,7 +276,7 @@ export default function PlatformTenantsPage(): JSX.Element {
             ))}
             {items.length === 0 ? (
               <tr>
-                <td colSpan={9}>テナントがありません</td>
+                <td colSpan={10}>テナントがありません</td>
               </tr>
             ) : null}
           </tbody>
@@ -287,6 +311,35 @@ export default function PlatformTenantsPage(): JSX.Element {
           <p>
             スラッグ: <code>{detail.slug}</code> · タイムゾーン: {detail.timezone}
           </p>
+
+          <h3 className="platform-detail-subhead">初期テスター</h3>
+          <p className="platform-detail-hint">
+            公開ベータ中の登録者は自動でテスターになります。有料化時の特別価格対象として記録します。
+            {detail.earlyTesterMarkedAt ? ` · 付与 ${formatDt(detail.earlyTesterMarkedAt)}` : ""}
+          </p>
+          <div className="platform-grid-2">
+            <div className="platform-field">
+              <label className="platform-inline-check">
+                <input
+                  type="checkbox"
+                  checked={editEarlyTester}
+                  onChange={(e) => setEditEarlyTester(e.target.checked)}
+                />{" "}
+                初期テスターとして記録する
+              </label>
+            </div>
+            <div className="platform-field">
+              <label>ロック価格（円・税込想定）</label>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={editEarlyPrice}
+                disabled={!editEarlyTester}
+                onChange={(e) => setEditEarlyPrice(e.target.value)}
+              />
+            </div>
+          </div>
 
           <h3 className="platform-detail-subhead">課金・利用期限</h3>
           <p className="platform-detail-hint">

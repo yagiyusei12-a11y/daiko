@@ -89,6 +89,11 @@ model Tenant {
   /// この日時までアプリ利用可（トライアル・Stripe・ライセンスの上限）
   paidThroughAt    DateTime?
   billingUpdatedAt DateTime             @default(now())
+  /// 公開ベータの初期テスター（有料化後の特別価格対象）
+  isEarlyTester           Boolean   @default(false)
+  /// 初期テスター向けロック価格（円・税込想定）。例: 2980
+  earlyTesterPriceYen     Int?
+  earlyTesterMarkedAt     DateTime?
 
   settings            TenantSettings?
   subscriptions       Subscription[]

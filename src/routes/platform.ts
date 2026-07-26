@@ -34,13 +34,16 @@ const BILLING_STATUSES = new Set<TenantBillingStatus>([
 ]);
 const REPLY_BODY_MAX = 20_000;
 
-function serializeTenantBilling(t: Pick<Tenant, "billingStatus" | "paidThroughAt" | "trialEndsAt" | "billingUpdatedAt" | "stripeCustomerId">) {
+function serializeTenantBilling(t: Pick<Tenant, "billingStatus" | "paidThroughAt" | "trialEndsAt" | "billingUpdatedAt" | "stripeCustomerId" | "isEarlyTester" | "earlyTesterPriceYen" | "earlyTesterMarkedAt">) {
   return {
     billingStatus: t.billingStatus,
     paidThroughAt: t.paidThroughAt?.toISOString() ?? null,
     trialEndsAt: t.trialEndsAt?.toISOString() ?? null,
     billingUpdatedAt: t.billingUpdatedAt.toISOString(),
     stripeCustomerId: t.stripeCustomerId,
+    isEarlyTester: t.isEarlyTester,
+    earlyTesterPriceYen: t.earlyTesterPriceYen,
+    earlyTesterMarkedAt: t.earlyTesterMarkedAt?.toISOString() ?? null,
   };
 }
 
@@ -274,19 +277,24 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
     return { subject, body: mailBody };
   });
 
-  app.get<{ Querystring: { q?: string; page?: string; limit?: string } }>("/tenants", async (req) => {
+  app.get<{ Querystring: { q?: string; page?: string; limit?: string; earlyTester?: string } }>("/tenants", async (req) => {
     const page = parsePage(req.query.page);
     const limit = parseLimit(req.query.limit, 50);
     const q = String(req.query.q ?? "").trim();
+    const earlyTesterRaw = String(req.query.earlyTester ?? "").trim().toLowerCase();
+    const earlyTesterOnly = earlyTesterRaw === "1" || earlyTesterRaw === "true" || earlyTesterRaw === "yes";
 
-    const where = q
-      ? {
-          OR: [
-            { name: { contains: q, mode: "insensitive" as const } },
-            { slug: { contains: q, mode: "insensitive" as const } },
-          ],
-        }
-      : {};
+    const where = {
+      ...(earlyTesterOnly ? { isEarlyTester: true } : {}),
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q, mode: "insensitive" as const } },
+              { slug: { contains: q, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+    };
 
     const [total, tenants] = await Promise.all([
       prisma.tenant.count({ where }),
@@ -437,7 +445,13 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
       if (!tenant) return reply.code(404).send({ error: "not found" });
 
       const body = req.body || {};
-      const tenantData: { name?: string; timezone?: string } = {};
+      const tenantData: {
+        name?: string;
+        timezone?: string;
+        isEarlyTester?: boolean;
+        earlyTesterPriceYen?: number | null;
+        earlyTesterMarkedAt?: Date | null;
+      } = {};
       const settingsData: {
         legalTradeName?: string;
         legalPhone?: string | null;
@@ -450,6 +464,41 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
       }
       if (body.timezone !== undefined) {
         tenantData.timezone = String(body.timezone).trim() || "Asia/Tokyo";
+      }
+      if (body.isEarlyTester !== undefined) {
+        const on = Boolean(body.isEarlyTester);
+        tenantData.isEarlyTester = on;
+        if (on) {
+          const priceRaw = body.earlyTesterPriceYen;
+          const price =
+            priceRaw === undefined || priceRaw === null || priceRaw === ""
+              ? tenant.earlyTesterPriceYen ?? 2980
+              : Number(priceRaw);
+          if (!Number.isFinite(price) || price <= 0) {
+            return reply.code(400).send({ error: "earlyTesterPriceYen invalid" });
+          }
+          tenantData.earlyTesterPriceYen = Math.round(price);
+          tenantData.earlyTesterMarkedAt = tenant.earlyTesterMarkedAt ?? new Date();
+        } else {
+          // フラグOFFでも価格履歴は残す（再ON時用）。明示クリアは null 指定時のみ。
+          if (body.earlyTesterPriceYen === null) {
+            tenantData.earlyTesterPriceYen = null;
+            tenantData.earlyTesterMarkedAt = null;
+          }
+        }
+      } else if (body.earlyTesterPriceYen !== undefined) {
+        if (body.earlyTesterPriceYen === null || body.earlyTesterPriceYen === "") {
+          tenantData.earlyTesterPriceYen = null;
+        } else {
+          const price = Number(body.earlyTesterPriceYen);
+          if (!Number.isFinite(price) || price <= 0) {
+            return reply.code(400).send({ error: "earlyTesterPriceYen invalid" });
+          }
+          tenantData.earlyTesterPriceYen = Math.round(price);
+          if (tenant.isEarlyTester && !tenant.earlyTesterMarkedAt) {
+            tenantData.earlyTesterMarkedAt = new Date();
+          }
+        }
       }
       if (body.legalTradeName !== undefined) {
         settingsData.legalTradeName = String(body.legalTradeName).trim();
