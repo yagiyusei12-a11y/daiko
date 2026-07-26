@@ -47,13 +47,17 @@ export type BillingStatusResponse = {
   billingStatus: TenantBillingStatus;
   trialEndsAt: string | null;
   paidThroughAt: string | null;
+  isEarlyTester?: boolean;
   billingUpdatedAt?: string;
   canAccessApp: boolean;
   stripeCustomerId: string | null;
   bypassReason?: string | null;
 };
 
-export function billingStatusHeadline(status: TenantBillingStatus): string {
+export function billingStatusHeadline(status: TenantBillingStatus, isEarlyTester?: boolean): string {
+  if (isEarlyTester) {
+    return "初期テスターとしてご利用中";
+  }
   switch (status) {
     case "EXPIRED":
       return "無料トライアル期間が終了しました";
@@ -76,7 +80,11 @@ export function billingStatusDetail(
   status: TenantBillingStatus,
   trialEndsAt: string | null,
   paidThroughAt: string | null,
+  isEarlyTester?: boolean,
 ): string {
+  if (isEarlyTester) {
+    return "公開βの初期テスター特典により、有料化までは期限なくご利用いただけます。";
+  }
   if (status === "EXPIRED") {
     return "引き続きご利用いただくには、Stripeでのお支払い、またはライセンスキーの登録が必要です。";
   }

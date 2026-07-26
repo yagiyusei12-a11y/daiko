@@ -1,4 +1,4 @@
-/** 公開ベータの初期テスター自動付与 */
+/** 公開ベータの初期テスター自動付与（付与時は当面利用期限なし） */
 
 export function earlyTesterAutoEnrollEnabled(): boolean {
   const raw = (process.env.EARLY_TESTER_AUTO_ENROLL ?? "1").trim().toLowerCase();

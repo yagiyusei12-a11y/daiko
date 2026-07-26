@@ -35,6 +35,7 @@ export type MeUser = {
   billingStatus?: string;
   trialEndsAt?: string | null;
   paidThroughAt?: string | null;
+  isEarlyTester?: boolean;
   /** false のとき主要機能は利用不可（課金画面へ誘導） */
   canAccessApp?: boolean;
   /** ログイン従業員の免許有効期限が2か月以内（または期限切れ）のとき */

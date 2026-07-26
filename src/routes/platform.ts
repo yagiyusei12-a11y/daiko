@@ -451,6 +451,8 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
         isEarlyTester?: boolean;
         earlyTesterPriceYen?: number | null;
         earlyTesterMarkedAt?: Date | null;
+        paidThroughAt?: Date | null;
+        trialEndsAt?: Date | null;
       } = {};
       const settingsData: {
         legalTradeName?: string;
@@ -479,6 +481,9 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
           }
           tenantData.earlyTesterPriceYen = Math.round(price);
           tenantData.earlyTesterMarkedAt = tenant.earlyTesterMarkedAt ?? new Date();
+          // 当面は初期テスターに14日制限を付けない
+          tenantData.paidThroughAt = null;
+          tenantData.trialEndsAt = null;
         } else {
           // フラグOFFでも価格履歴は残す（再ON時用）。明示クリアは null 指定時のみ。
           if (body.earlyTesterPriceYen === null) {

@@ -8,6 +8,8 @@ export type TenantBillingSnapshot = {
   billingStatus: TenantBillingStatus;
   paidThroughAt: Date | null;
   trialEndsAt: Date | null;
+  /** 公開βの初期テスターは当面期限なしで利用可 */
+  isEarlyTester?: boolean;
 };
 
 export type BillingAccessContext = {
@@ -16,7 +18,7 @@ export type BillingAccessContext = {
 };
 
 export type BillingAccessResult =
-  | { allowed: true; reason: "paid_through" | "trialing" | "demo" | "platform_admin" }
+  | { allowed: true; reason: "paid_through" | "trialing" | "early_tester" | "demo" | "platform_admin" }
   | { allowed: false; billingStatus: TenantBillingStatus };
 
 export function trialEndsAtFrom(base: Date = new Date()): Date {
@@ -37,6 +39,11 @@ export function evaluateTenantBillingAccess(
   }
   if (!tenant) {
     return { allowed: false, billingStatus: "EXPIRED" };
+  }
+
+  // 初期テスターは有料化まで期限なし（paidThroughAt が付いていてもフラグ優先）
+  if (tenant.isEarlyTester) {
+    return { allowed: true, reason: "early_tester" };
   }
 
   if (tenant.paidThroughAt && tenant.paidThroughAt.getTime() > now.getTime()) {

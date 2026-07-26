@@ -314,7 +314,7 @@ export default function PlatformTenantsPage(): JSX.Element {
 
           <h3 className="platform-detail-subhead">初期テスター</h3>
           <p className="platform-detail-hint">
-            公開ベータ中の登録者は自動でテスターになります。有料化時の特別価格対象として記録します。
+            公開ベータ中の登録者は自動でテスターになり、当面は利用期限なしです。有料化時の特別価格対象として記録します。
             {detail.earlyTesterMarkedAt ? ` · 付与 ${formatDt(detail.earlyTesterMarkedAt)}` : ""}
           </p>
           <div className="platform-grid-2">

@@ -51,7 +51,7 @@ export default function Register(): JSX.Element {
         <p className="auth-lede">事業者・店舗ID・代表者（従業員マスタ登録）を一度に作成し、オーナーとしてログインします。</p>
         <p className="settings-hint" style={{ marginBottom: "1rem" }}>
           公開β期間中のご登録は<strong>初期テスター</strong>として記録されます。有料化後も通常価格（月額5,478円）ではなく、特別価格
-          <strong>月額2,980円（税込）</strong>でご利用いただけます。まずは14日間無料です。
+          <strong>月額2,980円（税込）</strong>でご利用いただけます。当面は<strong>利用期限なし</strong>でお試しいただけます。
         </p>
         <form onSubmit={(e) => void onSubmit(e)}>
           <label>事業者名</label>

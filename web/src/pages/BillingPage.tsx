@@ -61,10 +61,11 @@ export default function BillingPage(): JSX.Element {
 
   const trialEndsAt = status?.trialEndsAt ?? me?.trialEndsAt ?? null;
   const paidThroughAt = status?.paidThroughAt ?? me?.paidThroughAt ?? null;
+  const isEarlyTester = status?.isEarlyTester ?? me?.isEarlyTester ?? false;
   const canAccessApp = status?.canAccessApp ?? me?.canAccessApp ?? false;
 
-  const headline = billingStatusHeadline(billingStatus);
-  const detail = billingStatusDetail(billingStatus, trialEndsAt, paidThroughAt);
+  const headline = billingStatusHeadline(billingStatus, isEarlyTester);
+  const detail = billingStatusDetail(billingStatus, trialEndsAt, paidThroughAt, isEarlyTester);
 
   const startCheckout = useCallback(
     async (priceId: string, planLabel: string) => {

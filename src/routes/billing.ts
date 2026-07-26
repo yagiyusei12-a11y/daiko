@@ -28,6 +28,7 @@ export async function registerBillingRoutes(app: FastifyInstance): Promise<void>
         billingStatus: true,
         trialEndsAt: true,
         paidThroughAt: true,
+        isEarlyTester: true,
         stripeCustomerId: true,
         billingUpdatedAt: true,
       },
@@ -37,6 +38,7 @@ export async function registerBillingRoutes(app: FastifyInstance): Promise<void>
         billingStatus: "EXPIRED",
         trialEndsAt: null,
         paidThroughAt: null,
+        isEarlyTester: false,
         canAccessApp: false,
         stripeCustomerId: null,
       };
@@ -47,6 +49,7 @@ export async function registerBillingRoutes(app: FastifyInstance): Promise<void>
         billingStatus: tenant.billingStatus,
         paidThroughAt: tenant.paidThroughAt,
         trialEndsAt: tenant.trialEndsAt,
+        isEarlyTester: tenant.isEarlyTester,
       },
       { email: u.email, tenantSlug: tenant.slug },
     );
@@ -55,6 +58,7 @@ export async function registerBillingRoutes(app: FastifyInstance): Promise<void>
       billingStatus: tenant.billingStatus,
       trialEndsAt: tenant.trialEndsAt?.toISOString() ?? null,
       paidThroughAt: tenant.paidThroughAt?.toISOString() ?? null,
+      isEarlyTester: tenant.isEarlyTester,
       billingUpdatedAt: tenant.billingUpdatedAt.toISOString(),
       canAccessApp: access.allowed,
       stripeCustomerId: tenant.stripeCustomerId,

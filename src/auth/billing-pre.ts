@@ -17,6 +17,7 @@ export async function requireTenantBilling(req: FastifyRequest, reply: FastifyRe
       billingStatus: true,
       paidThroughAt: true,
       trialEndsAt: true,
+      isEarlyTester: true,
     },
   });
 
@@ -26,6 +27,7 @@ export async function requireTenantBilling(req: FastifyRequest, reply: FastifyRe
           billingStatus: tenant.billingStatus,
           paidThroughAt: tenant.paidThroughAt,
           trialEndsAt: tenant.trialEndsAt,
+          isEarlyTester: tenant.isEarlyTester,
         }
       : null,
     { email: u.email, tenantSlug: tenant?.slug ?? "" },

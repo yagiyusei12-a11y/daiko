@@ -104,9 +104,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const passwordHash = await bcrypt.hash(password, 10);
     const displayName = `${familyName} ${givenName}`.trim();
     const now = new Date();
-    const trialEnd = trialEndsAtFrom(now);
     const enrollEarlyTester = earlyTesterAutoEnrollEnabled();
     const earlyPrice = earlyTesterLockedPriceYen();
+    // 初期テスターは当面期限なし。通常登録のみ14日トライアル。
+    const trialEnd = enrollEarlyTester ? null : trialEndsAtFrom(now);
     const tenant = await prisma.$transaction(async (tx) => {
       const t = await tx.tenant.create({
         data: {
@@ -225,6 +226,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
             billingStatus: true,
             trialEndsAt: true,
             paidThroughAt: true,
+            isEarlyTester: true,
             settings: { select: { legalTradeName: true, customJson: true, businessDayRollHour: true } },
           },
         },
@@ -246,6 +248,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         billingStatus: user.tenant.billingStatus,
         paidThroughAt: user.tenant.paidThroughAt,
         trialEndsAt: user.tenant.trialEndsAt,
+        isEarlyTester: user.tenant.isEarlyTester,
       },
       { email: user.email, tenantSlug: user.tenant.slug },
     );
@@ -273,6 +276,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         billingStatus: user.tenant.billingStatus,
         trialEndsAt: user.tenant.trialEndsAt?.toISOString() ?? null,
         paidThroughAt: user.tenant.paidThroughAt?.toISOString() ?? null,
+        isEarlyTester: user.tenant.isEarlyTester,
         canAccessApp: billingAccess.allowed,
         licenseExpiryNotice,
       },
