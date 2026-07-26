@@ -238,6 +238,8 @@ layout_head('新規会員登録');
     </form>
 
     <p class="mt-6 text-center text-sm text-slate-600">
+      <a href="guide.php" class="font-semibold text-brand hover:underline">使い方ガイド</a>
+      ／
       既にアカウントをお持ちの方は
       <a href="login.php" class="font-semibold text-brand hover:underline">ログイン</a>
       ／

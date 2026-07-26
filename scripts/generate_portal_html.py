@@ -1328,6 +1328,10 @@ def render_header(h1: str, subtitle: str = "全国対応") -> str:
           </h1>
         </div>
         <nav class="flex flex-wrap items-center gap-2" aria-label="サイトナビゲーション">
+          <a href="/portal-member/guide.php"
+             class="whitespace-nowrap rounded-xl border border-slate-700 bg-slate-800/80 px-4 py-2.5 text-sm font-semibold text-slate-100 no-underline shadow-sm hover:border-emerald-500/50 hover:text-emerald-400">
+            使い方
+          </a>
           <a href="{html.escape(MEMBER_REGISTER_URL)}"
              class="portal-header-register-btn whitespace-nowrap rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white no-underline transition hover:opacity-90">
             業者会員登録
@@ -1491,6 +1495,7 @@ def render_footer() -> str:
           掲載情報は Google 等の公開情報をもとに自動収集しています。内容の正確性は各事業者へご確認ください。<br />
           運営: <a href="{html.escape(SITE_URL)}" class="text-brand hover:underline">はるのゆこと / Daiko</a>
           · <a href="{html.escape(PORTAL_TERMS_PATH)}" class="text-brand hover:underline">利用規約・免責事項</a>
+          · <a href="/portal-member/guide.php" class="text-brand hover:underline">使い方ガイド</a>
           · <a href="{html.escape(MEMBER_REGISTER_URL)}" class="text-brand hover:underline">業者会員登録</a>
           · <a href="{html.escape(MEMBER_LOGIN_URL)}" class="text-brand hover:underline">会員ログイン</a>
         </p>

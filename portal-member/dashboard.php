@@ -188,6 +188,7 @@ layout_head('マイページ');
       <p class="text-xs text-slate-500">認定 <?= e($company['cert_number']) ?> · <?= e($user['role']) ?> プラン</p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
+      <a href="guide.php" class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 hover:border-emerald-400">使い方</a>
       <a href="/portal/" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:border-brand">ポータルTOP</a>
       <a href="logout.php" class="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">ログアウト</a>
     </div>
@@ -220,6 +221,7 @@ layout_head('マイページ');
           <li><a href="#sales-management" class="block rounded-lg px-2 py-1.5 hover:bg-indigo-50 font-semibold text-indigo-800">💰 売上管理</a></li>
           <li><a href="#demand-heatmap" class="block rounded-lg px-2 py-1.5 hover:bg-orange-50 font-semibold text-orange-800">🔥 需要ヒートマップ</a></li>
           <li><a href="#store-pop" class="block rounded-lg px-2 py-1.5 hover:bg-slate-50">店舗用POP</a></li>
+          <li><a href="guide.php" class="block rounded-lg px-2 py-1.5 font-semibold text-brand hover:bg-emerald-50">📖 使い方ガイド</a></li>
         </ul>
       </nav>
     </div>
