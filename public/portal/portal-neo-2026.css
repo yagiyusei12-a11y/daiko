@@ -166,6 +166,30 @@ section[aria-labelledby="cta-top"] .portal-cta-btn-secondary,
   border-color: rgba(255, 255, 255, 0.4) !important;
 }
 
+/* フッター業者向けCTA: text-slate-800 のダークテーマ上書きで白背景に薄字になるのを防ぐ */
+footer .portal-footer-cta,
+footer .rounded-2xl.border-blue-100.bg-blue-50 {
+  background: linear-gradient(135deg, #1e3a8a 0%, var(--brand) 45%, var(--blue-700) 100%) !important;
+  border-color: rgba(147, 197, 253, 0.35) !important;
+  color: #fff !important;
+}
+footer .portal-footer-cta p,
+footer .rounded-2xl.border-blue-100.bg-blue-50 p,
+footer .rounded-2xl.border-blue-100.bg-blue-50 .text-slate-800 {
+  color: #fff !important;
+}
+footer .portal-footer-cta a.bg-brand,
+footer .rounded-2xl.border-blue-100.bg-blue-50 a.bg-brand {
+  background: #fff !important;
+  color: var(--brand) !important;
+}
+footer .portal-footer-cta a.bg-white,
+footer .rounded-2xl.border-blue-100.bg-blue-50 a.bg-white {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #fff !important;
+  border-color: rgba(255, 255, 255, 0.45) !important;
+}
+
 /* ヒーロー — 夜の街グラデーション */
 .portal-hero {
   background: linear-gradient(

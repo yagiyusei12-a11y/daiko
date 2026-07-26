@@ -1472,17 +1472,17 @@ def render_footer() -> str:
     return f"""
     <footer class="mt-12 border-t border-slate-800 bg-slate-900/80 backdrop-blur-md">
       <section class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-        <div class="rounded-2xl border border-blue-100 bg-blue-50 p-6 sm:p-8">
-          <p class="text-sm font-semibold leading-relaxed text-slate-800 sm:text-base">
+        <div class="portal-footer-cta rounded-2xl border border-blue-400/30 bg-gradient-to-br from-brand to-blue-700 p-6 text-white sm:p-8">
+          <p class="text-sm font-semibold leading-relaxed text-white sm:text-base">
             【運転代行業者様へ】配車・売上管理をスマートにする最新システムを導入しませんか？初期費用を抑えて業務を効率化。詳しくはこちら
           </p>
           <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <a href="{html.escape(MEMBER_REGISTER_URL)}"
-               class="inline-flex rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white no-underline shadow-sm hover:bg-blue-800">
+               class="inline-flex rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-brand no-underline shadow-sm hover:bg-blue-50">
               業者会員登録（掲載・リアルタイム情報の更新）
             </a>
             <a href="{html.escape(SITE_URL)}"
-               class="inline-flex rounded-xl border border-brand/20 bg-white px-5 py-2.5 text-sm font-bold text-brand no-underline shadow-sm hover:bg-blue-50">
+               class="inline-flex rounded-xl border border-white/40 bg-white/10 px-5 py-2.5 text-sm font-bold text-white no-underline shadow-sm hover:bg-white/20">
               Daiko 公式サイト
             </a>
           </div>
