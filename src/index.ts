@@ -4,7 +4,7 @@ import fastifyStatic from "@fastify/static";
 import jwt from "@fastify/jwt";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
-import Fastify from "fastify";
+import Fastify, { type FastifyReply } from "fastify";
 import { existsSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -140,6 +140,18 @@ app.get("/portal/portal.css", async (_, reply) => {
 });
 
 const portalStaticRoot = join(publicAssetsRoot, "portal");
+/** 公開ポータル一時休止。再開時は .env の PORTAL_PUBLIC_CLOSED を 0/false/空にして restart */
+const portalPublicClosed = ["1", "true", "yes", "on"].includes(
+  String(process.env.PORTAL_PUBLIC_CLOSED ?? "").trim().toLowerCase()
+);
+
+function sendPortalClosedPage(reply: FastifyReply) {
+  return reply
+    .code(503)
+    .header("Retry-After", "86400")
+    .type("text/html; charset=utf-8")
+    .sendFile("portal/closed.html", publicAssetsRoot);
+}
 
 function resolvePortalSendPath(wildcard: string): string | null {
   const segments = wildcard
@@ -171,6 +183,7 @@ function resolvePortalSendPath(wildcard: string): string | null {
 }
 
 app.get("/portal/", async (_, reply) => {
+  if (portalPublicClosed) return sendPortalClosedPage(reply);
   return reply.type("text/html; charset=utf-8").sendFile("portal/index.html", publicAssetsRoot);
 });
 app.get("/portal/*", async (request, reply) => {
@@ -178,7 +191,13 @@ app.get("/portal/*", async (request, reply) => {
   if (wildcard === "portal-data.json" || wildcard === "portal.css") {
     return reply.callNotFound();
   }
+  if (wildcard === "closed.html") {
+    return reply.type("text/html; charset=utf-8").sendFile("portal/closed.html", publicAssetsRoot);
+  }
   if (wildcard === "sitemap.xml") {
+    if (portalPublicClosed) {
+      return reply.code(404).type("text/plain; charset=utf-8").send("Not Found");
+    }
     return reply
       .type("application/xml; charset=utf-8")
       .sendFile("portal/sitemap.xml", publicAssetsRoot);
@@ -189,6 +208,9 @@ app.get("/portal/*", async (request, reply) => {
   const rel = resolvePortalSendPath(wildcard);
   if (!rel) return reply.callNotFound();
   const isHtml = rel.endsWith(".html");
+  if (portalPublicClosed && isHtml) {
+    return sendPortalClosedPage(reply);
+  }
   return reply
     .type(isHtml ? "text/html; charset=utf-8" : "application/octet-stream")
     .sendFile(rel, publicAssetsRoot);
