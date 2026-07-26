@@ -129,9 +129,10 @@ return [
         'platform_fee_yen' => 200,
         'agency_compensation_yen' => 800,
     ],
-    /** 飲食店紹介キックバック（決済完了時・プラットフォーム手数料から控除） */
+    /** 飲食店紹介キックバック（廃止・付与しない） */
     'kickback' => [
-        'amount_yen' => 100,
+        'enabled' => false,
+        'amount_yen' => 0,
     ],
     'stripe' => [
         'mock_mode' => true,

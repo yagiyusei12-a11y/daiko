@@ -23,7 +23,9 @@ function kickback_config(): array
     global $config;
     $kb = is_array($config['kickback'] ?? null) ? $config['kickback'] : [];
     return [
-        'amount_yen' => max(0, (int) ($kb['amount_yen'] ?? 100)),
+        // キックバック報酬は廃止（付与しない）
+        'enabled' => false,
+        'amount_yen' => 0,
     ];
 }
 
@@ -51,90 +53,8 @@ function kickback_find_shop_user(int $shopUserId): ?array
  */
 function kickback_process_on_payment_paid(array $transaction): array
 {
-    $transactionId = (int) ($transaction['id'] ?? 0);
-    $rideRequestId = (int) ($transaction['ride_request_id'] ?? 0);
-    if ($transactionId <= 0 || $rideRequestId <= 0) {
-        return ['ok' => false, 'message' => '取引情報が不正です。'];
-    }
-    if ((string) ($transaction['transaction_type'] ?? 'ride_fare') !== 'ride_fare') {
-        return ['ok' => false, 'message' => '配車料金以外はキックバック対象外です。'];
-    }
-
-    $request = ride_fetch_request_by_id($rideRequestId);
-    if (!$request) {
-        return ['ok' => false, 'message' => '配車リクエストが見つかりません。'];
-    }
-
-    $shopUserId = (int) ($request['referred_by_shop_id'] ?? 0);
-    if ($shopUserId <= 0) {
-        return ['ok' => false, 'message' => '紹介飲食店なし。'];
-    }
-
-    $shop = kickback_find_shop_user($shopUserId);
-    if (!$shop) {
-        return ['ok' => false, 'message' => '紹介飲食店アカウントが無効です。'];
-    }
-
-    $ledgerCheck = db()->prepare('SELECT id FROM shop_kickback_ledger WHERE transaction_id = ? LIMIT 1');
-    $ledgerCheck->execute([$transactionId]);
-    if ($ledgerCheck->fetch(PDO::FETCH_ASSOC)) {
-        return ['ok' => true, 'message' => 'キックバック処理済みです。'];
-    }
-
-    $cfg = kickback_config();
-    $kickbackAmount = (int) $cfg['amount_yen'];
-    if ($kickbackAmount <= 0) {
-        return ['ok' => false, 'message' => 'キックバック額が未設定です。'];
-    }
-
-    $platformFee = (int) ($transaction['platform_fee'] ?? 0);
-    $applied = min($kickbackAmount, $platformFee);
-    if ($applied <= 0) {
-        return ['ok' => false, 'message' => '手数料が不足のためキックバックを付与できません。'];
-    }
-
-    $pdo = db();
-    $pdo->beginTransaction();
-    try {
-        $updTxn = $pdo->prepare(
-            'UPDATE transactions
-             SET platform_fee = platform_fee - ?, kickback_amount = ?
-             WHERE id = ? AND payment_status = ?'
-        );
-        $updTxn->execute([$applied, $applied, $transactionId, 'paid']);
-        if ($updTxn->rowCount() === 0) {
-            $pdo->rollBack();
-            return ['ok' => false, 'message' => '取引のキックバック更新に失敗しました。'];
-        }
-
-        $pdo->prepare('UPDATE users SET kickback_balance = kickback_balance + ? WHERE id = ?')
-            ->execute([$applied, $shopUserId]);
-
-        $pdo->prepare(
-            'INSERT INTO shop_kickback_ledger (shop_user_id, ride_request_id, transaction_id, amount_yen)
-             VALUES (?, ?, ?, ?)'
-        )->execute([$shopUserId, $rideRequestId, $transactionId, $applied]);
-
-        $pdo->commit();
-    } catch (Throwable $e) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        error_log('kickback_process_on_payment_paid: ' . $e->getMessage());
-        return ['ok' => false, 'message' => 'キックバック処理に失敗しました。'];
-    }
-
-    $txnFresh = kickback_payment_find_transaction($transactionId);
-    $invoiceResult = kickback_invoice_create_payable_entry($txnFresh ?: $transaction, $shop, $applied);
-
-    return [
-        'ok' => true,
-        'message' => 'キックバックを付与しました。',
-        'kickback_amount' => $applied,
-        'slip_id' => $invoiceResult['slip_id'] ?? null,
-        'invoice_ok' => $invoiceResult['ok'] ?? false,
-        'invoice_message' => $invoiceResult['message'] ?? '',
-    ];
+    // キックバック報酬機能は廃止
+    return ['ok' => true, 'message' => 'キックバックは無効です。', 'kickback_amount' => 0];
 }
 
 /**

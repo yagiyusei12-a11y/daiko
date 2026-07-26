@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $user = find_user_by_email($email);
             if ($user) {
                 auth_login($user);
-                flash_set('success', '飲食店アカウントを登録しました。紹介用URLをマイページで確認できます。');
+                flash_set('success', '飲食店アカウントを登録しました。店頭用URLをマイページで確認できます。');
                 redirect('shop-dashboard.php');
             }
             $errors[] = '登録に失敗しました。';
@@ -62,7 +62,7 @@ layout_head('飲食店提携登録');
   <div class="rounded-2xl border border-amber-200 bg-white p-6 shadow-sm sm:p-8">
     <h1 class="text-xl font-bold text-amber-900">🍽 飲食店提携登録</h1>
     <p class="mt-2 text-sm text-slate-600">
-      お店専用URLから代行を紹介すると、決済完了ごとにキックバック報酬が貯まります。
+      お店専用の飲食店モードURLを発行できます。営業中の代行だけを大きく表示し、お客様がすぐ電話できるようになります。
     </p>
 
     <?php if ($errors !== []): ?>

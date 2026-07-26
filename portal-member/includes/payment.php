@@ -298,10 +298,6 @@ SQL
         coupon_mark_used_for_ride($rideRequestId, $couponId);
     }
 
-    require_once __DIR__ . '/kickback.php';
-    $kickbackResult = kickback_process_on_payment_paid($txnFresh);
-    $txnFresh = payment_find_transaction_by_id($transactionId) ?: $txnFresh;
-
     $invoiceResult = invoice_create_ride_platform_fee_entry($txnFresh, $chargeId);
     if ($invoiceResult['ok'] && !empty($invoiceResult['slip_id'])) {
         db()->prepare('UPDATE transactions SET invoice_slip_id = ? WHERE id = ?')
@@ -314,8 +310,6 @@ SQL
         'slip_id' => $invoiceResult['slip_id'] ?? null,
         'invoice_ok' => $invoiceResult['ok'],
         'invoice_message' => $invoiceResult['message'] ?? '',
-        'kickback_ok' => $kickbackResult['ok'] ?? false,
-        'kickback_amount' => $kickbackResult['kickback_amount'] ?? 0,
     ];
 }
 
