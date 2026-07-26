@@ -225,10 +225,12 @@ DAIKO_ROOT=/home/ubuntu/daiko
 PHP_SOCK=/run/php/php8.3-fpm.sock   # 環境に合わせて変更
 
 sudo tee /etc/nginx/sites-available/portal-member-internal >/dev/null <<NGINX
-# portal-member: PHP only on internal port (Caddy -> 9080)
+# portal-member: PHP only on internal port (Caddy -> host.docker.internal:9080)
+# host.docker.internal は 172.17.0.1 または 172.19.0.1 に解決されるため両方 listen する
 server {
     listen 127.0.0.1:9080;
     listen 172.17.0.1:9080;
+    listen 172.19.0.1:9080;
     listen [::1]:9080;
     server_name localhost;
 
@@ -281,6 +283,33 @@ sudo ss -tlnp | grep 9080
 | `/portal-member/*` | Nginx:9080 → PHP-FPM |
 | `/portal/` 他 | Caddy → Node:3001（既存） |
 | `/app/` `/api/` 等 | Caddy → Node:3001（既存） |
+
+### 4-4. 502 Bad Gateway になったとき
+
+症状: `/portal-member/login.php` や `api/get_live_info.php` がすべて 502。静的の `/portal/` は 200。
+
+よくある原因:
+
+1. **PHP-FPM の `listen` が Unix ソケットではない**  
+   Nginx は `unix:/run/php/php8.3-fpm.sock` を想定。`listen = 172.19.0.1:9000` などに変わっているとソケットが消え 502。  
+   → `/etc/php/8.3/fpm/pool.d/www.conf` を `listen = /run/php/php8.3-fpm.sock` に戻し `sudo systemctl restart php8.3-fpm`
+
+2. **Nginx が Docker ブリッジ IP で listen していない**  
+   Caddy の `host.docker.internal` が `172.19.0.1` のとき、9080 が `127.0.0.1` / `172.17.0.1` だけだと connection refused。  
+   → `listen 172.19.0.1:9080;` を追加して `sudo nginx -t && sudo systemctl reload nginx`
+
+3. **`sites-enabled` に `.bak` が残っている**  
+   server 名衝突で listen が無視される。バックアップは `/etc/nginx/backup/` へ移す。
+
+確認コマンド:
+
+```bash
+ss -lntp | grep 9080
+ls -la /run/php/php8.3-fpm.sock
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:9080/portal-member/login.php
+curl -sS -o /dev/null -w '%{http_code}\n' https://daiko.harunoyukoto.jp/portal-member/login.php
+docker exec vps-caddy-1 wget -q -O - -S http://host.docker.internal:9080/portal-member/api/get_live_info.php 2>&1 | head
+```
 
 ---
 

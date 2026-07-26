@@ -107,6 +107,18 @@ button:active,
 header.portal-site-header {
   background: rgba(15, 23, 42, 0.92) !important;
 }
+/* 旧HTML（bg-white/95・portal-site-header 無し）でもヘッダー文字が消えないようにする */
+header.sticky[class*="bg-white"],
+header.sticky.border-b {
+  background: rgba(15, 23, 42, 0.92) !important;
+  border-color: rgba(51, 65, 85, 0.85) !important;
+}
+header.sticky h1,
+header.sticky h1 a,
+header.sticky .text-inherit,
+header.sticky p.text-xs {
+  color: #f1f5f9 !important;
+}
 .portal-site-header a.rounded-xl.bg-brand {
   color: #fff !important;
   text-shadow: none !important;

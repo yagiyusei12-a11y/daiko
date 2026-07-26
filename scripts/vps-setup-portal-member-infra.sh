@@ -117,10 +117,12 @@ log "config.php OK"
 sudo apt-get install -y -qq nginx
 
 sudo tee "${NGINX_SITE}" >/dev/null <<NGINX
-# portal-member internal (Caddy -> 127.0.0.1:9080)
+# portal-member internal (Caddy -> host.docker.internal:9080)
+# host.docker.internal は Docker ブリッジ IP（172.17.0.1 または 172.19.0.1）に解決されるため両方 listen する
 server {
     listen 127.0.0.1:9080;
     listen 172.17.0.1:9080;
+    listen 172.19.0.1:9080;
     listen [::1]:9080;
     server_name localhost;
 
@@ -151,11 +153,14 @@ NGINX
 
 sudo ln -sf "${NGINX_SITE}" /etc/nginx/sites-enabled/portal-member-internal
 sudo rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+# sites-enabled に .bak が残ると server 衝突で listen が無視される
+sudo mkdir -p /etc/nginx/backup
+sudo mv -f /etc/nginx/sites-enabled/*.bak* /etc/nginx/backup/ 2>/dev/null || true
 sudo nginx -t
 sudo systemctl enable nginx
 sudo systemctl start nginx 2>/dev/null || true
 sudo systemctl reload nginx
-log "nginx started on 127.0.0.1:9080 and 172.17.0.1:9080 (for Docker Caddy)"
+log "nginx started on 127.0.0.1/172.17.0.1/172.19.0.1:9080 (for Docker Caddy host.docker.internal)"
 
 # --- 5. Caddy: /portal-member -> nginx:9080（本番の HTTPS 手前は Docker Caddy）---
 if [[ -f "${CADDY_FILE}" ]] && ! grep -q 'portal-member' "${CADDY_FILE}"; then
