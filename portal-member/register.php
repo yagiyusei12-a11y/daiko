@@ -4,7 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/includes/bootstrap.php';
 
 if (auth_user()) {
-    redirect('dashboard.php');
+    redirect(auth_home_path());
 }
 
 $initialPref = prefecture_from_query((string) ($_GET['pref'] ?? ''));
@@ -53,6 +53,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($prefecture === '' || !prefecture_is_valid($prefecture)) {
             $errors[] = '都道府県を選択してください。';
+        }
+        if (empty($_POST['agree_terms'])) {
+            $errors[] = '利用規約への同意が必要です。';
         }
         if ($errors === [] && find_user_by_email($email)) {
             $errors[] = 'このメールアドレスは既に登録されています。';
@@ -211,15 +214,34 @@ layout_head('新規会員登録');
                class="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5" />
       </div>
 
-      <button type="submit"
-              class="w-full rounded-xl bg-brand py-3 text-sm font-bold text-white hover:bg-blue-800">
-        無料で掲載登録する
-      </button>
+      <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <label class="flex cursor-pointer items-start gap-3 text-sm text-slate-700">
+          <input type="checkbox" name="agree_terms" value="1" required
+                 class="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-brand focus:ring-brand" />
+          <span>
+            <a href="/portal/terms/" target="_blank" rel="noopener noreferrer" class="font-semibold text-brand hover:underline">利用規約・免責事項</a>
+            およびプライバシーポリシーに同意します *
+          </span>
+        </label>
+      </div>
+
+      <div class="flex flex-col gap-3 sm:flex-row-reverse">
+        <button type="submit"
+                class="w-full rounded-xl bg-brand py-3 text-sm font-bold text-white hover:bg-blue-800 sm:w-auto sm:min-w-[12rem] sm:px-6">
+          無料で掲載登録する
+        </button>
+        <a href="/portal/"
+           class="inline-flex w-full items-center justify-center rounded-xl border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-700 no-underline hover:bg-slate-50 sm:w-auto sm:min-w-[8rem] sm:px-6">
+          キャンセル
+        </a>
+      </div>
     </form>
 
     <p class="mt-6 text-center text-sm text-slate-600">
       既にアカウントをお持ちの方は
       <a href="login.php" class="font-semibold text-brand hover:underline">ログイン</a>
+      ／
+      <a href="/portal/" class="font-semibold text-slate-500 hover:underline">ポータルTOP</a>
     </p>
   </div>
 </main>
