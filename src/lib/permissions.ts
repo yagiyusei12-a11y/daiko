@@ -59,6 +59,50 @@ export function isFullNavUser(permissions: string[]): boolean {
   return permissions.includes("*") || permissions.includes("nav.full");
 }
 
+/**
+ * 従業員マスタの「管理者」に合わせて、紐づくログインユーザーのロールを同期する。
+ * adminMaster=true → owner（*） / false → staff（staff.shift）
+ * テナント内に * 権限ユーザーが0人になる降格は拒否する。
+ */
+export async function syncLinkedUserRoleForAdminMaster(
+  tenantId: string,
+  userId: string,
+  adminMaster: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const ownerRole = await prisma.role.findFirst({ where: { tenantId, name: "owner" } });
+  const staffRole = await prisma.role.findFirst({ where: { tenantId, name: "staff" } });
+  if (!ownerRole || !staffRole) {
+    return { ok: false, error: "テナントの権限ロールが見つかりません" };
+  }
+
+  if (!adminMaster) {
+    const stillAdmin = await userHasWildcard(userId, tenantId);
+    if (stillAdmin) {
+      const users = await prisma.user.findMany({
+        where: { tenantId },
+        select: { id: true },
+      });
+      let wildcardCount = 0;
+      for (const u of users) {
+        if (await userHasWildcard(u.id, tenantId)) wildcardCount += 1;
+      }
+      if (wildcardCount <= 1) {
+        return {
+          ok: false,
+          error: "最後の管理者の権限は外せません。先に別の従業員を管理者にしてください。",
+        };
+      }
+    }
+  }
+
+  const targetRoleId = adminMaster ? ownerRole.id : staffRole.id;
+  await prisma.$transaction(async (tx) => {
+    await tx.userRole.deleteMany({ where: { userId } });
+    await tx.userRole.create({ data: { userId, roleId: targetRoleId } });
+  });
+  return { ok: true };
+}
+
 /** 勤務ウィザード中心のスタッフ（フルでない） */
 export function isStaffShiftOnly(permissions: string[]): boolean {
   return permissions.includes("staff.shift") && !isFullNavUser(permissions);

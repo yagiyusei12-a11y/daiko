@@ -80,7 +80,7 @@ export default function Register(): JSX.Element {
             従業員マスタの管理者
           </label>
           <p className="settings-hint" style={{ marginTop: "-0.35rem" }}>
-            チェックすると名簿の「管理者」に相当する権限が付きます（システムのオーナー権限とは別です）。
+            チェックすると名簿の「管理者」になり、ログイン後に全メニューが使えます。
           </p>
           <label>ログイン用メールアドレス</label>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />

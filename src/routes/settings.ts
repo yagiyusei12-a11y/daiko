@@ -31,6 +31,7 @@ import {
   mergeStaffMenuVisibilityIntoCustomJson,
   parseStaffMenuVisibilityPut,
 } from "../lib/staff-menu-visibility-settings.js";
+import { syncLinkedUserRoleForAdminMaster } from "../lib/permissions.js";
 import { prisma } from "../db.js";
 import { reverseGeocodeTownJaCached } from "../lib/reverse-geocode-cache.js";
 import { appendVehicleOdometerAndSetCurrent } from "../lib/vehicle-odometer.js";
@@ -396,8 +397,10 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
       if (password.length < 8) return reply.code(400).send({ error: "password min 8 chars when loginEmail set" });
       const exists = await prisma.user.findFirst({ where: { tenantId, email: loginEmail } });
       if (exists) return reply.code(409).send({ error: "login email already used" });
+      const ownerRole = await prisma.role.findFirst({ where: { tenantId, name: "owner" } });
       const staffRole = await prisma.role.findFirst({ where: { tenantId, name: "staff" } });
-      if (!staffRole) return reply.code(500).send({ error: "staff role missing" });
+      if (!ownerRole || !staffRole) return reply.code(500).send({ error: "staff role missing" });
+      const roleId = adminMaster ? ownerRole.id : staffRole.id;
 
       const passwordHash = await bcrypt.hash(password, 10);
       const emp = await prisma.$transaction(async (tx) => {
@@ -418,7 +421,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
         const u = await tx.user.create({
           data: { tenantId, email: loginEmail, passwordHash, displayName: `${familyName} ${givenName}`, employeeId: e.id },
         });
-        await tx.userRole.create({ data: { userId: u.id, roleId: staffRole.id } });
+        await tx.userRole.create({ data: { userId: u.id, roleId } });
         return e;
       });
       return { id: emp.id };
@@ -487,6 +490,12 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
         if (taken) return reply.code(409).send({ error: "このログインIDは既に使われています" });
         await prisma.user.update({ where: { id: uid }, data: { email: nextEmail } });
       }
+    }
+
+    if (b.adminMaster !== undefined && emp.linkedUsers[0]) {
+      const nextAdmin = Boolean(b.adminMaster);
+      const sync = await syncLinkedUserRoleForAdminMaster(tenantId, emp.linkedUsers[0].id, nextAdmin);
+      if (!sync.ok) return reply.code(400).send({ error: sync.error });
     }
 
     await prisma.employee.update({

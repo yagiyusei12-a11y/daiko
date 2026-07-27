@@ -1023,6 +1023,9 @@ export default function SettingsMenuPage(): JSX.Element {
                 安全運転管理者
               </label>
             </div>
+            <p className="settings-hint">
+              「管理者」にチェックすると、ログイン後に全メニュー（設定含む）が使えるようになります。ログインアカウントがある場合のみ反映されます。反映後は再ログインしてください。
+            </p>
             <label>電話番号</label>
             <input value={empForm.phone} onChange={(e) => setEmpForm({ ...empForm, phone: e.target.value })} />
             <label>携帯電話</label>

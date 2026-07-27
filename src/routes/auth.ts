@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import type { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { authenticate } from "../auth/pre.js";
-import { userEffectivePermissionList } from "../lib/permissions.js";
+import { userEffectivePermissionList, syncLinkedUserRoleForAdminMaster, userHasWildcard } from "../lib/permissions.js";
 import { coerceStaffMenuVisibilityFromCustomJson } from "../lib/staff-menu-visibility-settings.js";
 import { prisma } from "../db.js";
 import { hashToken, randomRefreshToken } from "../lib/tokens.js";
