@@ -179,6 +179,16 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       return reply.code(401).send({ error: "invalid credentials" });
     }
+    // 従業員マスタで「管理者」済みなら、ログイン時に全メニュー権限を付与（既存データ救済）
+    if (user.employeeId) {
+      const emp = await prisma.employee.findFirst({
+        where: { id: user.employeeId, tenantId: tenant.id },
+        select: { adminMaster: true },
+      });
+      if (emp?.adminMaster && !(await userHasWildcard(user.id, tenant.id))) {
+        await syncLinkedUserRoleForAdminMaster(tenant.id, user.id, true);
+      }
+    }
     return issueTokens(reply, user.id, user.tenantId, user.email);
   });
 
