@@ -67,19 +67,6 @@ function startOfTokyoDayFromYmd(ymd: string): Date {
   return new Date(`${ymd}T00:00:00+09:00`);
 }
 
-function pctToBps(raw: unknown): number {
-  const n = Number(String(raw ?? "").replace(/,/g, "").trim());
-  if (!Number.isFinite(n) || n <= 0) return 0;
-  if (n >= 100) return 10000;
-  return Math.round(n * 100);
-}
-
-function bpsToPctDisplay(bps: number): string {
-  const x = Math.round(bps) / 100;
-  if (Math.abs(x - Math.round(x)) < 1e-9) return String(Math.round(x));
-  return x.toFixed(2).replace(/\.?0+$/, "");
-}
-
 function parseYenInt(raw: unknown): number {
   const n = Number(String(raw ?? "").replace(/,/g, "").trim());
   if (!Number.isFinite(n) || n < 0) return 0;
@@ -875,12 +862,13 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
         period: p
           ? {
               id: p.id,
-              compensationType: p.compensationType,
+              // 賃金は時給のみ（既存DBに歩合値が残っていてもUI/計算には出さない）
+              compensationType: CompensationType.HOURLY_ONLY,
               mainHourlyYen: p.mainHourlyYen,
               partnerHourlyYen: p.partnerHourlyYen,
               phoneHourlyYen: p.phoneHourlyYen,
-              mainCommissionPct: bpsToPctDisplay(p.commissionMainRateBps),
-              partnerCommissionPct: bpsToPctDisplay(p.commissionPartnerRateBps),
+              mainCommissionPct: "0",
+              partnerCommissionPct: "0",
             }
           : null,
       });
@@ -899,8 +887,6 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const anchor = new Date();
     const todayTokyoStart = startOfTokyoDayFromYmd(ymdInTokyo(anchor));
 
-    const allowed = new Set<string>(Object.values(CompensationType));
-
     try {
       await prisma.$transaction(async (tx) => {
         for (const raw of rawRows) {
@@ -914,17 +900,14 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
             throw new Error(`従業員が見つかりません: ${employeeId}`);
           }
 
-          const ctStr = String(o.compensationType ?? "").trim();
-          if (!allowed.has(ctStr)) {
-            throw new Error(`賃金体系が不正です: ${ctStr || "(空)"}`);
-          }
-          const compensationType = ctStr as CompensationType;
+          // 賃金は時給のみ（歩合は廃止）
+          const compensationType = CompensationType.HOURLY_ONLY;
 
           const mainHourlyYen = parseYenInt(o.mainHourlyYen);
           const partnerHourlyYen = parseYenInt(o.partnerHourlyYen);
           const phoneHourlyYen = parseYenInt(o.phoneHourlyYen);
-          const commissionMainRateBps = pctToBps(o.mainCommissionPct);
-          const commissionPartnerRateBps = pctToBps(o.partnerCommissionPct);
+          const commissionMainRateBps = 0;
+          const commissionPartnerRateBps = 0;
           const baseHourlyYen = mainHourlyYen;
 
           const existing = await tx.employeeCompensationPeriod.findFirst({

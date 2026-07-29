@@ -91,19 +91,14 @@ type EmployeeRow = {
   isOwner: boolean;
 };
 
-type EmployeeCompCompensationType = "HOURLY_ONLY" | "COMMISSION_ONLY" | "HOURLY_AND_COMMISSION";
-
 type EmployeeCompRowDraft = {
   employeeId: string;
   familyName: string;
   givenName: string;
   status: string;
-  compensationType: EmployeeCompCompensationType;
   mainHourlyYen: string;
   partnerHourlyYen: string;
   phoneHourlyYen: string;
-  mainCommissionPct: string;
-  partnerCommissionPct: string;
 };
 
 type VehicleRow = {
@@ -285,23 +280,16 @@ export default function SettingsMenuPage(): JSX.Element {
       setErr(r.error);
       return;
     }
-    const allowed: EmployeeCompCompensationType[] = ["HOURLY_ONLY", "COMMISSION_ONLY", "HOURLY_AND_COMMISSION"];
     setCompRows(
       (r.data.rows ?? []).map((row) => {
-        const ct = row.period?.compensationType;
-        const compensationType: EmployeeCompCompensationType =
-          ct && allowed.includes(ct as EmployeeCompCompensationType) ? (ct as EmployeeCompCompensationType) : "HOURLY_ONLY";
         return {
           employeeId: row.employeeId,
           familyName: row.familyName,
           givenName: row.givenName,
           status: row.status,
-          compensationType,
           mainHourlyYen: row.period != null ? String(row.period.mainHourlyYen) : "",
           partnerHourlyYen: row.period != null ? String(row.period.partnerHourlyYen) : "",
           phoneHourlyYen: row.period != null ? String(row.period.phoneHourlyYen) : "",
-          mainCommissionPct: row.period?.mainCommissionPct ?? "",
-          partnerCommissionPct: row.period?.partnerCommissionPct ?? "",
         };
       }),
     );
@@ -606,12 +594,12 @@ export default function SettingsMenuPage(): JSX.Element {
       json: {
         rows: compRows.map((c) => ({
           employeeId: c.employeeId,
-          compensationType: c.compensationType,
+          compensationType: "HOURLY_ONLY",
           mainHourlyYen: c.mainHourlyYen,
           partnerHourlyYen: c.partnerHourlyYen,
           phoneHourlyYen: c.phoneHourlyYen,
-          mainCommissionPct: c.mainCommissionPct,
-          partnerCommissionPct: c.partnerCommissionPct,
+          mainCommissionPct: "0",
+          partnerCommissionPct: "0",
         })),
       },
     });
@@ -1145,7 +1133,7 @@ export default function SettingsMenuPage(): JSX.Element {
   const employeesCompPanel = (
     <div className="settings-comp-col">
       <p className="settings-hint" style={{ marginTop: 0 }}>
-        現在有効な報酬です。「賃金を保存」で一覧の全員分をまとめて保存します（未登録の従業員は今日付の報酬期間が作成されます）。歩合率は百分率（5.5% は 5.5 と入力）。
+        賃金は時給のみです。「賃金を保存」で一覧の全員分をまとめて保存します（未登録の従業員は今日付の報酬期間が作成されます）。
       </p>
       <div className="settings-form" style={{ marginBottom: "1.25rem" }}>
         <p className="settings-hint" style={{ marginTop: 0 }}>
@@ -1212,12 +1200,9 @@ export default function SettingsMenuPage(): JSX.Element {
           <thead>
             <tr>
               <th>氏名</th>
-              <th>賃金体系</th>
               <th>客車時給（円）</th>
               <th>随伴車時給（円）</th>
               <th>電話時給（円）</th>
-              <th>客車歩合（%）</th>
-              <th>随伴車歩合（%）</th>
             </tr>
           </thead>
           <tbody>
@@ -1225,26 +1210,6 @@ export default function SettingsMenuPage(): JSX.Element {
               <tr key={row.employeeId} className={row.status === "RETIRED" ? "settings-comp-row--retired" : undefined}>
                 <td>
                   {row.familyName} {row.givenName}
-                </td>
-                <td>
-                  <select
-                    className="settings-comp-select"
-                    value={row.compensationType}
-                    aria-label={`${row.familyName} 賃金体系`}
-                    onChange={(e) =>
-                      setCompRows((xs) =>
-                        xs.map((x) =>
-                          x.employeeId === row.employeeId
-                            ? { ...x, compensationType: e.target.value as EmployeeCompCompensationType }
-                            : x,
-                        ),
-                      )
-                    }
-                  >
-                    <option value="HOURLY_ONLY">時給</option>
-                    <option value="COMMISSION_ONLY">歩合</option>
-                    <option value="HOURLY_AND_COMMISSION">時給+歩合</option>
-                  </select>
                 </td>
                 <td>
                   <input
@@ -1287,42 +1252,6 @@ export default function SettingsMenuPage(): JSX.Element {
                     onChange={(e) =>
                       setCompRows((xs) =>
                         xs.map((x) => (x.employeeId === row.employeeId ? { ...x, phoneHourlyYen: e.target.value } : x)),
-                      )
-                    }
-                  />
-                </td>
-                <td>
-                  <input
-                    className="settings-comp-num"
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.01}
-                    inputMode="decimal"
-                    aria-label={`${row.familyName} 客車歩合`}
-                    value={row.mainCommissionPct}
-                    onChange={(e) =>
-                      setCompRows((xs) =>
-                        xs.map((x) => (x.employeeId === row.employeeId ? { ...x, mainCommissionPct: e.target.value } : x)),
-                      )
-                    }
-                  />
-                </td>
-                <td>
-                  <input
-                    className="settings-comp-num"
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.01}
-                    inputMode="decimal"
-                    aria-label={`${row.familyName} 随伴車歩合`}
-                    value={row.partnerCommissionPct}
-                    onChange={(e) =>
-                      setCompRows((xs) =>
-                        xs.map((x) =>
-                          x.employeeId === row.employeeId ? { ...x, partnerCommissionPct: e.target.value } : x,
-                        )
                       )
                     }
                   />
