@@ -5,7 +5,7 @@ import jwt from "@fastify/jwt";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import Fastify, { type FastifyReply } from "fastify";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { prisma } from "./db.js";
@@ -114,6 +114,11 @@ await app.register(fastifyStatic, {
 });
 
 const publicAssetsRoot = join(__dirname, "../public");
+/** 公開ポータル一時休止。再開時は .env の PORTAL_PUBLIC_CLOSED を 0/false/空にして restart */
+const portalPublicClosed = ["1", "true", "yes", "on"].includes(
+  String(process.env.PORTAL_PUBLIC_CLOSED ?? "").trim().toLowerCase()
+);
+
 await app.register(fastifyStatic, {
   root: join(publicAssetsRoot, "images"),
   prefix: "/images/",
@@ -123,9 +128,30 @@ app.get("/favicon.ico", async (_, reply) => {
   return reply.sendFile("favicon.ico", publicAssetsRoot);
 });
 app.get("/robots.txt", async (_, reply) => {
+  if (portalPublicClosed) {
+    return reply.type("text/plain; charset=utf-8").send(
+      [
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /portal/",
+        "",
+        "Sitemap: https://daiko.harunoyukoto.jp/sitemap.xml",
+        "",
+      ].join("\n")
+    );
+  }
   return reply.type("text/plain; charset=utf-8").sendFile("robots.txt", publicAssetsRoot);
 });
 app.get("/sitemap.xml", async (_, reply) => {
+  if (portalPublicClosed) {
+    const raw = readFileSync(join(publicAssetsRoot, "sitemap.xml"), "utf8");
+    // 休止中は /portal/ をサイトマップから除外
+    const filtered = raw.replace(
+      /\s*<url>\s*<loc>https:\/\/daiko\.harunoyukoto\.jp\/portal\/?<\/loc>[\s\S]*?<\/url>/g,
+      ""
+    );
+    return reply.type("application/xml; charset=utf-8").send(filtered);
+  }
   return reply.type("application/xml; charset=utf-8").sendFile("sitemap.xml", publicAssetsRoot);
 });
 app.get("/googlea48fb01297c4ced2.html", async (_, reply) => {
@@ -140,10 +166,6 @@ app.get("/portal/portal.css", async (_, reply) => {
 });
 
 const portalStaticRoot = join(publicAssetsRoot, "portal");
-/** 公開ポータル一時休止。再開時は .env の PORTAL_PUBLIC_CLOSED を 0/false/空にして restart */
-const portalPublicClosed = ["1", "true", "yes", "on"].includes(
-  String(process.env.PORTAL_PUBLIC_CLOSED ?? "").trim().toLowerCase()
-);
 
 function sendPortalClosedPage(reply: FastifyReply) {
   return reply
@@ -196,13 +218,25 @@ app.get("/portal/*", async (request, reply) => {
   }
   if (wildcard === "sitemap.xml") {
     if (portalPublicClosed) {
-      return reply.code(404).type("text/plain; charset=utf-8").send("Not Found");
+      return reply
+        .type("application/xml; charset=utf-8")
+        .send(
+          '<?xml version="1.0" encoding="UTF-8"?>\n' +
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n</urlset>\n'
+        );
     }
     return reply
       .type("application/xml; charset=utf-8")
       .sendFile("portal/sitemap.xml", publicAssetsRoot);
   }
   if (wildcard === "robots.txt") {
+    if (portalPublicClosed) {
+      return reply.type("text/plain; charset=utf-8").send(
+        ["User-agent: *", "Disallow: /", "", "Sitemap: https://daiko.harunoyukoto.jp/sitemap.xml", ""].join(
+          "\n"
+        )
+      );
+    }
     return reply.type("text/plain; charset=utf-8").sendFile("portal/robots.txt", publicAssetsRoot);
   }
   const rel = resolvePortalSendPath(wildcard);
