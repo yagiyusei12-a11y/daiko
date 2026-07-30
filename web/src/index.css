@@ -1711,6 +1711,11 @@ button.settings-danger:disabled {
   max-width: 36rem;
 }
 
+.attend-shift-dialog--week.pricing-modal {
+  max-width: min(28rem, 96vw);
+  width: 100%;
+}
+
 /* 日報: 運行追加（フォームが長いため広め・高め） */
 .trip-add-dialog.pricing-modal {
   max-width: min(42rem, 96vw);
@@ -1964,6 +1969,118 @@ button.settings-danger:disabled {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 0 1.1rem 0.75rem;
+}
+
+.attend-shift-week-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.5rem;
+  margin: 0.35rem 0 0.75rem;
+}
+
+.attend-shift-week-nav .settings-secondary {
+  margin-top: 0;
+  padding: 0.45rem 0.65rem;
+  min-height: 2.5rem;
+}
+
+.attend-shift-week-range {
+  flex: 1 1 100%;
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+@media (min-width: 420px) {
+  .attend-shift-week-range {
+    flex: 1 1 auto;
+    text-align: left;
+    order: 0;
+  }
+}
+
+.attend-shift-week-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.attend-shift-week-row {
+  margin: 0;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.attend-shift-week-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+
+.attend-shift-week-day {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.attend-shift-week-clear {
+  margin: 0;
+  padding: 0.35rem 0.55rem;
+  min-height: 2.25rem;
+  font: inherit;
+  font-size: 0.82rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.attend-shift-week-clear:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.attend-shift-week-times {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.45rem 0.55rem;
+}
+
+.attend-shift-week-time-label {
+  flex: 1 1 6.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.attend-shift-week-time-label .attend-shift-time-field,
+.attend-shift-week-time-label input {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.6rem;
+  font-size: 1.05rem;
+  box-sizing: border-box;
+}
+
+.attend-shift-week-tilde {
+  flex: 0 0 auto;
+  padding-bottom: 0.7rem;
+  color: var(--color-muted);
+  font-size: 0.95rem;
 }
 
 .attend-shift-ym-row {

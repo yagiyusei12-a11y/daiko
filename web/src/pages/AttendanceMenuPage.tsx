@@ -11,6 +11,7 @@ import {
   isValidFlexHm,
   normalizeShiftDaySlot,
 } from "../lib/flex-time-input";
+import { weekDatesContaining, shiftYmd } from "../lib/schedule-week";
 import { timecardButtonAvailability } from "../lib/timecard-punch-order";
 
 type EmployeeRow = {
@@ -192,6 +193,51 @@ function monthCalendarCells(ym: string): { key: string; date: string | null; day
 }
 
 const WEEK_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+/** 月曜始まりの週ラベル（weekDatesContaining の並びと一致） */
+const WEEKDAY_MON_START = ["月", "火", "水", "木", "金", "土", "日"] as const;
+
+function tokyoYmdToday(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function ymdToYearMonth(ymd: string): string {
+  return ymd.slice(0, 7);
+}
+
+function mondayOfWeekContaining(ymd: string): string {
+  return weekDatesContaining(ymd)[0] ?? ymd;
+}
+
+function formatShiftWeekLabel(dates: string[]): string {
+  if (dates.length === 0) return "";
+  const fmt = (ymd: string, wd: string) => {
+    const parts = ymd.split("-");
+    const mo = Number(parts[1]);
+    const d = Number(parts[2]);
+    return `${mo}/${d}（${wd}）`;
+  };
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  return `${fmt(first, "月")} 〜 ${fmt(last, "日")}`;
+}
+
+function formatShiftDayRowLabel(ymd: string, weekday: string): string {
+  const parts = ymd.split("-");
+  const mo = Number(parts[1]);
+  const d = Number(parts[2]);
+  return `${mo}/${d}（${weekday}）`;
+}
+
+function emptyWeekSlots(dates: string[]): Record<string, ShiftDaySlot> {
+  const out: Record<string, ShiftDaySlot> = {};
+  for (const d of dates) out[d] = { start: "", end: "" };
+  return out;
+}
 
 function ShiftApplyDialog({
   open,
@@ -208,116 +254,65 @@ function ShiftApplyDialog({
 }): JSX.Element | null {
   const { flashSaved } = useSavedToast();
   const [err, setErr] = useState<string | null>(null);
-  const [ym, setYm] = useState(currentYearMonth);
-  const [days, setDays] = useState<Record<string, ShiftDaySlot>>({});
-  const [activeDay, setActiveDay] = useState<string | null>(null);
-  const [copyMode, setCopyMode] = useState(false);
-  const [copyTemplate, setCopyTemplate] = useState<ShiftDaySlot | null>(null);
-  const [copyTargets, setCopyTargets] = useState<Set<string>>(() => new Set());
+  const [weekStart, setWeekStart] = useState(() => mondayOfWeekContaining(tokyoYmdToday()));
+  /** 月ごとの申請全体（保存時のマージ用） */
+  const [monthDays, setMonthDays] = useState<Record<string, Record<string, ShiftDaySlot>>>({});
+  /** 表示中の週の編集下書き */
+  const [weekDraft, setWeekDraft] = useState<Record<string, ShiftDaySlot>>({});
+  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const loadMonth = useCallback(async () => {
+  const weekDates = useMemo(() => weekDatesContaining(weekStart), [weekStart]);
+
+  const loadWeek = useCallback(async () => {
     if (!employeeId) return;
+    const dates = weekDatesContaining(weekStart);
+    const months = [...new Set(dates.map(ymdToYearMonth))];
+    setLoading(true);
     setErr(null);
-    const r = await apiFetch<{ days: Record<string, ShiftDaySlot> }>(
-      `/attendance/shift-applications?employeeId=${encodeURIComponent(employeeId)}&yearMonth=${encodeURIComponent(ym)}`,
-    );
-    if (!r.ok) {
-      setErr(r.error);
-      return;
+    const nextMonthDays: Record<string, Record<string, ShiftDaySlot>> = {};
+    for (const ym of months) {
+      const r = await apiFetch<{ days: Record<string, ShiftDaySlot> }>(
+        `/attendance/shift-applications?employeeId=${encodeURIComponent(employeeId)}&yearMonth=${encodeURIComponent(ym)}`,
+      );
+      if (!r.ok) {
+        setLoading(false);
+        setErr(r.error);
+        return;
+      }
+      nextMonthDays[ym] = { ...(r.data.days ?? {}) };
     }
-    setDays(r.data.days ?? {});
-    setActiveDay(null);
-    setCopyMode(false);
-    setCopyTemplate(null);
-    setCopyTargets(new Set());
-  }, [employeeId, ym]);
+    const draft = emptyWeekSlots(dates);
+    for (const d of dates) {
+      const slot = nextMonthDays[ymdToYearMonth(d)]?.[d];
+      if (slot) draft[d] = { start: slot.start ?? "", end: slot.end ?? "" };
+    }
+    setMonthDays(nextMonthDays);
+    setWeekDraft(draft);
+    setLoading(false);
+  }, [employeeId, weekStart]);
 
   useEffect(() => {
-    if (open && employeeId) void loadMonth();
-  }, [open, employeeId, ym, loadMonth]);
+    if (open && employeeId) void loadWeek();
+  }, [open, employeeId, loadWeek]);
 
   useEffect(() => {
     if (!open) {
-      setYm(currentYearMonth());
-      setDays({});
-      setActiveDay(null);
-      setCopyMode(false);
-      setCopyTemplate(null);
-      setCopyTargets(new Set());
+      setWeekStart(mondayOfWeekContaining(tokyoYmdToday()));
+      setMonthDays({});
+      setWeekDraft({});
       setErr(null);
+      setBusy(false);
+      setLoading(false);
     }
   }, [open]);
 
-  const cells = useMemo(() => monthCalendarCells(ym), [ym]);
-
-  function toggleCopyTarget(date: string): void {
-    setCopyTargets((prev) => {
-      const n = new Set(prev);
-      if (n.has(date)) n.delete(date);
-      else n.add(date);
-      return n;
-    });
-  }
-
-  function onCellClick(date: string | null): void {
-    if (!date) return;
-    if (copyMode) {
-      toggleCopyTarget(date);
-      return;
-    }
-    setActiveDay(date);
-  }
-
-  function beginCopyDay(): void {
-    if (!activeDay) return;
-    const slot = normalizeShiftDaySlot(days[activeDay] ?? { start: "", end: "" });
-    updateActiveSlot(slot);
-    const st = slot.start.trim();
-    const en = slot.end.trim();
-    if (!isValidFlexHm(st) || !isValidFlexHm(en)) {
-      setErr("コピー元の日で、開始・終了を正しい時刻で入力してください（例 9:00、28:00）。");
-      return;
-    }
-    setErr(null);
-    setCopyTemplate({ start: st, end: en });
-    setCopyMode(true);
-    setCopyTargets(new Set());
-  }
-
-  function confirmCopy(): void {
-    if (!copyTemplate || copyTargets.size === 0) {
-      setErr("コピー先の日を1日以上選んでください。");
-      return;
-    }
-    setErr(null);
-    setDays((d) => {
-      const n = { ...d };
-      for (const dt of copyTargets) {
-        n[dt] = { ...copyTemplate };
-      }
-      return n;
-    });
-    setCopyMode(false);
-    setCopyTemplate(null);
-    setCopyTargets(new Set());
-  }
-
-  function cancelCopyMode(): void {
-    setCopyMode(false);
-    setCopyTemplate(null);
-    setCopyTargets(new Set());
-  }
-
-  const slot = activeDay ? days[activeDay] ?? { start: "", end: "" } : { start: "", end: "" };
-
-  function updateActiveSlot(patch: Partial<ShiftDaySlot>): void {
-    if (!activeDay) return;
-    setDays((d) => {
-      const cur = d[activeDay] ?? { start: "", end: "" };
+  function updateWeekSlot(date: string, patch: Partial<ShiftDaySlot>): void {
+    setWeekDraft((prev) => {
+      const cur = prev[date] ?? { start: "", end: "" };
       return {
-        ...d,
-        [activeDay]: {
+        ...prev,
+        [date]: {
           start: patch.start !== undefined ? patch.start : cur.start,
           end: patch.end !== undefined ? patch.end : cur.end,
         },
@@ -325,40 +320,63 @@ function ShiftApplyDialog({
     });
   }
 
+  function clearWeekSlot(date: string): void {
+    setWeekDraft((prev) => ({ ...prev, [date]: { start: "", end: "" } }));
+  }
+
   async function saveApplication(): Promise<void> {
-    const normalizedDays = Object.fromEntries(
-      Object.entries(days).map(([k, v]) => [k, normalizeShiftDaySlot(v)]),
-    );
-    setDays(normalizedDays);
-    const msg = validateDaysForSave(normalizedDays);
+    const dates = weekDates;
+    const normalizedWeek: Record<string, ShiftDaySlot> = {};
+    for (const d of dates) {
+      normalizedWeek[d] = normalizeShiftDaySlot(weekDraft[d] ?? { start: "", end: "" });
+    }
+    setWeekDraft(normalizedWeek);
+    const msg = validateDaysForSave(normalizedWeek);
     if (msg) {
       setErr(msg);
       return;
     }
-    const cleaned: Record<string, ShiftDaySlot> = {};
-    for (const [k, v] of Object.entries(normalizedDays)) {
-      const st = v.start.trim();
-      const en = v.end.trim();
-      if (st && en) cleaned[k] = { start: st, end: en };
-    }
+
+    const months = [...new Set(dates.map(ymdToYearMonth))];
     setBusy(true);
     setErr(null);
-    const r = await apiFetch("/attendance/shift-applications", {
-      method: "PUT",
-      json: { employeeId, yearMonth: ym, days: cleaned },
-    });
-    setBusy(false);
-    if (!r.ok) setErr(r.error);
-    else {
-      flashSaved();
-      onSaved();
-      onClose();
+
+    for (const ym of months) {
+      const base: Record<string, ShiftDaySlot> = { ...(monthDays[ym] ?? {}) };
+      for (const d of dates) {
+        if (ymdToYearMonth(d) !== ym) continue;
+        const slot = normalizedWeek[d];
+        const st = slot.start.trim();
+        const en = slot.end.trim();
+        if (st && en) base[d] = { start: st, end: en };
+        else delete base[d];
+      }
+      const cleaned: Record<string, ShiftDaySlot> = {};
+      for (const [k, v] of Object.entries(base)) {
+        const st = String(v.start ?? "").trim();
+        const en = String(v.end ?? "").trim();
+        if (st && en) cleaned[k] = { start: st, end: en };
+      }
+      const r = await apiFetch("/attendance/shift-applications", {
+        method: "PUT",
+        json: { employeeId, yearMonth: ym, days: cleaned },
+      });
+      if (!r.ok) {
+        setBusy(false);
+        setErr(r.error);
+        return;
+      }
     }
+
+    setBusy(false);
+    flashSaved();
+    onSaved();
+    onClose();
   }
 
   if (!open) return null;
 
-  const ymParts = parseYm(ym);
+  const isThisWeek = weekStart === mondayOfWeekContaining(tokyoYmdToday());
 
   return (
     <div
@@ -368,112 +386,107 @@ function ShiftApplyDialog({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="pricing-modal attend-shift-dialog" role="dialog" aria-modal="true" aria-labelledby="attend-shift-title" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className="pricing-modal attend-shift-dialog attend-shift-dialog--week"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="attend-shift-title"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <h2 id="attend-shift-title" className="pricing-modal-title">
           シフト申請
         </h2>
         <div className="attend-shift-dialog-scroll">
-          <p className="settings-hint">
-            {employeeLabel} — 日付をタップして勤務時間を入力します。
-          </p>
+          <p className="settings-hint">{employeeLabel} — 1週間分の勤務時間を入力します。</p>
           <Err msg={err} />
 
-          {copyMode && copyTemplate ? (
-            <p className="settings-hint attend-shift-copy-banner">
-              コピー元: <strong>{copyTemplate.start}</strong> ～ <strong>{copyTemplate.end}</strong>
-              。カレンダーで適用する日をタップして複数選択（<strong>赤</strong>
-              ）し、「コピーを確定」を押してください。
-            </p>
-          ) : null}
-
-          <div className="settings-form attend-shift-ym-row">
-            <label htmlFor="shift-ym">年月</label>
-            <input
-              id="shift-ym"
-              type="month"
-              value={ym}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (/^\d{4}-\d{2}$/.test(v)) setYm(v);
-              }}
-            />
+          <div className="attend-shift-week-nav">
+            <button
+              type="button"
+              className="settings-secondary"
+              disabled={busy || loading}
+              onClick={() => setWeekStart((w) => shiftYmd(w, -7))}
+            >
+              前の週
+            </button>
+            <strong className="attend-shift-week-range">{formatShiftWeekLabel(weekDates)}</strong>
+            <button
+              type="button"
+              className="settings-secondary"
+              disabled={busy || loading}
+              onClick={() => setWeekStart((w) => shiftYmd(w, 7))}
+            >
+              次の週
+            </button>
+            <button
+              type="button"
+              className="settings-secondary"
+              disabled={busy || loading || isThisWeek}
+              onClick={() => setWeekStart(mondayOfWeekContaining(tokyoYmdToday()))}
+            >
+              今週へ
+            </button>
           </div>
 
-          <div className="attend-cal">
-            <div className="attend-cal-weekdays">
-              {WEEK_LABELS.map((w) => (
-                <span key={w} className="attend-cal-wd">
-                  {w}
-                </span>
-              ))}
-            </div>
-            <div className="attend-cal-grid">
-              {cells.map((c) => {
-                const isSel = Boolean(c.date && activeDay === c.date && !copyMode);
-                const isCopySel = Boolean(c.date && copyMode && copyTargets.has(c.date));
-                const slotDay = c.date ? days[c.date] : null;
-                const hasTime = Boolean(
-                  slotDay && isValidFlexHm(slotDay.start.trim()) && isValidFlexHm(slotDay.end.trim()),
-                );
+          {loading ? (
+            <p className="settings-hint">読み込み中…</p>
+          ) : (
+            <ul className="attend-shift-week-list">
+              {weekDates.map((date, i) => {
+                const slot = weekDraft[date] ?? { start: "", end: "" };
+                const wd = WEEKDAY_MON_START[i] ?? "";
+                const hasAny = Boolean(slot.start.trim() || slot.end.trim());
                 return (
-                  <button
-                    key={c.key}
-                    type="button"
-                    className={`attend-cal-cell${!c.date ? " attend-cal-cell--empty" : ""}${isSel ? " attend-cal-cell--active" : ""}${isCopySel ? " attend-cal-cell--copy" : ""}${hasTime ? " attend-cal-cell--has" : ""}`}
-                    disabled={!c.date}
-                    onClick={() => onCellClick(c.date)}
-                  >
-                    {c.dayNum != null ? c.dayNum : ""}
-                  </button>
+                  <li key={date} className="attend-shift-week-row">
+                    <div className="attend-shift-week-row-head">
+                      <span className="attend-shift-week-day">{formatShiftDayRowLabel(date, wd)}</span>
+                      <button
+                        type="button"
+                        className="attend-shift-week-clear"
+                        disabled={!hasAny || busy}
+                        onClick={() => clearWeekSlot(date)}
+                      >
+                        クリア
+                      </button>
+                    </div>
+                    <div className="attend-shift-week-times">
+                      <label className="attend-shift-week-time-label">
+                        <span>開始</span>
+                        <FlexTimeInput
+                          aria-label={`${date} 開始`}
+                          placeholder="20:00"
+                          value={slot.start}
+                          onChange={(start) => updateWeekSlot(date, { start })}
+                          disabled={busy}
+                        />
+                      </label>
+                      <span className="attend-shift-week-tilde" aria-hidden="true">
+                        ～
+                      </span>
+                      <label className="attend-shift-week-time-label">
+                        <span>終了</span>
+                        <FlexTimeInput
+                          aria-label={`${date} 終了`}
+                          placeholder="28:00"
+                          value={slot.end}
+                          onChange={(end) => updateWeekSlot(date, { end })}
+                          disabled={busy}
+                        />
+                      </label>
+                    </div>
+                  </li>
                 );
               })}
-            </div>
-          </div>
-
-          {!copyMode ? (
-            <div className="settings-form attend-shift-time-block">
-              <p className="settings-hint" style={{ marginTop: 0 }}>
-                {activeDay ? `選択中: ${activeDay}` : "日付をタップしてください。"}
-              </p>
-              <label>開始（例 9:00、28:00）</label>
-              <FlexTimeInput
-                placeholder="9:00"
-                value={slot.start}
-                onChange={(start) => updateActiveSlot({ start })}
-                disabled={!activeDay}
-              />
-              <label>終了（例 18:00、36:00）</label>
-              <FlexTimeInput
-                placeholder="18:00"
-                value={slot.end}
-                onChange={(end) => updateActiveSlot({ end })}
-                disabled={!activeDay}
-              />
-              <p className="settings-hint">24時を超える場合は 25:00、28:00 のように入力できます（0:00〜48:59）。</p>
-              <button type="button" className="settings-secondary" disabled={!activeDay} onClick={beginCopyDay}>
-                この日をコピーする
-              </button>
-            </div>
-          ) : (
-            <div className="settings-form attend-shift-copy-actions">
-              <button type="button" className="settings-primary" onClick={confirmCopy}>
-                コピーを確定（{copyTargets.size} 日）
-              </button>
-              <button type="button" onClick={cancelCopyMode}>
-                コピーキャンセル
-              </button>
-            </div>
+            </ul>
           )}
 
-          {ymParts ? (
-            <p className="settings-hint">
-              {ymParts.y}年{ymParts.m}月の申請内容を保存します。確定シフトは「勤怠」→「シフト調整」で登録します。
-            </p>
-          ) : null}
+          <p className="settings-hint">
+            24時超は 28:00 のように入力。両方空ならその日は申請なし。確定シフトは「シフト調整」で登録します。
+          </p>
         </div>
 
         <div className="pricing-modal-actions">
-          <button type="button" className="settings-primary" disabled={busy} onClick={() => void saveApplication()}>
+          <button type="button" className="settings-primary" disabled={busy || loading} onClick={() => void saveApplication()}>
             申請を保存
           </button>
           <button type="button" disabled={busy} onClick={onClose}>
@@ -1289,6 +1302,9 @@ export default function AttendanceMenuPage(): JSX.Element {
               シフト申請
             </button>
           </div>
+          <p className="settings-hint">
+            「シフト申請」から1週間分（月曜〜日曜）の勤務時間をまとめて入力できます。スマホでも週ごとに申請しやすい画面です。
+          </p>
 
           <div className="attend-shift-section-head">
             <h3 className="attend-shift-section-title attend-shift-section-title--inline">今月のシフト（確定）</h3>
@@ -1339,7 +1355,9 @@ export default function AttendanceMenuPage(): JSX.Element {
                 </button>
               </div>
               {listRows.length === 0 ? (
-                <p className="settings-hint">この月の申請データはまだありません。</p>
+                <p className="settings-hint">
+                  この月の申請データはまだありません。上の「シフト申請」から今週分を入力してください。
+                </p>
               ) : (
                 <ul className="settings-sf-list">
                   {listRows.map(([date, t]) => (
