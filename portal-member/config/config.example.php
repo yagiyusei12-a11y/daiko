@@ -82,7 +82,7 @@ return [
             'charger_id' => 1,
             'section_id' => 1,
         ],
-        'paid_detection' => 'bridge_and_payment',
+        'paid_detection' => 'bridge_and_payment', // bridge_only = ブリッジ手動更新のみ。自動 paid は伝票固有根拠が必須
         'defaults' => [
             'monthly_amount_yen' => 3300,
             'product_name' => 'ポータルサイトプレミアム枠掲載料',

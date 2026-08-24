@@ -1,14 +1,25 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/process_lock.php';
+
 /**
  * is_premium 変更後にポータル静的 HTML をバックグラウンド再生成する。
+ * 生成中なら 2 本目は起動しない（課金失敗とはみなさない）。
  */
 function portal_trigger_html_regeneration(): bool
 {
     global $config;
 
     $root = (string) ($config['project_root'] ?? dirname(__DIR__, 2));
+    $lockPath = $root . DIRECTORY_SEPARATOR . 'logs' . DIRECTORY_SEPARATOR . 'portal-generate.lock';
+    $probe = daiko_try_exclusive_lock($lockPath);
+    if (!$probe['ok']) {
+        error_log('portal_trigger_html_regeneration: skip (' . $probe['reason'] . ')');
+        return false;
+    }
+    daiko_release_exclusive_lock($probe['handle']);
+
     $script = (string) ($config['portal_generate_script'] ?? 'scripts/generate_portal_html.py');
     $scriptPath = $root . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $script);
 

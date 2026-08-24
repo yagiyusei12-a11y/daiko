@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/invoice_db.php';
+require_once __DIR__ . '/invoice_premium_sync.php';
 
 /**
  * プレミアム申込 → 請求システムへ sales_slip（sales_entry 相当）を起票。
@@ -85,6 +86,14 @@ function invoice_create_portal_premium_billing(array $company, array $user): arr
             $memo,
         ]);
         $slipId = (int) $pdo->lastInsertId();
+        $memoWithSlip = sprintf(
+            'PORTAL_PREMIUM company_id=%d PORTAL_SLIP:%d cert=%s email=%s',
+            $companyId,
+            $slipId,
+            $cert,
+            (string) ($user['email'] ?? '')
+        );
+        $pdo->prepare("UPDATE {$slipTable} SET memo = ? WHERE id = ?")->execute([$memoWithSlip, $slipId]);
 
         $stmtPart = $pdo->prepare(
             "INSERT INTO {$partsTable}
@@ -151,103 +160,6 @@ function invoice_create_portal_premium_billing(array $company, array $user): arr
 }
 
 /**
- * 入金・期限切れに応じて portal_premium_billings と companies を同期。
- *
- * @return array{updated: int, activated: int, deactivated: int, regenerated: bool}
- */
-function invoice_sync_premium_statuses(): array
-{
-    $result = ['updated' => 0, 'activated' => 0, 'deactivated' => 0, 'regenerated' => false];
-
-    $portalPdo = db();
-    $invPdo = invoice_db();
-    if (!$invPdo instanceof PDO) {
-        return $result;
-    }
-
-    $cfg = invoice_config();
-    $bridgeTable = invoice_table('portal_premium_billings');
-    $slipTable = invoice_table('sales_slip');
-    $payTable = invoice_table('pay_receipt');
-    $paidMode = (string) ($cfg['paid_detection'] ?? 'bridge_and_payment');
-
-    $rows = $portalPdo->query(
-        "SELECT id, premium_invoice_slip_id, premium_billing_status, is_premium, premium_due_date
-         FROM companies
-         WHERE premium_invoice_slip_id IS NOT NULL
-            OR premium_billing_status NOT IN ('none', '')
-            OR is_premium = 1"
-    )->fetchAll(PDO::FETCH_ASSOC);
-
-    $anyPremiumChange = false;
-
-    foreach ($rows as $row) {
-        $companyId = (int) $row['id'];
-        $slipId = (int) ($row['premium_invoice_slip_id'] ?? 0);
-        $currentStatus = (string) ($row['premium_billing_status'] ?? 'none');
-        $wasPremium = (int) ($row['is_premium'] ?? 0) === 1;
-
-        if ($slipId <= 0) {
-            continue;
-        }
-
-        $bridge = invoice_fetch_bridge_row($invPdo, $bridgeTable, $slipId, $companyId);
-        $newBillingStatus = $bridge['billing_status'] ?? 'invoiced';
-        $paidAt = $bridge['paid_at'] ?? null;
-
-        if ($newBillingStatus === 'invoiced' && invoice_detect_payment_received($invPdo, $cfg, $slipId, $companyId, $paidMode)) {
-            invoice_mark_bridge_paid($invPdo, $bridgeTable, $slipId, $companyId);
-            $newBillingStatus = 'paid';
-            $paidAt = date('Y-m-d H:i:s');
-        }
-
-        $dueDate = (string) ($bridge['due_date'] ?? $row['premium_due_date'] ?? '');
-        if ($newBillingStatus === 'invoiced' && $dueDate !== '' && $dueDate < date('Y-m-d')) {
-            $newBillingStatus = 'overdue';
-            invoice_mark_bridge_overdue($invPdo, $bridgeTable, $slipId, $companyId);
-        }
-
-        if ($newBillingStatus === 'cancelled') {
-            $shouldPremium = false;
-            $portalBilling = 'cancelled';
-        } elseif ($newBillingStatus === 'paid') {
-            $shouldPremium = true;
-            $portalBilling = 'paid';
-        } else {
-            $shouldPremium = false;
-            $portalBilling = $newBillingStatus === 'overdue' ? 'overdue' : 'invoiced';
-        }
-
-        $shouldPremiumInt = $shouldPremium ? 1 : 0;
-        if ($portalBilling !== $currentStatus || $shouldPremiumInt !== ($wasPremium ? 1 : 0)) {
-            $portalPdo->prepare(
-                'UPDATE companies SET
-                   is_premium = ?,
-                   premium_billing_status = ?,
-                   premium_paid_at = CASE WHEN ? = 1 THEN COALESCE(premium_paid_at, NOW()) ELSE NULL END
-                 WHERE id = ?'
-            )->execute([$shouldPremiumInt, $portalBilling, $shouldPremiumInt, $companyId]);
-
-            $result['updated']++;
-            if ($shouldPremium && !$wasPremium) {
-                $result['activated']++;
-                $anyPremiumChange = true;
-            }
-            if (!$shouldPremium && $wasPremium) {
-                $result['deactivated']++;
-                $anyPremiumChange = true;
-            }
-        }
-    }
-
-    if ($anyPremiumChange) {
-        $result['regenerated'] = portal_trigger_html_regeneration();
-    }
-
-    return $result;
-}
-
-/**
  * @param array<string, mixed> $company
  */
 function invoice_ensure_portal_customer(PDO $pdo, array $company, array $cfg): int
@@ -298,89 +210,4 @@ function invoice_next_slip_number(PDO $pdo, string $slipTable, string $prefix): 
         $seq = (int) substr($last, -2) + 1;
     }
     return $prefix . $today . sprintf('%02d', $seq);
-}
-
-/**
- * @return array<string, mixed>
- */
-function invoice_fetch_bridge_row(PDO $pdo, string $bridgeTable, int $slipId, int $companyId): array
-{
-    $stmt = $pdo->prepare(
-        "SELECT * FROM {$bridgeTable} WHERE sales_slip_id = ? AND portal_company_id = ? LIMIT 1"
-    );
-    $stmt->execute([$slipId, $companyId]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    return is_array($row) ? $row : [];
-}
-
-function invoice_detect_payment_received(
-    PDO $pdo,
-    array $cfg,
-    int $slipId,
-    int $companyId,
-    string $paidMode
-): bool {
-    if ($paidMode === 'bridge_only') {
-        return false;
-    }
-
-    $slipTable = invoice_table('sales_slip');
-    $payTable = invoice_table('pay_receipt');
-    $stmt = $pdo->prepare(
-        "SELECT customer_id, sum_price, issue_date, memo FROM {$slipTable} WHERE id = ? LIMIT 1"
-    );
-    $stmt->execute([$slipId]);
-    $slip = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$slip) {
-        return false;
-    }
-
-    $customerId = (int) ($slip['customer_id'] ?? 0);
-    $sumPrice = (float) ($slip['sum_price'] ?? 0);
-    $issueDate = (string) ($slip['issue_date'] ?? '');
-    if ($customerId <= 0 || $sumPrice <= 0) {
-        return false;
-    }
-
-    $memoNeedle = sprintf('PORTAL_PREMIUM company_id=%d', $companyId);
-    if (str_contains((string) ($slip['memo'] ?? ''), $memoNeedle)) {
-        $stmtPay = $pdo->prepare(
-            "SELECT COALESCE(SUM(price), 0) AS paid_sum
-             FROM {$payTable}
-             WHERE target_id = ? AND deleted IS NULL
-               AND target_date >= ?
-               AND (memo LIKE ? OR memo LIKE ?)"
-        );
-        $stmtPay->execute([
-            $customerId,
-            $issueDate,
-            '%' . $memoNeedle . '%',
-            '%PORTAL_SLIP:' . $slipId . '%',
-        ]);
-        $paidSum = (float) $stmtPay->fetchColumn();
-        if ($paidSum >= $sumPrice) {
-            return true;
-        }
-    }
-
-    $stmtPay2 = $pdo->prepare(
-        "SELECT COALESCE(SUM(price), 0) FROM {$payTable}
-         WHERE target_id = ? AND deleted IS NULL AND target_date >= ? AND price >= ?"
-    );
-    $stmtPay2->execute([$customerId, $issueDate, $sumPrice]);
-    return (float) $stmtPay2->fetchColumn() >= $sumPrice;
-}
-
-function invoice_mark_bridge_paid(PDO $pdo, string $bridgeTable, int $slipId, int $companyId): void
-{
-    $pdo->prepare(
-        "UPDATE {$bridgeTable} SET billing_status = 'paid', paid_at = NOW() WHERE sales_slip_id = ? AND portal_company_id = ?"
-    )->execute([$slipId, $companyId]);
-}
-
-function invoice_mark_bridge_overdue(PDO $pdo, string $bridgeTable, int $slipId, int $companyId): void
-{
-    $pdo->prepare(
-        "UPDATE {$bridgeTable} SET billing_status = 'overdue' WHERE sales_slip_id = ? AND portal_company_id = ? AND billing_status = 'invoiced'"
-    )->execute([$slipId, $companyId]);
 }

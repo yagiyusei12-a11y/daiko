@@ -44,6 +44,7 @@ from portal_data_sources import (
     merge_business_records,
     register_url_for_prefecture,
 )
+from portal_generate_lock import acquire_portal_generate_lock, release_portal_generate_lock
 
 SITE_URL = "https://daiko.harunoyukoto.jp/"
 PORTAL_BASE = "/portal/"
@@ -3933,6 +3934,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    lock_handle = acquire_portal_generate_lock(root)
+    if lock_handle is None:
+        print("portal generate already running; skip")
+        return 0
+
+    try:
+        return _generate_all_pages_main(root, args)
+    finally:
+        release_portal_generate_lock(lock_handle)
+
+
+def _generate_all_pages_main(root: Path, args: argparse.Namespace) -> int:
     print("依存パッケージ: pip install pandas pykakasi pymysql")
     pref_slug_map = build_pref_slug_map()
 
