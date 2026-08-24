@@ -68,7 +68,7 @@ function prefecture_from_query(string $raw): string
         return $raw;
     }
     foreach (PREFECTURES_JIS as $pref) {
-        if (str_contains($pref, $raw) || str_contains($raw, $pref)) {
+        if (strpos($pref, $raw) !== false || strpos($raw, $pref) !== false) {
             return $pref;
         }
     }
