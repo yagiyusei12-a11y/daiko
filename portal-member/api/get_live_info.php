@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * ポータル閲覧用：会員登録業者のリアルタイム情報（イベント・待機・料金）を JSON で返す。
+ * ポータル閲覧用：会員登録業者のリアルタイム情報（イベント・待機・料金・お迎え目安・こだわり）を JSON で返す。
  *
  * GET /portal-member/api/get_live_info.php
  */
@@ -17,6 +17,12 @@ SELECT
   c.cert_number,
   c.prefecture,
   c.name AS company_name,
+  c.wait_time_minutes,
+  c.accept_cashless,
+  c.is_invoice_registered,
+  c.has_female_driver,
+  c.left_hand_drive_ok,
+  c.is_premium,
   e.is_active,
   e.drivers_available,
   e.event_title,
@@ -29,6 +35,7 @@ SELECT
 FROM companies c
 LEFT JOIN events e ON e.company_id = c.id
 LEFT JOIN prices p ON p.company_id = c.id
+WHERE COALESCE(c.is_suspended, 0) = 0
 ORDER BY c.id ASC
 SQL;
 
@@ -52,8 +59,9 @@ SQL;
             || trim((string) ($row['event_title'] ?? '')) !== ''
             || trim((string) ($row['event_body'] ?? '')) !== ''
         );
+        $hasPortalPrefs = has_portal_prefs($row);
 
-        if (!$hasPrice && !$hasEvent) {
+        if (!$hasPrice && !$hasEvent && !$hasPortalPrefs) {
             continue;
         }
 
@@ -62,6 +70,12 @@ SQL;
             'cert_number' => $cert,
             'prefecture' => $prefecture,
             'company_name' => trim((string) $row['company_name']),
+            'wait_time_minutes' => $row['wait_time_minutes'] !== null ? (int) $row['wait_time_minutes'] : null,
+            'accept_cashless' => (bool) (int) ($row['accept_cashless'] ?? 0),
+            'is_invoice_registered' => (bool) (int) ($row['is_invoice_registered'] ?? 0),
+            'has_female_driver' => (bool) (int) ($row['has_female_driver'] ?? 0),
+            'left_hand_drive_ok' => (bool) (int) ($row['left_hand_drive_ok'] ?? 0),
+            'is_premium' => (bool) (int) ($row['is_premium'] ?? 0),
         ];
 
         if ($hasEvent) {
@@ -134,4 +148,32 @@ function has_price_data(array $row): bool
         return true;
     }
     return trim((string) ($row['price_note'] ?? '')) !== '';
+}
+
+/**
+ * お迎え目安またはこだわり条件が1つでも設定されているか。
+ *
+ * @param array<string, mixed> $row
+ */
+function has_portal_prefs(array $row): bool
+{
+    if ($row['wait_time_minutes'] !== null && $row['wait_time_minutes'] !== '') {
+        return true;
+    }
+    if (!empty($row['accept_cashless'])) {
+        return true;
+    }
+    if (!empty($row['is_invoice_registered'])) {
+        return true;
+    }
+    if (!empty($row['has_female_driver'])) {
+        return true;
+    }
+    if (!empty($row['left_hand_drive_ok'])) {
+        return true;
+    }
+    if (!empty($row['is_premium'])) {
+        return true;
+    }
+    return false;
 }
