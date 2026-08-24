@@ -4,20 +4,22 @@
 
 ## セットアップ
 
-### 1. MySQL マイグレーション
+### 1. MySQL マイグレーション（新規 install）
+
+正式経路は次の 2 段です。`001_init.sql` は歴史的 baseline（`users` / `companies` / `prices` / `events`）です。002 以降は PHP applicator が適用します。
 
 ```bash
 mysql -u root -p < portal-member/database/migrations/001_init.sql
-# 既存DBへ第1弾カラム追加（お迎え目安・こだわり条件）
-mysql -u root -p portal_member < portal-member/database/migrations/002_companies_portal_features.sql
+cp portal-member/config/config.example.php portal-member/config/config.php
+# DB 接続情報を編集
+php scripts/apply-portal-member-migrations.php
 ```
+
+既存 DB の追加マイグレーションも、生 SQL を 001→013 と連続実行するのではなく、同じ PHP applicator を使います。
 
 ### 2. 設定ファイル
 
-```bash
-cp portal-member/config/config.example.php portal-member/config/config.php
-# DB 接続情報・enriched_csv_dir を編集
-```
+`config.php` は上の手順で baseline の直後に用意します（applicator が参照します）。
 
 ### 3. Web サーバー
 

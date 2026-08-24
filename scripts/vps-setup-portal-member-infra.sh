@@ -66,7 +66,7 @@ $pass = getenv('DB_PASS');
 $sql = sprintf(
     "CREATE USER IF NOT EXISTS 'portal_user'@'localhost' IDENTIFIED BY %s;\n"
     . "ALTER USER 'portal_user'@'localhost' IDENTIFIED BY %s;\n"
-    . "GRANT SELECT, INSERT, UPDATE, DELETE ON portal_member.* TO 'portal_user'@'localhost';\n"
+    . "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES ON portal_member.* TO 'portal_user'@'localhost';\n"
     . "FLUSH PRIVILEGES;\n",
     var_export($pass, true),
     var_export($pass, true)
@@ -112,6 +112,9 @@ new PDO($dsn, $d["username"], $d["password"]);
 echo "DB OK\n";
 '
 log "config.php OK"
+
+php "${DAIKO_ROOT}/scripts/apply-portal-member-migrations.php"
+log "portal-member migrations applied (001 + PHP applicator)"
 
 # --- 4. Nginx（内部 9080。手前の HTTPS は Caddy）---
 sudo apt-get install -y -qq nginx

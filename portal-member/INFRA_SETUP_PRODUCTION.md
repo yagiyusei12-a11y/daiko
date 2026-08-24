@@ -111,7 +111,9 @@ chmod 600 ~/daiko/.portal-member-db-secret
 | DB ユーザー | `portal_user` |
 | DB パスワード | `.portal-member-db-secret` の内容 |
 
-### 2-3. マイグレーション（`001_init.sql`）
+### 2-3. マイグレーション（新規 install）
+
+正式経路は **`001_init.sql`（歴史的 baseline）→ `php scripts/apply-portal-member-migrations.php`** です。生 SQL を 001→002→…→013 と連続実行する手順は、新規構築の正式手順ではありません。
 
 ```bash
 cd ~/daiko
@@ -120,7 +122,7 @@ sudo mysql < portal-member/database/migrations/001_init.sql
 sudo mysql -e "USE portal_member; SHOW TABLES;"
 ```
 
-期待: `users`, `companies`, `prices`, `events`
+この時点の期待: `users`, `companies`, `prices`, `events`。002 以降（プレミアム・配車・レビュー等）は `config.php` 作成後に PHP applicator で適用します（後述 3-4）。
 
 ### 2-4. ユーザー作成と権限付与
 
@@ -135,7 +137,7 @@ $pass = getenv("DB_PASS");
 $sql = sprintf(
     "CREATE USER IF NOT EXISTS '\''portal_user'\''@'\''localhost'\'' IDENTIFIED BY %s;\n"
     . "ALTER USER '\''portal_user'\''@'\''localhost'\'' IDENTIFIED BY %s;\n"
-    . "GRANT SELECT, INSERT, UPDATE, DELETE ON portal_member.* TO '\''portal_user'\''@'\''localhost'\'';\n"
+    . "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES ON portal_member.* TO '\''portal_user'\''@'\''localhost'\'';\n"
     . "FLUSH PRIVILEGES;\n",
     var_export($pass, true),
     var_export($pass, true)
@@ -209,6 +211,17 @@ new PDO($dsn, $d["username"], $d["password"]);
 echo "DB OK\n";
 '
 ```
+
+### 3-4. 002 以降のスキーマ（PHP applicator）
+
+`config.php` の DB 接続が通ったあと、必ず実行します。
+
+```bash
+cd ~/daiko
+php scripts/apply-portal-member-migrations.php
+```
+
+既存 DB への追加適用も同じコマンドです。applicator は未適用分だけ実行します。
 
 ---
 
@@ -411,7 +424,8 @@ docker logs vps-caddy-1 --tail 20
 
 | ファイル | 内容 |
 |----------|------|
-| `database/migrations/001_init.sql` | スキーマ |
+| `database/migrations/001_init.sql` | 歴史的 baseline |
+| `../scripts/apply-portal-member-migrations.php` | 002 以降の正式適用 |
 | `nginx_proxy.conf` | 旧来のコメント付き Nginx 例（本番は **9080 + Caddy** を優先） |
 | `../scripts/vps-setup-portal-member-infra.sh` | 一括セットアップ |
 | `../scripts/vps-finish-portal-member.sh` | 権限・Caddy 追記の仕上げ用 |
