@@ -10,6 +10,8 @@ prisma/dev.db
 prisma/dev.db-journal
 uploads/
 .cache/
+__pycache__/
+*.pyc
 .cursor/debug-*.log
 # ローカル参考（Excel 様式など）。リポジトリには含めない
 新しいフォルダー/
