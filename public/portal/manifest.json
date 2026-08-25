@@ -1,0 +1,32 @@
+{
+  "name": "代行ナビ - はるのゆこと",
+  "short_name": "代行ナビ",
+  "description": "全国の運転代行業者をすぐ検索。お気に入り・GPS・リアルタイム営業情報に対応。",
+  "start_url": "/portal/",
+  "scope": "/portal/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ecfdf5",
+  "theme_color": "#10b981",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "/portal/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/portal/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/portal/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
